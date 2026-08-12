@@ -1,0 +1,148 @@
+{
+  "day": "2019-12-30",
+  "metric": "peak_live_orders",
+  "n": 20,
+  "source": "data/itch_sample/out_day/stats.csv",
+  "symbols": [
+    {
+      "locate": 393,
+      "symbol": "AMZN",
+      "messages": 536079,
+      "peak_orders": 37068,
+      "peak_levels": 5608
+    },
+    {
+      "locate": 13,
+      "symbol": "AAPL",
+      "messages": 1519865,
+      "peak_orders": 27110,
+      "peak_levels": 5320
+    },
+    {
+      "locate": 5291,
+      "symbol": "MSFT",
+      "messages": 1221478,
+      "peak_orders": 23005,
+      "peak_levels": 3813
+    },
+    {
+      "locate": 7992,
+      "symbol": "TSLA",
+      "messages": 545564,
+      "peak_orders": 17482,
+      "peak_levels": 3558
+    },
+    {
+      "locate": 2737,
+      "symbol": "FB",
+      "messages": 544602,
+      "peak_orders": 14736,
+      "peak_levels": 2878
+    },
+    {
+      "locate": 1730,
+      "symbol": "CSCO",
+      "messages": 550980,
+      "peak_orders": 13408,
+      "peak_levels": 1835
+    },
+    {
+      "locate": 5708,
+      "symbol": "NVDA",
+      "messages": 456375,
+      "peak_orders": 12800,
+      "peak_levels": 3126
+    },
+    {
+      "locate": 344,
+      "symbol": "AMD",
+      "messages": 1512674,
+      "peak_orders": 11614,
+      "peak_levels": 2021
+    },
+    {
+      "locate": 5497,
+      "symbol": "NFLX",
+      "messages": 319366,
+      "peak_orders": 11560,
+      "peak_levels": 2505
+    },
+    {
+      "locate": 6815,
+      "symbol": "ROKU",
+      "messages": 446827,
+      "peak_orders": 10072,
+      "peak_levels": 2284
+    },
+    {
+      "locate": 5332,
+      "symbol": "MU",
+      "messages": 802998,
+      "peak_orders": 9845,
+      "peak_levels": 1710
+    },
+    {
+      "locate": 6556,
+      "symbol": "QQQ",
+      "messages": 2376743,
+      "peak_orders": 8847,
+      "peak_levels": 2615
+    },
+    {
+      "locate": 4184,
+      "symbol": "INTC",
+      "messages": 753343,
+      "peak_orders": 8609,
+      "peak_levels": 1723
+    },
+    {
+      "locate": 1151,
+      "symbol": "BYND",
+      "messages": 137188,
+      "peak_orders": 8423,
+      "peak_levels": 1912
+    },
+    {
+      "locate": 6998,
+      "symbol": "SBUX",
+      "messages": 492817,
+      "peak_orders": 8384,
+      "peak_levels": 1765
+    },
+    {
+      "locate": 6521,
+      "symbol": "QCOM",
+      "messages": 412399,
+      "peak_orders": 7925,
+      "peak_levels": 1635
+    },
+    {
+      "locate": 3459,
+      "symbol": "GOOGL",
+      "messages": 781302,
+      "peak_orders": 7487,
+      "peak_levels": 2059
+    },
+    {
+      "locate": 4587,
+      "symbol": "KHC",
+      "messages": 277891,
+      "peak_orders": 7093,
+      "peak_levels": 1463
+    },
+    {
+      "locate": 3458,
+      "symbol": "GOOG",
+      "messages": 667348,
+      "peak_orders": 7017,
+      "peak_levels": 1755
+    },
+    {
+      "locate": 1637,
+      "symbol": "COST",
+      "messages": 177708,
+      "peak_orders": 6958,
+      "peak_levels": 1902
+    }
+  ]
+}
