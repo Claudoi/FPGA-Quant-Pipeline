@@ -1,0 +1,8 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "name": "fpga-quant-pipeline",
+  "instructions": ["AGENTS.md", "docs/DESARROLLO.md"],
+  "skills": {
+    "paths": [".opencode/skills"]
+  }
+}

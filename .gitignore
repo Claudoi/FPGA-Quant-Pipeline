@@ -1,0 +1,67 @@
+# ───────────────────────────────────────────────────────────────
+# FPGA — .gitignore
+# Repo limpio "solo fuente": nada de artefactos de Vivado, datos
+# de mercado crudos ni cachés de simulación.
+# ───────────────────────────────────────────────────────────────
+
+# ── Ruido de sistema / editor ──
+.DS_Store
+**/.DS_Store
+._*
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.temp
+*.orig
+*.bak
+
+# ── opencode / agente ──
+.opencode/skills/**/artifacts/
+.opencode/*.local.json
+
+# ── Python ──
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Datos de mercado (nunca commitear feeds reales) ──
+data/itch_sample/**
+!data/itch_sample/.gitkeep
+*.NASDAQ_ITCH50.gz
+
+# ── Simulación (cocotb / Verilator) ──
+sim_build/
+**/sim_build/
+**/obj_dir/
+**/xsim.dir/
+**/work/
+*.vcd
+*.fst
+*.wlf
+*.log
+coverage/
+**/coverage/
+*.xml
+
+# ── Vivado / síntesis ──
+*.jou
+*.log
+*.backup
+synth/*.runs/
+synth/*.cache/
+synth/*.hw/
+synth/*.gen/
+synth/*.ip_user_files/
+synth/*.sim/
+*.bit
+*.bin
+*.ltx
+.idea/
+.vscode/
