@@ -1,5 +1,6 @@
 {
   "specs/fase0-golden-model/gherkin": "golden_model/tests",
   "specs/fase1-parser-rtl/gherkin": "verification/testbenches/parser",
-  "specs/fase2-orderbook/gherkin": "verification/testbenches/orderbook"
+  "specs/fase2-orderbook/gherkin": "verification/testbenches/orderbook",
+  "specs/fase3-optimizacion/gherkin": "verification/testbenches/phase3"
 }
