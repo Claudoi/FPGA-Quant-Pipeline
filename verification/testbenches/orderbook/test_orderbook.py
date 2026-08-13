@@ -102,9 +102,9 @@ def run_book(messages):
 def _fields_from_body(mtype, body):
     """Extrae la tupla de campos que book.py consume (campos del struct)."""
     if mtype == "S":
-        return (body[0],)
+        return (chr(body[0]),)  # el golden compara contra "Q"/"M" (str)
     if mtype == "H":
-        return (body[0:8], body[8])  # stock, trading_state
+        return (body[0:8], chr(body[8]))  # stock, trading_state ("T" = continuo)
     if mtype in ("A", "F"):
         ref = int.from_bytes(body[0:8], "big")
         side = chr(body[8])
@@ -419,6 +419,27 @@ async def test_multi01_dos_simbolos_independientes(dut):
 
 
 # ---------------------------------------------------------------------------
+# INV-U-01: replace sobre el mejor nivel — el BBO final ve la baja del precio
+#   Pinca el BUG-U: dos level_add en el mismo ciclo (la segunda no ve la
+#   primera por el sincronismo no-bloqueante) -> mejor bid stale.
+# ---------------------------------------------------------------------------
+@cocotb.test()
+async def test_inv_u01_replace_best_bid_estado_final(dut):
+    """INV/SEC-U-01 (borde): U sobre el mejor bid -> el estado final es visible."""
+    AMZN = 1101
+    msgs = [
+        A(AMZN, 1, 247097, b"B", 500, b"AMZN    ", 425_800),
+        A(AMZN, 2, 246365, b"B", 300, b"AMZN    ", 425_500),
+        U(AMZN, 3, 247097, 247657, 500, 425_700),  # baja el mejor bid 425800->425700
+    ]
+    expected, golden = run_book(msgs)
+    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    assert got == expected, (
+        f"INV-U-01: got={got} exp={expected} "
+        f"(el U debe dejar visible el nivel 425700, no el 425800 stale)")
+
+
+# ---------------------------------------------------------------------------
 # REPLAY-02: vectores congelados de BBO -> reproducción bit a bit
 # ---------------------------------------------------------------------------
 @cocotb.test()
@@ -476,20 +497,32 @@ def _pcap_msgs_subset(pcap_path, max_symbols=20):
 
 @cocotb.test()
 async def test_replay01_feed_real_bbo(dut):
-    """Espejo §REPLAY-01: el BBO del feed real es idéntico al golden.
+    """Espejo §REPLAY-01: el BBO del feed real (subset 20 símbolos) es idéntico
+    al golden book.py — bit a bit, evento a evento, incluido changed.
 
-    El mapeo locate→índice ya está implementado; el feed real multi-símbolo
-    expone un bug del replace `U` (dos level_add en el mismo ciclo: la segunda
-    no ve la primera por el sincronismo no-bloqueante). Documentado en
-    docs/research-orderbook-pendientes.md §BUG-U. El test se omite (no rompe)
-    mientras el bug no se arregla; REPLAY-02 (vectores congelados) cubre el
-    criterio 8 en estas iteraciones."""
+    El pcap local no se commitea (regla G0); el test se omite si no existe."""
     import os
     pcap = "/tmp/real_trading.pcap"
     if not os.path.exists(pcap):
         cocotb.log.info("REPLAY-01: pcap local ausente, test omitido (env sin datos)")
         return
+    msgs, keep = _pcap_msgs_subset(pcap, max_symbols=20)
     cocotb.log.info(
-        "REPLAY-01: omitido en esta iteración — BUG-U del replace en feed real "
-        "multi-símbolo (ver docs/research-orderbook-pendientes.md)")
+        f"REPLAY-01: {len(msgs)} mensajes de {len(keep)} símbolos "
+        f"({sorted(keep)[:3]}...) contra golden")
+    expected, golden = run_book(msgs)
+    got, cross, anomaly = await drive_and_collect_bbo(dut, msgs, max_cycles=2_000_000)
+    if got != expected:
+        first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
+        raise AssertionError(
+            f"REPLAY-01: got({len(got)}) exp({len(expected)}) sobre {len(msgs)} msgs "
+            f"/ {len(keep)} símbolos; primer desajuste en evento {first}:\n"
+            f" got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
+    assert cross == golden.cross_events, (
+        f"REPLAY-01 cross: got={cross} exp={golden.cross_events}")
+    assert anomaly == golden.anomalies, (
+        f"REPLAY-01 anomaly: got={anomaly} exp={golden.anomalies}")
+    cocotb.log.info(
+        f"REPLAY-01 OK: {len(got)} eventos bit a bit, "
+        f"cross={cross}, anomaly={anomaly}")
 

@@ -8,75 +8,62 @@
 
 | Área | Estado |
 |---|---|
-| RTL `orderbook.sv` | lint `--Wall` 0; **13/13 tests verdes** (mapeo locate→índice en iteración 2) |
-| Tests | BBO-01, SEC-U, SEC-HZ-01/02, SEC-DC-01/02, SEC-AN, SEC-OV, SEC-CR, SEC-EM, MULTI-01, REPLAY-02 |
-| Gate E (mutación) | 6/6 mutantes muertos (`scripts/verify/mutate_orderbook.py`) |
-| **CERRADO iteración 2** | Mapeo locate→índice (register-on-first-seen) — 13/13 sintéticos verde |
-| **PENDIENTE 1** | **BUG-U**: replace con doble level_add en el mismo ciclo (REPLAY-01) |
-| **PENDIENTE 2** | Profundidad de book (N niveles públicos), pipeline URAM optimizado |
+| RTL `orderbook.sv` | lint `--Wall` 0; **14/14 tests verdes** (iteración 3) |
+| Tests | BBO-01, SEC-U, SEC-HZ-01/02, SEC-DC-01/02, SEC-AN, SEC-OV, SEC-CR, SEC-EM, MULTI-01, INV-U-01, REPLAY-01 (feed real), REPLAY-02 |
+| Gate E (mutación) | **8/8 mutantes muertos** (`scripts/verify/mutate_orderbook.py`) |
+| **CERRADO iteración 2** | Mapeo locate→índice (register-on-first-seen) |
+| **CERRADO iteración 3** | **BUG-U** (replace atómico en 2 ciclos), K=19, P=32, tstate por símbolo, **REPLAY-01 bit a bit** |
+| **PENDIENTE 2** | Profundidad de book (N niveles públicos), pipeline URAM optimizado (fase 3) |
 
-## PENDIENTE 1 — BUG-U: replace `U` con dos level_add en el mismo ciclo
+## CERRADO — BUG-U: replace `U` con dos level_add en el mismo ciclo (iteración 3)
 
-### Síntoma (iteración 2)
+### Fix aplicado
 
-El feed real multi-símbolo (20 locates, 31400 mensajes) falla REPLAY-01:
-`got(30261) exp(30729)` — 468 eventos de diferencia. El primer desajuste:
+El branch `U` de `apply_one` ya NO hace dos `level_add` en el mismo ciclo.
+Ahora el delete se aplica en `ST_APPLY` (con `level_add` de `-o_qty` + `o_valid[oref] <= 0`)
+y la add se aplica en el estado nuevo `ST_UADD` (ciclo siguiente), donde la
+segunda `level_add` SÍ ve la eliminación (las escrituras `<=` del flanco anterior
+son visibles). El routing `ST_APPLY → ST_UADD` usa la salida bloqueante
+`out_uadd` de `apply_one` (visible en el mismo ciclo; un flag `<=` habría llegado
+tarde). `emit_ok` se conserva entre ambos estados: el BBO del U se emite UNA vez,
+con el estado final (atómico, sin ventana).
 
-```
-evento 769: got=(1101, (425800, 500, 426300, 1400), 0) exp=(1101, (425700, 500, 426300, 1400), 1)
-mensaje: type=U loc=1101, orig=247097, new=247657, shares=500, price=425700
-```
+### Otros hallazgos cerrados en la misma iteración (REPLAY-01)
 
-### Reproducción mínima (sintética)
+El feed real multi-símbolo expuso TRES divergencias más, todas corregidas:
 
-```
-A(1101, 247097, bid, 500, @425800)
-A(1101, 246365, bid, 300, @425500)
-U(1101, 247097→247657, 500, @425700)
-exp: [(1101,(425800,500,0,0),1), (1101,(425800,500,0,0),0), (1101,(425700,500,0,0),1)]
-got: [(1101,(425800,500,0,0),1), (1101,(425800,500,0,0),0), (1101,(425800,500,0,0),0)]
-```
+1. **Truncado de `order_ref` a K=14 bits**: los refs del subset real van de 267
+   a 372.297 (refs globales del día); con 2^14=16.384 entradas hay 4.443
+   colisiones (2 refs con los mismos 14 bits bajos) → órdenes perdidas/confundidas
+   (173 eventos de menos). Fix: **K=19** (2^19=524.288 ≥ max_ref del subset).
+   La indexación directa exige `2^K > max_ref`, no `≥ peak_live`; se documenta el
+   coste URAM (524.288 × ~66 bits ≈ 4,3 MB ≈ 120 URAM) para fase 3.
+2. **Overflow de niveles con P=8**: el símbolo 6960 llega a **17 niveles ask**
+   vivos (13 bid); con P=8 el RTL descartaba niveles (error silencioso de BBO).
+   Fix: **P=32** (≥ máximo medido del subset; el overflow >P sigue señalizándose
+   con `error`, SEC-OV).
+3. **`trading_state` 4 bits global**: el golden guarda el trading state POR
+   locate (8 bits, `'T'`=0x54 continuo); el RTL tenía un registro global de 4
+   bits comparado contra `4'd0` → los crosses reales no se contaban. Fix:
+   `tstate[NSYM-1:0]` de 8 bits por símbolo, comparado contra `8'h54`.
+   Además el testbench pasaba `S`/`H` como int al golden (comparaba contra str
+   `"Q"`/`"T"` → market hours y crosses NUNCA contaban, SEC-CR-01 vacuo):
+   ahora se pasan como `chr()` y SEC-CR-01 pincha de verdad.
 
-El `U` reemplaza la orden best-bid (425800) por una a 425700; el golden da
-best bid 425700, el RTL sigue en 425800.
+### Evidencia
 
-### Causa raíz
-
-En `apply_one`, el branch `U` hace DOS llamadas a `level_add` en el MISMO
-ciclo:
-1. `level_add(o_side[oref], o_price[oref], -o_qty[oref])`  → elimina 425800
-2. `level_add(o_side[oref], price, shares)`              → añade 425700
-
-Cada `level_add` copia `lv_qty/lv_price` a variables locales (`lpr/lqt`),
-aplica, y escribe de vuelta con `<=` (non-blocking). La segunda llamada lee
-`lv_qty` ANTES de que la primera actualice (la escritura `<=` es visible el
-ciclo siguiente), así que la segunda ve 425800 con qty 500 (no 0) y el nivel
-resultante queda corrupto (425800 con qty residual, 425700 mal ordenado).
-
-Esto es el MISMO patrón que se arregló en la iteración 1 dentro de una sola
-`level_add` (variables locales), pero ahora son DOS `level_add` consecutivas
-en `apply_one` que comparten el mismo flanco.
-
-### Fix propuesto (iteración 3)
-
-1. **Pipeline del U en 2 ciclos**: aplicar la eliminación de la orig en un
-   ciclo y la adición de la nueva en el siguiente (o un `level_add` que acepte
-   dos operaciones atómicas). Alternativa más simple: serializar las dos
-   operaciones con un `apply_pending` flag que divida el APPLY del U en dos
-   estados.
-2. O: hacer `level_add` **combinacional puro** que devuelva el nuevo estado
-   (no escriba `<=`), y que `apply_one` lo invoque dos veces encadenadas sobre
-   la misma variable local, escribiendo `lv_*` UNA vez al final.
-3. Revalidar REPLAY-01 con el feed real de 20 símbolos (31400 mensajes).
+- Rojo (tests añadidos/restaurados contra el RTL de la iteración 2):
+  `SEC-CR-01` (cross 0 vs 1), `INV-U-01` (best bid stale 425800 vs 425700),
+  `REPLAY-01` (got 30.556 vs exp 30.729).
+- Verde: **14/14**, REPLAY-01 **30.729 eventos bit a bit** (anomaly 671, cross 0),
+  8/8 mutantes muertos (añadidos U-DELETE-HALF y U-SKIP-ROUTE).
 
 ### Cómo reproducir
 
 ```bash
 cd verification/testbenches/orderbook
 export PATH="$PWD/../../../.venv/bin:$PATH"
-# suite (REPLAY-01 omitido por BUG-U)
-make clean && make sim
-# para ver el bug: descomentar el cuerpo de test_replay01_feed_real_bbo
+make clean && make sim          # 14/14 (REPLAY-01 con /tmp/real_trading.pcap)
 ```
 
 ## CERRADO — mapeo locate → índice de símbolo (iteración 2)
@@ -107,6 +94,7 @@ restante es el BUG-U, independiente del mapeo).
 ```bash
 cd verification/testbenches/orderbook
 export PATH="$PWD/../../../.venv/bin:$PATH"
-make clean && make sim          # 13/13 con mapeo [4:0]
-# para reintentar el mapeo en iteración 2, ver la sección PENDIENTE 1
+make clean && make sim          # 14/14 con mapeo locate→índice + U en 2 ciclos
+# mutación del order book (gate E): 8/8 deben morir
+python3 ../../../scripts/verify/mutate_orderbook.py
 ```

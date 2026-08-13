@@ -20,8 +20,13 @@
 // URAM y la latencia registrada se optimizan en la iteración de profundidad.
 module orderbook #(
     parameter DW  = 64,
-    parameter K   = 14,          // 2^K entradas de orden (refs)
-    parameter P   = 8,           // niveles de precio por lado
+    parameter K   = 19,          // 2^K entradas de orden (refs). Indexación
+                                 // directa por order_ref: 2^K >= max ref del
+                                 // subset real (372.297 -> K=19); el mapeo a
+                                 // URAM se dimensiona en fase 3.
+    parameter P   = 32,          // niveles de precio por lado. Máx medido del
+                                 // subset real: 17 (locate 6960 ask, día local);
+                                 // el overflow >P sigue señalizándose (SEC-OV)
     parameter NSYM = 20,         // símbolos del subset
     parameter PXW = 32,          // ancho de precio (sub-céntimos ITCH)
     parameter QW  = 32           // ancho de cantidad
@@ -52,9 +57,11 @@ module orderbook #(
     localparam ST_BODY  = 3'd2;
     localparam ST_APPLY = 3'd3;
     localparam ST_EMIT  = 3'd4;
+    localparam ST_UADD  = 3'd5;
     reg [2:0] st;
     reg [6:0] nbody_w;      // words de cuerpo restantes por consumir
     reg emit_ok;            // la operación aplicada se emite (no fue anomalía/error)
+    reg do_uadd;            // el replace U de este ciclo necesita ST_UADD
     // handshake combinacional: acepta entrada en W0/TS/BODY
     assign s_axis_tready = (st == ST_W0) || (st == ST_TS) || (st == ST_BODY);
 
@@ -71,7 +78,6 @@ module orderbook #(
     // ---------------------------------------------------------------
     reg           o_valid [ORD-1:0];
     reg           o_side  [ORD-1:0];
-    reg [15:0]    o_locate[ORD-1:0];
     reg [PXW-1:0] o_price [ORD-1:0];
     reg [QW-1:0]  o_qty   [ORD-1:0];
 
@@ -83,7 +89,14 @@ module orderbook #(
     reg [QW-1:0]  prev_bq [NSYM-1:0], prev_aq [NSYM-1:0];
 
     reg market_open;
-    reg [3:0] trading_state;
+    reg [7:0] tstate [NSYM-1:0];   // trading state por símbolo (golden: por locate)
+
+    // reemplazo U: la mitad "add" se aplica en el ciclo siguiente (ST_UADD),
+    // porque dos level_add en el mismo ciclo no ven la primera (no-bloqueante)
+    reg [K-1:0] u_newref;
+    reg        u_side;
+    reg [PXW-1:0] u_price;
+    reg [QW-1:0]  u_shares;
 
     // mapeo locate -> índice de símbolo (register-on-first-seen)
     reg [15:0] loc_map[NSYM-1:0];
@@ -131,7 +144,9 @@ module orderbook #(
             end
             bbo_tvalid <= 1'b0; bbo_locate <= 0; bbo_tdata <= 0; bbo_changed <= 1'b0;
             cross_events <= 0; anomaly_count <= 0; error <= 1'b0;
-            market_open <= 1'b0; trading_state <= 4'h0;
+            market_open <= 1'b0; u_newref <= 0; u_side <= 0;
+            u_price <= 0; u_shares <= 0;
+            for (int i = 0; i < NSYM; i++) tstate[i] <= 8'h00;
             bi <= 0; nbody_w <= 0; emit_ok <= 1'b0;
             for (int i = 0; i < NSYM; i++) loc_map[i] <= 16'hffff;
             loc_cnt <= 0; m_loc_idx <= 0;
@@ -184,12 +199,23 @@ module orderbook #(
                     if (!bbo_tvalid || bbo_tready) begin
                         if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
                         if (m_idx == 32'hffffffff) error <= 1'b1;  // idx sane
-                        apply_one();
-                        if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
-                            m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
-                            m_type == 8'h55) st <= ST_EMIT;
+                        apply_one(do_uadd);
+                        if (do_uadd) st <= ST_UADD;   // replace: mitad add
+                        else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
+                                 m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
+                                 m_type == 8'h55) st <= ST_EMIT;
                         else st <= ST_W0;
                     end
+                end
+                ST_UADD: begin
+                    // mitad add del replace: la segunda level_add ve el estado
+                    // del ciclo anterior (la eliminación ya aplicada)
+                    level_add(u_side, u_price, u_shares);
+                    o_valid[u_newref] <= 1'b1;
+                    o_side[u_newref] <= u_side;
+                    o_price[u_newref] <= u_price;
+                    o_qty[u_newref] <= u_shares;
+                    st <= ST_EMIT;
                 end
                 ST_EMIT: begin
                     if (emit_ok) emit_bbo();
@@ -315,7 +341,7 @@ module orderbook #(
                     i = P;
                 end
             end
-            if (market_open && trading_state == 4'd0 && bp != 0 && ap != 0 && bp >= ap)
+            if (market_open && tstate[m_loc_idx] == 8'h54 && bp != 0 && ap != 0 && bp >= ap)
                 cross_events <= cross_events + 1;
             bbo_locate <= m_locate;
             bbo_tdata  <= {bp[31:0], bq[31:0], ap[31:0], aq[31:0]};
@@ -328,7 +354,7 @@ module orderbook #(
         end
     endtask
 
-    task automatic apply_one;
+    task automatic apply_one(output logic out_uadd);
         reg [K-1:0] oref, newref;
         reg [31:0] shares, price;
         reg ask;
@@ -336,6 +362,7 @@ module orderbook #(
         reg do_emit;
         begin
             do_emit = 1'b0;
+            out_uadd = 1'b0;
             case (m_type)
                 8'h41, 8'h46: begin
                     oref = K'(b64(0)); ask = (pbody(8) == 8'h53);
@@ -344,7 +371,6 @@ module orderbook #(
                         error <= 1'b1;
                     end else begin
                         o_valid[oref] <= 1'b1; o_side[oref] <= ask;
-                        o_locate[oref] <= m_locate;
                         o_price[oref] <= price; o_qty[oref] <= shares;
                         level_add(ask, price, shares);
                         do_emit = 1'b1;
@@ -368,15 +394,16 @@ module orderbook #(
                     if (!o_valid[oref]) anomaly_count <= anomaly_count + 1;
                     else if (shares == 0 || o_valid[newref]) error <= 1'b1;
                     else begin
+                        // mitad delete (atómico): la add se aplica en ST_UADD,
+                        // un ciclo después, para que vea la eliminación
                         level_add(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
-                        level_add(o_side[oref], price, shares);
                         o_valid[oref] <= 1'b0;
-                        o_valid[newref] <= 1'b1;
-                        o_locate[newref] <= o_locate[oref];
-                        o_side[newref] <= o_side[oref];
-                        o_price[newref] <= price;
-                        o_qty[newref] <= shares;
+                        u_newref <= newref;
+                        u_side <= o_side[oref];
+                        u_price <= price;
+                        u_shares <= shares;
                         do_emit = 1'b1;
+                        out_uadd = 1'b1;
                     end
                 end
                 8'h53: begin
@@ -384,7 +411,7 @@ module orderbook #(
                     if (ev == 8'h51) market_open <= 1'b1;
                     else if (ev == 8'h4d) market_open <= 1'b0;
                 end
-                8'h48: trading_state <= 4'(pbody(8));
+                8'h48: tstate[m_loc_idx] <= pbody(8);
                 default: ;
             endcase
             emit_ok <= do_emit;

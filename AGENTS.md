@@ -14,7 +14,7 @@
 `10G MAC → decap IP/UDP → framing MoldUDP64 → parser ITCH → order book engine (URAM) → BBO`.
 El proyecto ganador es el **pipeline completo por fases**, no un parser suelto.
 
-## Estado actual (actualizado 2026-08-12)
+## Estado actual (actualizado 2026-08-13)
 
 **Fase 0 (golden model) CERRADA con PASS** — ciclo completo en 3 iteraciones
 (spec → build → verify → grade), contrato en `specs/fase0-golden-model/`.
@@ -25,18 +25,18 @@ El proyecto ganador es el **pipeline completo por fases**, no un parser suelto.
 - Evidencia día real 2019-12-30 (en `data/itch_sample/`, no commiteado):
   268.744.780 mensajes en 17 min, 0 anomalías, 14,4M vectores sobre el
   subset de 20 símbolos (`verification/vectors/subset_symbols.json`).
-- **Siguiente paso: campaña `fase1-parser-rtl`** — `/spec` primero
-  (entrevista). Alcance del maestro: datapath 64-bit @ 156,25 MHz, subset
-  S,R,A,F,E,C,X,D,U,P, AXI-Stream de salida, 1 palabra/ciclo en peor caso,
-  cocotb replayando pcaps contra los vectores del golden.
-- **Bloqueante de entorno para fase 1:** Verilator + cocotb NO instalados
-  (setup en `docs/DESARROLLO.md`; venv + brew — pedir confirmación al owner).
-- Cabos abiertos de fase 0: día de regresión 01302019 sin procesar; vectores
-  sintéticos pequeños commiteables en `verification/vectors/` pendientes.
-- Gotcha de datos: los `.md5sum` de emi.nasdaq.com dan 404 por HTTPS;
-  `fetch_itch.py` aborta fail closed (usar `--no-md5-verify` + gzip -t si
-  hace falta). El servidor es lento (~350 KB/s/conexión): descargar por
-  rangos en paralelo.
+
+**Fase 1 (parser RTL) CERRADA** — contrato en `specs/fase1-parser-rtl/`.
+19/19 tests, 10/10 mutantes; criterio 7 (frame truncado) cerrado en iteración 3.
+
+**Fase 2 (order book RTL) — iteración 3 CERRADA, lista para /grade.** Contrato
+en `specs/fase2-orderbook/`. 14/14 tests, 8/8 mutantes. Cerrados: mapeo
+locate→índice (iter 2) y REPLAY-01 con el feed real (iter 3): 31.400 mensajes
+de 20 símbolos → **30.729 eventos BBO bit a bit vs golden** (anomaly 671,
+cross 0). Hallazgos de la iteración 3: BUG-U del replace (U en 2 ciclos),
+truncado de order_ref (K=19), overflow de niveles (P=32), trading state por
+símbolo de 8 bits. Pendiente de fase 2: veredicto de `/grade`.
+- **Siguiente paso: `/grade` de fase 2 → fase 3 (optimización 322 MHz / URAM).**
 
 ## Ciclo de trabajo (loop verificado, portado a FPGA + opencode)
 
