@@ -115,12 +115,13 @@ module orderbook #(
     reg market_open;
     reg [7:0] tstate [NSYM-1:0];   // trading state por símbolo (golden: por locate)
 
-    // reemplazo U: la mitad "add" se aplica en el ciclo siguiente (ST_UADD),
-    // porque dos level_add en el mismo ciclo no ven la primera (no-bloqueante)
-    reg [K-1:0] u_newref;
-    reg        u_side;
-    reg [PXW-1:0] u_price;
-    reg [QW-1:0]  u_shares;
+// reemplazo U: la mitad "add" se aplica en el ciclo siguiente (ST_UADD),
+// porque dos level_add en el mismo ciclo no ven la primera (no-bloqueante)
+reg [K-1:0] u_newref;
+reg        u_side;
+reg [PXW-1:0] u_price;
+reg [QW-1:0]  u_shares;
+reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
 
     // mapeo locate -> índice de símbolo (register-on-first-seen)
     reg [15:0] loc_map[NSYM-1:0];
@@ -214,7 +215,7 @@ module orderbook #(
             depth_tvalid <= 1'b0; depth_tdata <= 0;
             cross_events <= 0; anomaly_count <= 0; error <= 1'b0;
             market_open <= 1'b0; u_newref <= 0; u_side <= 0;
-            u_price <= 0; u_shares <= 0;
+            u_price <= 0; u_shares <= 0; u_nidx <= 0;
             for (int i = 0; i < NSYM; i++) tstate[i] <= 8'h00;
             bi <= 0; nbody_w <= 0; hrem <= 2'd1; emit_ok <= 1'b0;
             for (int i = 0; i < NSYM; i++) loc_map[i] <= 16'hffff;
@@ -334,10 +335,11 @@ module orderbook #(
         input        ask;
         input [PXW-1:0] price;
         input signed [31:0] delta;
-        integer base, slot, found, empty, i, j;
+        integer base, slot, found, empty;
         reg [PXW-1:0] tp;
         reg [QW-1:0] tq;
         reg [32:0] newq;
+        reg removed;
         reg [PXW-1:0] lpr[0:P-1];   // copias locales (bloqueantes) del lado
         reg [QW-1:0]  lqt[0:P-1];
         begin
@@ -353,7 +355,13 @@ module orderbook #(
                 if (lqt[slot] == 0 && empty == -1) empty = slot;
                 else if (lqt[slot] != 0 && lpr[slot] == price) found = slot;
             end
+            removed = 1'b0;
             if (found == -1 && empty == -1) begin
+                error <= 1'b1;   // overflow de niveles (SEC-OV-01)
+            end else if (found == -1 && delta < 0) begin
+                // reduce sobre un nivel que no existe (orden en tabla sin
+                // nivel por overflow previo): jamás una cantidad envuelta
+                // (phantom ~4,29e9; hallazgo G5)
                 error <= 1'b1;
             end else if (found == -1) begin
                 lpr[empty] = price;
@@ -366,19 +374,35 @@ module orderbook #(
                     // precio Y cantidad, o el top-N filtraría precios stale
                     lqt[found] = 0;
                     lpr[found] = 0;
+                    removed = 1'b1;
                 end
                 else lqt[found] = QW'(newq);
             end
-            // burbuja sobre las copias locales (mejor primero)
-            for (i = 0; i < P; i = i + 1)
-                for (j = i+1; j < P; j = j + 1) begin
-                    if (lqt[j] != 0 &&
-                        (lqt[i] == 0 ||
-                         (ask ? (lpr[j] < lpr[i]) : (lpr[j] > lpr[i])))) begin
-                        tp = lpr[i]; lpr[i] = lpr[j]; lpr[j] = tp;
-                        tq = lqt[i]; lqt[i] = lqt[j]; lqt[j] = tq;
+            // reordenamiento O(P) — jamás O(P·P) (criterio 9): la lista ya
+            // está ordenada por invariante y a lo sumo UN elemento queda
+            // fuera de lugar: el nivel vaciado (hueco compactado a la
+            // izquierda) o el nivel recién insertado (burbuja de inserción
+            // de una pasada hacia el mejor)
+            if (removed) begin
+                for (slot = found; slot < P-1; slot = slot + 1) begin
+                    lpr[slot] = lpr[slot+1];
+                    lqt[slot] = lqt[slot+1];
+                end
+                lpr[P-1] = 0;
+                lqt[P-1] = 0;
+            end else if (found == -1 && delta > 0) begin
+                // el nivel nuevo sube por precio: los anteriores ya están
+                // ordenados, la pasada derecha->izquierda lo coloca y para
+                for (slot = empty; slot > 0; slot = slot - 1) begin
+                    if (lqt[slot] != 0 && lqt[slot-1] != 0 &&
+                        (ask ? (lpr[slot] < lpr[slot-1]) : (lpr[slot] > lpr[slot-1]))) begin
+                        tp = lpr[slot]; lpr[slot] = lpr[slot-1]; lpr[slot-1] = tp;
+                        tq = lqt[slot]; lqt[slot] = lqt[slot-1]; lqt[slot-1] = tq;
+                    end else begin
+                        slot = 0;   // ya en su posición: termina la pasada
                     end
                 end
+            end
             // escribir el resultado de una sola vez (non-blocking)
             for (slot = 0; slot < P; slot = slot + 1) begin
                 lv_price[base+slot] <= lpr[slot];
@@ -418,24 +442,15 @@ module orderbook #(
     endtask
 
     task automatic apply_uadd_half;
-        // mitad add del replace (ST_UADD): inserta u_newref en la tabla.
-        // Si los PROBE slots están ocupados -> tabla llena: no se aplica, se
-        // señaliza error y se cancela el BBO del replace (SEC-HASH-02).
-        logic full;
-        logic [SLOT-1:0] nidx;
+        // mitad add del replace (ST_UADD): inserta u_newref en el slot ya
+        // verificado u_nidx (la capacidad se chequeó en ST_APPLY, U atómico).
         begin
-            nidx = first_empty(u_newref[SLOT-1:0], full);
-            if (full) begin
-                error <= 1'b1;
-                emit_ok <= 1'b0;
-            end else begin
-                level_add(u_side, u_price, u_shares);
-                o_valid[nidx] <= 1'b1;
-                o_ref[nidx]   <= u_newref;
-                o_side[nidx]  <= u_side;
-                o_price[nidx] <= u_price;
-                o_qty[nidx]   <= u_shares;
-            end
+            level_add(u_side, u_price, u_shares);
+            o_valid[u_nidx] <= 1'b1;
+            o_ref[u_nidx]   <= u_newref;
+            o_side[u_nidx]  <= u_side;
+            o_price[u_nidx] <= u_price;
+            o_qty[u_nidx]   <= u_shares;
         end
     endtask
 
@@ -548,16 +563,26 @@ module orderbook #(
                         nidx = lookup_ref(newref, found2);
                         if (found2) error <= 1'b1;   // newref duplicada
                         else begin
-                            // mitad delete (atómico): la add se aplica en ST_UADD,
-                            // un ciclo después, para que vea la eliminación
-                            level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
-                            o_valid[sidx] <= 1'b0;
-                            u_newref <= newref;
-                            u_side <= o_side[sidx];
-                            u_price <= price;
-                            u_shares <= shares;
-                            do_emit = 1'b1;
-                            out_uadd = 1'b1;
+                            // U atómico (hallazgo G5): la capacidad de la mitad
+                            // add se verifica ANTES del delete; si el camino
+                            // del newref está lleno, no se toca la original
+                            nidx = first_empty(newref[SLOT-1:0], full);
+                            if (full) begin
+                                error <= 1'b1;   // tabla llena: la original sobrevive
+                            end else begin
+                                // mitad delete (atómica): la add se aplica en
+                                // ST_UADD, un ciclo después, en el slot ya
+                                // verificado u_nidx
+                                level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
+                                o_valid[sidx] <= 1'b0;
+                                u_newref <= newref;
+                                u_side <= o_side[sidx];
+                                u_price <= price;
+                                u_shares <= shares;
+                                u_nidx <= nidx;
+                                do_emit = 1'b1;
+                                out_uadd = 1'b1;
+                            end
                         end
                     end
                 end
