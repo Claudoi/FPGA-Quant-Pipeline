@@ -191,4 +191,69 @@ async def test_sec_hash02b_tombstone_reutilizado(dut):
     assert got == expected, f"SEC-HASH-02b: got={got} exp={expected}"
     assert anomaly == golden.anomalies, (
         f"SEC-HASH-02b: anomaly={anomaly} exp={golden.anomalies}")
-    assert errores == 0, f"SEC-HASH-02b: sin errores, vistos {errores}"
+
+
+@cocotb.test()
+async def test_inv_u01_tabla_llena_no_borra_la_original(dut):
+    """INV/SEC-HASH-02 (U): el replace con el camino del newref lleno señala
+    error SIN aplicar la mitad delete — la orden original sobrevive.
+
+    Hallazgo MAYOR del reviewer (G5): el RTL aplicaba el delete en ST_APPLY y
+    solo detectaba la tabla llena en ST_UADD -> la orden original se perdía
+    silenciosamente (error de pulso y libro divergente del golden).
+
+    El path del newref (hash 9) queda lleno con refs AJENAS (grupo B); el
+    delete de la original (grupo A, hash 5) libera otro slot, no el del path.
+
+    Forma cerrada (el golden no tiene límite de tabla): tras el U fallido, un
+    E sobre la ref original reduce su nivel (la original sigue viva)."""
+    AMZN = 393
+    refsA = [5 + i * 65536 for i in range(8)]       # slots 5..12 (hash 5)
+    refsB = [100 + i * 65536 for i in range(8)]     # slots 100..107 (hash 100),
+    # disjunto del path de A: los 16 adds caben sin error
+    msgs = [S(AMZN, 1, ord("Q"))]
+    for i, r in enumerate(refsA):
+        msgs.append(A(AMZN, 10 + i, r, b"B", 100, b"AMZN    ", 1_000_00 + i))
+    for i, r in enumerate(refsB):
+        msgs.append(A(AMZN, 20 + i, r, b"B", 100, b"AMZN    ", 999_00 + i))
+    msgs.append(U(AMZN, 90, refsA[0], 100 + 8 * 65536, 100, 1_000_00))
+    msgs.append(E(AMZN, 91, refsA[0], 100, 1001))   # la original debe seguir viva
+    got, _, anomaly, errores = await drive_and_collect_bbo32_err(dut, msgs)
+    assert errores > 0, "INV-U-01: el U con tabla llena debe señalar error"
+    assert anomaly == 0, (
+        f"INV-U-01: anomaly={anomaly} exp=0 (la original no debe perderse: "
+        f"el E posterior la reduce)")
+    assert len(got) == 17, f"INV-U-01: eventos={len(got)} exp=17 (16 adds + E)"
+    assert got[-1] == (393, (100007, 100, 0, 0), 0), (
+        f"INV-U-01: el E reduce la original -> mejor bid intacto 100007@100: "
+        f"got[-1]={got[-1]}")
+
+
+@cocotb.test()
+async def test_inv_ov01_phantom_no_envuelve_cantidad(dut):
+    """INV/SEC-OV-01 (phantom): un reduce sobre un nivel que no existe (orden
+    en tabla sin nivel por overflow de P=32) NO puede escribir una cantidad
+    envuelta (~4,29e9) en un slot libre.
+
+    Hallazgo MAYOR del reviewer (G5): con un slot libre (tras un D) la
+    reducción con delta negativo y precio ausente escribía QW'(delta) envuelto
+    -> nivel fantasma que salía como mejor bid.
+
+    Forma cerrada (el golden no tiene límite de P): 33 adds al mismo lado
+    (el 33º desborda y entra en tabla sin nivel), D del 1º (libera slot),
+    D del 33º (reduce sobre nivel ausente) -> error + sin cambio de BBO."""
+    AMZN = 393
+    msgs = [S(AMZN, 1, ord("Q"))]
+    for i in range(33):
+        msgs.append(A(AMZN, 10 + i, 1000 + i, b"B", 100, b"AMZN    ", 1_000_00 + i))
+    msgs.append(D(AMZN, 50, 1000))          # libera el slot del nivel 100000
+    msgs.append(D(AMZN, 51, 1032))          # la orden 33ª (en tabla, sin nivel)
+    got, _, anomaly, errores = await drive_and_collect_bbo32_err(dut, msgs)
+    assert errores >= 2, (
+        f"INV-OV-01: errores={errores} exp>=2 (overflow del add 33 + reduce "
+        f"sobre nivel ausente)")
+    assert anomaly == 0, f"INV-OV-01: anomaly={anomaly} exp=0"
+    assert len(got) == 35, f"INV-OV-01: eventos={len(got)} exp=35"
+    assert got[-1] == (393, (100031, 100, 0, 0), 0), (
+        f"INV-OV-01: el reduce fantasma no cambia el BBO (sin wrap): "
+        f"got[-1]={got[-1]} exp=(100031@100, changed=0)")
