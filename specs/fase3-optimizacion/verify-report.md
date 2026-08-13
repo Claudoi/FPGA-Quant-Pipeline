@@ -448,3 +448,20 @@ SEC-HASH-01/02/03, SEC-NSYM-01, SEC-BP-01, SEC-DP-01, DP-01, SEC-LAT-01 —
 Iteraciones 1-6 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
 informe del run externo pendiente de pegar): **verde con evidencia**;
 pendiente de `/grade` y del WNS del owner.
+
+## Grade (2026-08-14) — FAIL (1) con stop limit alcanzado; escala al owner
+
+Re-ejecución adversarial completa: gates A (25/25 + 19/19 + 14/14), B (lint
+`--Wall` limpio), D, E (22/22 mutantes muertos), F (14/14 espejos), G0 en
+verde. Criterios 1-9 y 11 PASS. Dos asuntos:
+
+1. **Criterio 10 (síntesis) FAIL — pendiente externo**: `synth/reports/` vacío;
+   `vivado` no está en el entorno de desarrollo. El owner corre
+   `synth/fase3_synth.tcl` y pega `timing_impl.txt` (WNS/TNS) y `util_impl.txt`
+   (LUT/FF/BRAM/URAM) — cierra criterio 10 y confirma la inferencia URAM del
+   criterio 9. Nuevo: `scripts/verify/synth_check.py` valida los artefactos
+   sin Vivado (10/10 PASS).
+2. **Hallazgo lente 1 (doc) — corregido en el commit 7e7954f**: la tabla por
+   tipo de `docs/writeup/latencia.md` (p99 por tipo) discrepaba de la
+   evidencia `verification/vectors/latency/latency_dw32.json`; regenerada
+   desde el JSON (el total ya coincidía).
