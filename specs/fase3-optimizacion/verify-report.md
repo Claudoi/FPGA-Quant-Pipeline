@@ -266,6 +266,38 @@ Cierra los dos hallazgos de la lente 9 del grade de fase 2 y mide la latencia:
 
 - Criterios 9-11 (URAM/registrada, sin rutas O(P·P), síntesis).
 
+## Iteración 5 — pipeline URAM y artefactos de síntesis (criterios 9-11)
+
+### Meta del atacante/diseño
+
+- **Criterio 9 (URAM)**: documentar el mapeo de la tabla de órdenes a URAM
+  (65.536×86 bits ≈ 20 URAM del VU9P), el patrón de lectura registrada
+  (probe serializado 1 slot/ciclo con prefetch durante ST_BODY) y auditar que
+  no existe ninguna ruta O(P·P) en el cálculo del mejor precio.
+- **Criterio 10 (síntesis)**: constraints 322,265625 MHz (period 3,103 ns) +
+  script tcl synth/impl (part `xcvu9p-flga2104-2L-e`, top `itch_chain`,
+  generic DW=32) commiteados en `synth/`; el run de Vivado es externo (owner).
+- **Criterio 11 (lint)**: cubierto por el gate B — `verilator --lint-only
+  -Wall` limpio en las 5 variantes (orderbook DW32/K19, DW32/K20, DW64/K19,
+  chain DW32, chain DW64), sin warnings reales silenciados.
+
+### Evidencia
+
+| Entregable | Resultado |
+|---|---|
+| `docs/writeup/uram.md` | mapeo URAM + patrón registrado + auditoría de complejidad (sin O(P·P): emit O(P), level_add O(P) de una pasada, lookup O(PROBE), top-N O(ND)) |
+| `synth/constraints/fase3_322mhz.xdc` | reloj 3,103 ns + I/O delays sobre puertos reales del top (verificados contra `itch_chain.sv`) |
+| `synth/fase3_synth.tcl` | synth→opt→place→route + informes WNS/TNS/utilización → `synth/reports/` |
+| `synth/reports/README.md` | qué pega el owner tras el run externo |
+| Lint (criterio 11) | 5/5 variantes `--lint-only -Wall` sin errores |
+
+### Pendiente del owner (externo)
+
+- Correr `fase3_synth.tcl` en Vivado y pegar `timing_impl.txt` (WNS/TNS,
+  criterio: **WNS ≥ 0**) y `util_impl.txt` (LUT/FF/BRAM/**URAM**) en
+  `synth/reports/`. La inferencia URAM del synth confirma el criterio 9
+  (guardarraíl del contrato sin gate nº 4).
+
 ## Tabla de gates
 
 | Gate | Comando / evidencia | Resultado |
@@ -280,6 +312,6 @@ Cierra los dos hallazgos de la lente 9 del grade de fase 2 y mide la latencia:
 
 ## Veredicto
 
-Iteración 1 (criterios 1-3 + REG-01), iteración 2 (criterios 4-5), iteración 3
-(criterio 6, top-N) e iteración 4 (criterios 7-8: hardening F1/F2 + latencia):
-**verde con evidencia**; pendiente de `/verify` formal y criterios 9-11.
+Iteraciones 1-5 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
+informe del run externo pendiente de pegar): **verde con evidencia**;
+pendiente de `/verify` formal y del WNS del owner.
