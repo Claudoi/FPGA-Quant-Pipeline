@@ -49,6 +49,10 @@ module orderbook #(
 
     localparam ORD = 2**K;
 
+    // bytes por palabra y su log2: 64 bits -> 8 B (b>>3), 32 bits -> 4 B (b>>2)
+    localparam BYTES = DW / 8;
+    localparam L2B   = $clog2(DW / 8);
+
     // ---------------------------------------------------------------
     // FSM de recepción
     // ---------------------------------------------------------------
@@ -58,8 +62,9 @@ module orderbook #(
     localparam ST_APPLY = 3'd3;
     localparam ST_EMIT  = 3'd4;
     localparam ST_UADD  = 3'd5;
-    reg [2:0] st;
+    reg [2:0]  st;
     reg [6:0] nbody_w;      // words de cuerpo restantes por consumir
+    reg [1:0]  hrem;        // words de cabecera restantes tras w0 (DW=32: 3)
     reg emit_ok;            // la operación aplicada se emite (no fue anomalía/error)
     reg do_uadd;            // el replace U de este ciclo necesita ST_UADD
     // handshake combinacional: acepta entrada en W0/TS/BODY
@@ -70,8 +75,8 @@ module orderbook #(
     reg [7:0]  m_len;
     reg [31:0] m_idx;
     // (body_rem eliminado; se usa nbody_w)
-    reg [2:0]  bi;
-    reg [DW-1:0] body_acc[0:7];
+    reg [3:0]  bi;
+    reg [DW-1:0] body_acc[0:15];   // 16 words cubren el cuerpo máximo a DW=32
 
     // ---------------------------------------------------------------
     // estado del libro
@@ -107,7 +112,7 @@ module orderbook #(
     // helpers de extracción de bytes (big-endian)
     // ---------------------------------------------------------------
     function automatic logic [7:0] pbody(input [6:0] b);
-        pbody = body_acc[3'(b >> 3)][63 - 8*3'(b & 3'd7) -: 8];
+        pbody = body_acc[4'(b >> L2B)][(8'(DW-1) - 8'(b & 7'(BYTES-1))*8) -: 8];
     endfunction
     function automatic logic [31:0] b32(input [6:0] b);
         b32 = {pbody(b), pbody(b+1), pbody(b+2), pbody(b+3)};
@@ -147,7 +152,7 @@ module orderbook #(
             market_open <= 1'b0; u_newref <= 0; u_side <= 0;
             u_price <= 0; u_shares <= 0;
             for (int i = 0; i < NSYM; i++) tstate[i] <= 8'h00;
-            bi <= 0; nbody_w <= 0; emit_ok <= 1'b0;
+            bi <= 0; nbody_w <= 0; hrem <= 2'd1; emit_ok <= 1'b0;
             for (int i = 0; i < NSYM; i++) loc_map[i] <= 16'hffff;
             loc_cnt <= 0; m_loc_idx <= 0;
         end else begin
@@ -157,30 +162,38 @@ module orderbook #(
             case (st)
                 ST_W0: begin
                     if (s_axis_tvalid) begin
-                        m_type   <= s_axis_tdata[63:56];
-                        m_locate <= s_axis_tdata[55:40];
-                        m_len    <= s_axis_tdata[39:32];
-                        m_idx    <= s_axis_tdata[31:0];
+                        // campos del w0: {type, locate, len, idx} a 64 bits;
+                        // a 32 bits el idx viaja en su propia word (w1)
+                        m_type   <= s_axis_tdata[DW-1 -: 8];
+                        m_locate <= s_axis_tdata[DW-9 -: 16];
+                        m_len    <= s_axis_tdata[DW-25 -: 8];
                         // mapeo de símbolo: índice conocido o registro por orden
                         // (register-on-first-seen). loc_lookup lee loc_map/loc_cnt
                         // del estado previo; el registro se hace con <= en el flanco.
-                        if (loc_lookup(s_axis_tdata[55:40]) == 5'd31 &&
+                        if (loc_lookup(s_axis_tdata[DW-9 -: 16]) == 5'd31 &&
                             loc_cnt < NSYM) begin
-                            loc_map[loc_cnt] <= s_axis_tdata[55:40];
+                            loc_map[loc_cnt] <= s_axis_tdata[DW-9 -: 16];
                             loc_cnt <= loc_cnt + 1;
                             m_loc_idx <= loc_cnt;
                         end else begin
-                            m_loc_idx <= loc_lookup(s_axis_tdata[55:40]);
+                            m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);
                         end
-                        // words de cuerpo = ceil((len-11)/8)
-                        nbody_w <= 7'(((8'(s_axis_tdata[39:32]) - 8'd11) + 8'd7) >> 3);
+                        // words de cuerpo = ceil((len-11)/BYTES)
+                        nbody_w <= 7'(((8'(s_axis_tdata[DW-25 -: 8]) - 8'd11) +
+                                       8'(BYTES-1)) >> L2B);
+                        hrem <= (DW == 32) ? 2'd3 : 2'd1;
                         bi <= 0;
                         st <= ST_TS;
                     end
                 end
                 ST_TS: begin
-                    // consume y descarta la word del timestamp
-                    if (s_axis_tvalid) st <= ST_BODY;
+                    // consume y descarta las words restantes de la cabecera
+                    // (32 bits: w1=idx [se captura], w2=ts[31:0], w3=ts_hi)
+                    if (s_axis_tvalid) begin
+                        if (DW == 32 && hrem == 2'd3) m_idx <= s_axis_tdata[31:0];
+                        if (hrem == 2'd1) st <= ST_BODY;
+                        else hrem <= hrem - 1;
+                    end
                 end
                 ST_BODY: begin
                     if (s_axis_tvalid) begin

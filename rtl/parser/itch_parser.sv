@@ -36,6 +36,10 @@ module itch_parser #(
 
     localparam QQ = QB * 8;
 
+    // bytes por palabra y su log2: 64 bits -> 8 B (>>3), 32 bits -> 4 B (>>2)
+    localparam BYTES = DW / 8;
+    localparam L2B   = $clog2(DW / 8);
+
     localparam ST_HDR  = 3'd0;
     localparam ST_LEN  = 3'd1;
     localparam ST_CAP  = 3'd2;   // capturar mensaje a msg_reg + drena 2+len
@@ -64,6 +68,7 @@ module itch_parser #(
     reg  [351:0]  msg_reg;
     reg  [6:0]    body_w;
     reg  [6:0]    bi;
+    reg  [1:0]    hw;         // índice de la word de cabecera restante (DW=32)
     reg           out_valid_reg;
     reg  [DW-1:0] out_data_reg;
     reg           out_last_reg;
@@ -120,11 +125,11 @@ module itch_parser #(
     function automatic logic [DW-1:0] cbody(input [351:0] m, input [7:0] ml,
                                             input [6:0] base);
         logic [DW-1:0] r;
-        for (int k = 0; k < 8; k++) begin
+        for (int k = 0; k < BYTES; k++) begin
             if ((16'(base) + 16'(k)) < 16'(ml)) begin
-                r[63 - 8*k -: 8] = mbyte(m, 7'(base + k));
+                r[DW-1 - 8*k -: 8] = mbyte(m, 7'(base + k));
             end else begin
-                r[63 - 8*k -: 8] = 8'h0;
+                r[DW-1 - 8*k -: 8] = 8'h0;
             end
         end
         cbody = r;
@@ -147,8 +152,8 @@ module itch_parser #(
     // tready combinacional: hay sitio y no drenamos este ciclo (el drain se
     // consume en el flanco con la palabra que ya estaba en la cola).
     wire drain_active = (drain_int > 0) && (qn >= drain_int);
-    wire can_aug = s_axis_tvalid && !drain_active && (qn + 8 <= QB);
-    wire can_da  = s_axis_tvalid && drain_active && (8'(qn) - 8'(drain_int) + 8 <= QB);
+    wire can_aug = s_axis_tvalid && !drain_active && (qn + 8'(BYTES) <= QB);
+    wire can_da  = s_axis_tvalid && drain_active && (8'(qn) - 8'(drain_int) + 8'(BYTES) <= QB);
     assign s_axis_tready = can_aug || can_da;
 
     always_ff @(posedge clk) begin
@@ -158,7 +163,7 @@ module itch_parser #(
             pack_left <= 0; pack_count <= 0; msg_len <= 0;
             in_subset <= 1'b0; msg_type <= 0; locate <= 0; ts_ns <= 0; len_ok <= 1'b0;
             eop_seen <= 1'b0;
-            msg_reg <= 0; body_w <= 0; bi <= 0;
+            msg_reg <= 0; body_w <= 0; bi <= 0; hw <= 0;
             out_valid_reg <= 1'b0; out_data_reg <= 0; out_last_reg <= 1'b0;
             gap_detected <= 1'b0; error <= 1'b0;
         end else begin
@@ -173,14 +178,14 @@ module itch_parser #(
             // ------------------------------------------------------------
             if (can_da) begin
                 q <= ((q << (8*drain_int)) |
-                      (QQ'(s_axis_tdata) << ((QB-1-(qn-drain_int))*8 - (DW-8))));
-                qn <= qn - drain_int + 8;
+                      (QQ'(s_axis_tdata) << ((32'(QB-1) - 32'(qn) + 32'(drain_int))*8 - (DW-8))));
+                qn <= qn - drain_int + 8'(BYTES);
             end else if (drain_active) begin
                 q <= q << (8*drain_int);
                 qn <= qn - drain_int;
             end else if (can_aug) begin
-                q <= q | (QQ'(s_axis_tdata) << ((QB-1-qn)*8 - (DW-8)));
-                qn <= qn + 8;
+                q <= q | (QQ'(s_axis_tdata) << ((32'(QB-1) - 32'(qn))*8 - (DW-8)));
+                qn <= qn + 8'(BYTES);
             end
 
 
@@ -232,7 +237,8 @@ ST_LEN: begin
                             ts_ns     <= {pbyte(q,7), pbyte(q,8), pbyte(q,9),
                                           pbyte(q,10), pbyte(q,11), pbyte(q,12)};
                             body_w <= (8'({pbyte(q,0), pbyte(q,1)}) >= 11) ?
-                               7'(((8'({pbyte(q,0), pbyte(q,1)}) - 8'd11 + 8'd7) >> 3)) : 7'd0;
+                                7'(((8'({pbyte(q,0), pbyte(q,1)}) - 8'd11) +
+                                    8'(BYTES-1)) >> L2B) : 7'd0;
                             bi <= 0;
                             msg_reg <= q[(QB-2)*8 - 1 -: 352];
                             // longitud incoherente (SEC-PAR-03): para un tipo del
@@ -266,29 +272,47 @@ ST_LEN: begin
                 ST_W0: begin
                     if (out_free) begin
                         if (in_subset && msg_len >= 11) begin
-                            out_data_reg <= {msg_type, locate, msg_len, msg_idx[31:0]};
+                            // w0: {type, locate, len, idx} a 64 bits; a 32 bits
+                            // el idx se emite en su propia word (w1)
+                            if (DW == 32)
+                                out_data_reg <= DW'({msg_type, locate, msg_len});
+                            else
+                                out_data_reg <= DW'({msg_type, locate, msg_len, msg_idx[31:0]});
                             out_valid_reg <= 1'b1;
                             out_last_reg  <= 1'b0;
                         end
+                        hw <= 2'd1;
                         st <= ST_TS;
                     end
                 end
 
                 ST_TS: begin
                     if (out_free) begin
-                        if (in_subset && msg_len >= 11) begin
-                            out_data_reg <= {16'h0, ts_ns};
+                        if (DW == 32) begin
+                            // cabecera de 32 bits: w1=idx, w2=ts[31:0],
+                            // w3={ts[47:32], 16'b0}
+                            case (hw)
+                                2'd1: out_data_reg <= DW'(msg_idx);
+                                2'd2: out_data_reg <= DW'(ts_ns[31:0]);
+                                default: out_data_reg <= DW'({ts_ns[47:32], 16'h0});
+                            endcase
                             out_valid_reg <= 1'b1;
                             out_last_reg  <= 1'b0;
+                            if (hw == 2'd3) st <= ST_BODY;
+                            else hw <= hw + 1;
+                        end else begin
+                            out_data_reg <= DW'({16'h0, ts_ns});
+                            out_valid_reg <= 1'b1;
+                            out_last_reg  <= 1'b0;
+                            st <= ST_BODY;
                         end
-                        st <= ST_BODY;
                     end
                 end
 
                 ST_BODY: begin
                     if (out_free) begin
                         if (in_subset && msg_len >= 11 && bi < body_w) begin
-                            out_data_reg <= cbody(msg_reg, msg_len, 11 + 8*bi);
+                            out_data_reg <= cbody(msg_reg, msg_len, 7'(11 + BYTES*bi));
                             out_valid_reg <= 1'b1;
                             out_last_reg  <= (bi == body_w - 1);
                             bi <= bi + 1;
