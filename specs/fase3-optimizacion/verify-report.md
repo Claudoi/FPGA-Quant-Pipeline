@@ -136,19 +136,80 @@ hash). Evidencia `scripts/verify/mutate_orderbook.py` (runner), re-ejecutable.
 
 - Criterios 7-11 (top-N, hardening F1/F2, latencia, URAM/synth).
 
+## Iteración 3 — top-N público ND=5 (criterio 6)
+
+### Meta del atacante/diseño
+
+Nuevos puertos del book (y de la cadena): `depth_tdata` (2*ND*64 = 640 bits),
+`depth_tvalid`, `depth_tready`. El depth acompaña al BBO como **par atómico**
+(mismo pulso registrado): `depth_tdata` = ND niveles por lado del símbolo del
+evento, best-first, `{bid[ND-1..0], ask[ND-1..0]}` MSB→LSB con el mejor a la
+izquierda (depth[639:576] = mejor bid), cada nivel `{px[31:0], qty[31:0]}`,
+vacíos a 0. Los niveles se leen de las listas ordenadas internas (slot 0 =
+mejor, invariante de la burbuja de fase 2), NUNCA se recalculan: el oráculo de
+los tests es `book.py` (`run_book_depth`, snapshot de `_levels` por evento).
+
+El handshake `depth_tready` entra en el guard de ST_APPLY junto al de BBO
+(par aceptado solo con ambos tready; la retención completa bajo backpressure
+es SEC-BP-01, iteración 4).
+
+### Rojo con evidencia (TDD)
+
+| Test | Rojo | Causa raíz |
+|---|---|---|
+| DP-01 (top-N) | `AttributeError: orderbook contains no child object named depth_tready` | el RTL aún no tiene puertos de depth |
+| DP-02 (replay real) | `DP-02: depth diverge en evento 5 (locate 6960): got=…00149bc8…` — un slot del bid con `px=0x149bc8, qty=0` | **BUG real del feed**: `level_add` ponía `qty=0` al vaciar un nivel pero dejaba el **precio stale** en el slot; el BBO solo lee el primer slot con qty≠0 (nunca se notó en fases 1-2), el top-N empaqueta el slot entero y filtra el precio muerto. Fix en la raíz: nivel vacío se limpia completo (`lpr[found]=0`), invariante «el nivel vacío no existe» del golden |
+
+### Verde (evidencia)
+
+| Suíte | Resultado |
+|---|---|
+| phase3/depth32 (DP-01 sintético, SEC-DP-01 vacíos a 0, DP-02 replay real) | **3/3 PASS** (DP-02: 31.400 msgs → **30.729 depths bit a bit** contra el golden, todos los símbolos) |
+| phase3/book32 + hash32 + chain32 + parser32 | **5/5 + 6/6 + 2/2 + 4/4 PASS** (regresión tras el fix de nivel vacío) |
+| fase1 regresión DW=64 | **19/19 PASS** |
+| fase2 regresión DW=64 (incl. REPLAY-01) | **14/14 PASS** |
+
+### Cambios
+
+- `rtl/orderbook/orderbook.sv`: parámetro `ND=5`; puertos `depth_tdata/
+  depth_tvalid/depth_tready`; `emit_bbo` empaqueta el depth (bucle de ND
+  niveles por lado con `dacc = {dacc[…], px, qty}` MSB→LSB, slot 0 = mejor) y
+  valida el par; guard de ST_APPLY extendido a ambos tready; reset de los
+  puertos; **fix de nivel vacío** (`lqt[found]=0` + `lpr[found]=0`).
+- `rtl/itch_chain.sv`: puertos de depth cableados del book al top.
+- `verification/testbenches/phase3/test_depth32.py` (nuevo): driver que
+  muestrea el par y **exige depth_tvalid=1 en cada handshake de BBO**
+  (mata al mutante DP-NOVALID); DP-01/DP-02/SEC-DP-01.
+- `verification/testbenches/orderbook/test_orderbook.py`: oráculos
+  `run_book_depth` (snapshot de niveles por evento) y `pack_depth` (bus de
+  640 bits).
+- `verification/testbenches/phase3/Makefile`: target `sim-depth`.
+- `scripts/verify/mutate_orderbook.py`: tercera suite (sim-depth) y 4 mutantes
+  de depth (DP-BADORDER, DP-ASKSWAP, DP-NOVALID, DP-EMPTYSTALE).
+
+### Mutación (gate E)
+
+19/19 mutantes muertos (15 previos + 4 de depth). Evidencia:
+`scripts/verify/mutate_orderbook.py` (runner, triple suite), re-ejecutable.
+
+### Pendiente para iteraciones siguientes
+
+- Criterios 7-11 (hardening F1/F2, latencia, URAM/synth).
+
 ## Tabla de gates
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | 4 suites phase3 (15/15) + fase1 19/19 + fase2 14/14 PASS | ✔ |
+| **A. Simulación** | 5 suites phase3 (20/20) + fase1 19/19 + fase2 14/14 PASS | ✔ |
 | **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en DW∈{32,64} × K∈{19,20} y chain | ✔ |
 | **C. Estilo** | `verible-verilog-lint` (si instalado) | — |
 | **D. Cobertura + mapeo** | Tabla spec↔tests (pendiente al cierre) | — |
-| **E. Mutación HDL** | 15/15 mutantes muertos (doble suite fase2+hash) | ✔ |
+| **E. Mutación HDL** | 19/19 mutantes muertos (triple suite fase2+hash+depth) | ✔ |
 | **F. Completitud Gherkin** | espejos del `.feature` ↔ tests | — |
 | **G. Rigor + timing** | G0/G2/G3 ✔ (vectores/feed no commiteados); G timing: run externo del owner (criterio 10) | — |
 
 ## Veredicto
 
-Iteración 1 (criterios 1-3 + REG-01) e iteración 2 (criterios 4-6):
-**verde con evidencia**; pendiente de `/verify` formal y criterios 7-11.
+Iteración 1 (criterios 1-3 + REG-01), iteración 2 (criterios 4-5) e
+iteración 3 (criterio 6, top-N): **verde con evidencia**; pendiente de
+`/verify` formal y criterios 7-11.
