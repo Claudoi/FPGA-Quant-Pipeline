@@ -392,16 +392,59 @@ itch_chain con dependencias).
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | 7 suites phase3 (25/25) + fase1 19/19 + fase2 14/14 PASS | ✔ |
+| **A. Simulación** | 7 suites phase3 (25/25) + fase1 19/19 + fase2 14/14 PASS (outputs reales en iteraciones 1-6) | ✔ |
 | **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en orderbook, itch_parser, itch_chain (con deps) | ✔ |
-| **C. Estilo** | `verible-verilog-lint` (si instalado) | — |
-| **D. Cobertura + mapeo** | Tabla spec↔tests (pendiente al cierre) | — |
+| **C. Estilo** | `verible-verilog-lint` NO instalado en el entorno (verificable: `which verible-verilog-lint`) | NO EJECUTADO |
+| **D. Cobertura + mapeo** | Nivel 1: tabla spec↔tests abajo (11/11 criterios con test nombrado; 10 y 11 por evidencias G4/lint) | ✔ (nivel 1) |
 | **E. Mutación HDL** | 22/22 mutantes muertos (cuádruple suite fase2+hash+depth+hard) | ✔ |
-| **F. Completitud Gherkin** | espejos del `.feature` ↔ tests | — |
-| **G. Rigor + timing** | G0/G2/G3 ✔; G5 adversarial: 0 CRITICO, 2 MAYOR cerrados en iteración 6 (U atómico + guard anti-fantasma); G timing: run externo del owner (criterio 10) | — |
+| **F. Completitud Gherkin** | `optimizacion.feature`: 14 escenarios ↔ 14 tests espejo (IDs literales); área en `specs/gherkin-espejos.json` | ✔ |
+| **G. Rigor + timing** | G0/G2/G3 ✔; G5 adversarial: 0 CRITICO, 2 MAYOR cerrados en iteración 6; G timing: run externo del owner (criterio 10) | — |
+
+## Gate D nivel 1 — cruce spec ↔ tests
+
+| Criterio | Test que lo pincha | Suite |
+|---|---|---|
+| 1. Parser DW=32 (Anexo A 32b + peor caso) | `test_p32_01_anexo_a_32_bits`, `test_p32_02_peor_caso_una_palabra_ciclo`, `test_p32_03_replay_pcap_real_32`, `test_inv_p32_01_backpressure_salida_sin_perdida` | phase3 (4/4) |
+| 2. Book DW=32 (BBO bit a bit) | `test_b32_01_bbo_igual_golden`, `test_b32_02_replay_feed_real_32`, `test_inv_b32_01_replace_atomico`, `test_inv_b32_02_raw_add_execute`, `test_inv_b32_03_dos_simbolos_independientes` | phase3 (5/5) |
+| 3. Regresión 64-bit | suites fase 1 (19/19) y fase 2 (14/14) re-ejecutadas tras cada iteración | fase1 + fase2 |
+| 4. Cadena DW=32 | `test_chain01_feed_real_bit_a_bit`, `test_chain02_sintetico_bit_a_bit` | phase3 (2/2) |
+| 5. Hash + probing | `test_sec_hash01_probe_agotado_anomalia`, `test_sec_hash02_tabla_llena_error`, `test_sec_hash02b_tombstone_reutilizado`, `test_sec_hash02c_replace_half_llena_error`, `test_sec_hash03_colision_entre_simbolos`, `test_sec_hash04_ref_duplicada_error`, `test_inv_u01_tabla_llena_no_borra_la_original`, `test_inv_ov01_phantom_no_envuelve_cantidad` | phase3 hash (8/8) |
+| 6. Top-N (ND=5) | `test_dp01_topn_igual_golden`, `test_dp02_replay_feed_real_depth`, `test_sec_dp01_simbolo_vacio_ceros` | phase3 depth (3/3) |
+| 7. Hardening | `test_sec_nsym01_simbolo_21_error_sin_oob`, `test_sec_bp01_bbo_se_retiene_bajo_backpressure` | phase3 hard (2/2) |
+| 8. Latencia | `test_sec_lat01_histograma_determinista_por_tipo` + `verification/vectors/latency/latency_dw32.json` (re-ejecución idéntica) | phase3 lat (1/1) |
+| 9. Pipeline URAM | auditoría de código: lectura registrada + sin O(P·P) (refactor iter 6); `docs/writeup/uram.md` (≈20 URAM) | revisión |
+| 10. Síntesis | `synth/constraints/fase3_322mhz.xdc` (3,103 ns) + `synth/fase3_synth.tcl`; **WNS ≥ 0 pendiente del run externo del owner** | — |
+| 11. Lint | gate B: 3 módulos `--lint-only -Wall` limpios (criterio 11 con Gherkin de regresión) | — |
+
+## Gate F — espejos Gherkin (evidencia)
+
+`specs/gherkin-espejos.json` declara el área
+`specs/fase3-optimizacion/gherkin → verification/testbenches/phase3`; el
+`.feature` tiene 14 escenarios y cada ID tiene su test espejo con el ID en el
+nombre literal: P32-01/02, B32-01/02, REG-01 (suites fase1+fase2), CHAIN-01,
+SEC-HASH-01/02/03, SEC-NSYM-01, SEC-BP-01, SEC-DP-01, DP-01, SEC-LAT-01 —
+14/14, sin escenario huérfano ni test sin escenario.
+
+## Gate G — checklist por superficie (iteración 6, diff sobre orderbook)
+
+- **G0** ✔: `git status` limpio de feeds/artefactos reales; vectores solo en
+  `verification/vectors/`; feeds en `/tmp/` (gitignored).
+- **G1** (parser): no aplica al diff de esta iteración (cerrado en fase 1).
+- **G2** ✔: U atómico (pre-check de capacidad antes del delete, nunca una
+  ventana Delete+Add inconsistente; mutantes U-NOTATOMIC/U-DELETE-HALF/
+  U-SKIP-ROUTE); doble cuenta (D-DOUBLE); hazards RAW sobre la misma orden
+  (`test_inv_b32_02_raw_add_execute`); overflow de niveles/cantidades
+  (OV-EMPTY, LV-NEGWRAP, guard en `reduce_order` con `rest[33]`).
+- **G3** ✔: bit a bit contra el golden en cada evento (REPLAY 30.729 eventos
+  BBO + depth 640 bits bit a bit sobre el feed real del subset).
+- **G4** ✔ (artefactos) + pendiente: constraints 3,103 ns coherentes con la
+  frecuencia objetivo; WNS/TNS y utilización pegados por el owner en
+  `synth/reports/` → cierra criterio 10.
+- **G5** ✔: revisión adversarial independiente (0 CRITICO, 2 MAYOR) cerrada en
+  la iteración 6 con TDD rojo→verde (INV-U-01, INV-OV-01).
 
 ## Veredicto
 
 Iteraciones 1-6 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
 informe del run externo pendiente de pegar): **verde con evidencia**;
-pendiente de `/verify` formal y del WNS del owner.
+pendiente de `/grade` y del WNS del owner.
