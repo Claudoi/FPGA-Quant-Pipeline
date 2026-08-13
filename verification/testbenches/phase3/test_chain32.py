@@ -22,6 +22,7 @@ async def _reset(dut):
     dut.s_axis_tvalid.value = 0
     dut.s_axis_tlast.value = 0
     dut.bbo_tready.value = 1
+    dut.depth_tready.value = 1
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
@@ -63,6 +64,7 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000):
         dut.s_axis_tdata.value = chunks[ci] if ci < n else 0
         dut.s_axis_tlast.value = 1 if ci in lasts else 0
         dut.bbo_tready.value = 1
+        dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.gap_detected.value) == 1:
             gaps += 1

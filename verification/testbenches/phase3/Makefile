@@ -29,6 +29,10 @@ EXTRA_ARGS ?= -GDW=32
 sim-hash:
 	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_hash32 EXTRA_ARGS="-GDW=32 -GK=20"
 
+# iteración 3: top-N público (depth_tdata de 640 bits vs niveles del golden)
+sim-depth:
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_depth32 EXTRA_ARGS="-GDW=32"
+
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 REPO_ROOT := $(CURDIR)/../../..
 export PYTHONPATH := $(REPO_ROOT):$(REPO_ROOT)/golden_model:$(CURDIR):$(REPO_ROOT)/verification/testbenches/orderbook:$(REPO_ROOT)/verification/testbenches/parser:$(PYTHONPATH)

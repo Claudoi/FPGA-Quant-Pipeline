@@ -99,6 +99,43 @@ def run_book(messages):
     return events, bk
 
 
+def run_book_depth(messages, nd=5):
+    """Oráculo top-N (fase 3, criterio 6): por cada evento BBO captura los ND
+    mejores niveles por lado del símbolo del evento, best-first (bid por precio
+    descendente, ask ascendente), rellenando con (0, 0) hasta ND.
+
+    Devuelve (bbo_events, depth_events, book) con cada depth_event =
+    (locate, bid_levels, ask_levels); bid_levels[i]/ask_levels[i] = (px, qty).
+    Los niveles se derivan SIEMPRE de _levels del golden, nunca del RTL."""
+    bk = book_golden.Book()
+    events = []
+    depth = []
+    for idx, raw in enumerate(messages):
+        mtype = chr(raw[0])
+        locate = int.from_bytes(raw[1:3], "big")
+        body = raw[message_oracle.COMMON_HEADER_LEN:]
+        fields = _fields_from_body(mtype, body)
+        ev = bk.apply((idx, mtype, locate, 0, 0, fields))
+        if ev is not None:
+            events.append(ev)
+            bid = sorted(bk._levels.get((locate, book_golden.BID), {}).items(), reverse=True)
+            ask = sorted(bk._levels.get((locate, book_golden.ASK), {}).items())
+            bid = (list(bid) + [(0, 0)] * nd)[:nd]
+            ask = (list(ask) + [(0, 0)] * nd)[:nd]
+            depth.append((locate, bid, ask))
+    return events, depth, bk
+
+
+def pack_depth(bid, ask):
+    """Empaqueta (bid best-first, ask best-first) en el word de 2*ND*64 bits
+    del bus depth_tdata: {mejor_bid, ..., 5º_bid, mejor_ask, ..., 5º_ask} de
+    MSB a LSB, cada nivel {px[31:0], qty[31:0]}, vacíos a 0."""
+    w = 0
+    for px, qty in list(bid) + list(ask):
+        w = (w << 64) | ((px & 0xFFFFFFFF) << 32) | (qty & 0xFFFFFFFF)
+    return w
+
+
 def _fields_from_body(mtype, body):
     """Extrae la tupla de campos que book.py consume (campos del struct)."""
     if mtype == "S":
