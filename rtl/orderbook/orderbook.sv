@@ -7,9 +7,16 @@
 //
 // Replica la semántica EXACTA de golden_model/src/book.py (fase 0).
 //
-// ESTRUCTURAS (iteración 1: un símbolo, niveles con lista ordenada):
-//   - orders[ORD] indexado por order_ref: {valid, side(0=bid,1=ask),
-//     price, qty}
+// ESTRUCTURAS (iteración 2, fase 3: tabla de órdenes con hash + linear probing):
+//   - orders en tabla hashada de NSLOT = 2^SLOT slots: {valid, tomb, ref, side
+//     (0=bid,1=ask), price, qty}. hash(ref) = ref[SLOT-1:0]; la inserción
+//     proba linealmente hasta PROBE slots (reutiliza slots con valid=0, p. ej.
+//     tombstones); el lookup continúa a través de slots ocupados por otras refs
+//     y tombstones, comparando el ref: encontrada -> hit; slot libre sin tomb
+//     -> no existe; PROBE pasos sin hueco -> no existe (anomalía, igual que la
+//     indexación directa de fase 2). Insert sin hueco en PROBE pasos -> tabla
+//     llena -> error (SEC-HASH-02), nunca wrap ni overwrite silencioso.
+//     La tabla se mapea a URAM en la iteración 5 (criterio 9).
 //   - levels por (lado): lista ordenada de P niveles {price, qty}, mejor
 //     primero (bid = mayor, ask = menor).
 //   La aplicación se hace en el ciclo ST_APPLY: se leen orders (de la misma
@@ -20,10 +27,12 @@
 // URAM y la latencia registrada se optimizan en la iteración de profundidad.
 module orderbook #(
     parameter DW  = 64,
-    parameter K   = 19,          // 2^K entradas de orden (refs). Indexación
-                                 // directa por order_ref: 2^K >= max ref del
-                                 // subset real (372.297 -> K=19); el mapeo a
-                                 // URAM se dimensiona en fase 3.
+    parameter K   = 19,          // ancho de order_ref (bits). 2^19 >= max ref
+                                 // del subset real (372.297); el mapeo a URAM
+                                 // se dimensiona en fase 3.
+    parameter SLOT = 16,         // 2^SLOT slots de la tabla hashada (criterio 5).
+                                 // hash(ref) = ref[SLOT-1:0]
+    parameter PROBE = 8,         // pasos máx de linear probing por op
     parameter P   = 32,          // niveles de precio por lado. Máx medido del
                                  // subset real: 17 (locate 6960 ask, día local);
                                  // el overflow >P sigue señalizándose (SEC-OV)
@@ -47,7 +56,7 @@ module orderbook #(
     output reg               error
 );
 
-    localparam ORD = 2**K;
+    localparam NSLOT = 2**SLOT;
 
     // bytes por palabra y su log2: 64 bits -> 8 B (b>>3), 32 bits -> 4 B (b>>2)
     localparam BYTES = DW / 8;
@@ -79,12 +88,18 @@ module orderbook #(
     reg [DW-1:0] body_acc[0:15];   // 16 words cubren el cuerpo máximo a DW=32
 
     // ---------------------------------------------------------------
-    // estado del libro
+    // estado del libro: tabla de órdenes hashada (criterio 5, iter 2).
+    // NSLOT slots: valid=1 ocupado, valid=0 libre o borrado; ref guardado
+    // para distinguir colisiones del hash. Los borrados dejan valid=0 y el
+    // lookup continúa a través de esos slots (semántica de tombstones sin
+    // bit muerto); el insert reutiliza el primer slot valid=0 del camino.
+    // La entrada es exactamente {valid, ref, side, price, qty} (spec).
     // ---------------------------------------------------------------
-    reg           o_valid [ORD-1:0];
-    reg           o_side  [ORD-1:0];
-    reg [PXW-1:0] o_price [ORD-1:0];
-    reg [QW-1:0]  o_qty   [ORD-1:0];
+    reg           o_valid [NSLOT-1:0];
+    reg [K-1:0]   o_ref   [NSLOT-1:0];
+    reg           o_side  [NSLOT-1:0];
+    reg [PXW-1:0] o_price [NSLOT-1:0];
+    reg [QW-1:0]  o_qty   [NSLOT-1:0];
 
     // niveles: [side*P + slot] = precio, qty (mejor primero)
     reg [PXW-1:0] lv_price [NSYM*2*P-1:0];
@@ -135,12 +150,55 @@ module orderbook #(
     endfunction
 
     // ---------------------------------------------------------------
+    // tabla hashada: hash(ref) = ref[SLOT-1:0], linear probing <= PROBE.
+    // lookup_ref: devuelve el slot si la ref está (found=1); si no, recorre
+    // hasta PROBE slots de refs ajenas/borradas y acaba con found=0 (slot
+    // con valid=0 -> no existe; camino lleno -> probe agotado -> no existe,
+    // anomalía igual que la fase 2).
+    // first_empty: primer slot con valid=0 del camino (reutiliza borrados);
+    // full=1 si los PROBE slots están ocupados -> tabla llena (SEC-HASH-02).
+    // Entrada: el hash ya truncado (los bits altos del ref no participan).
+    // ---------------------------------------------------------------
+    function automatic logic [SLOT-1:0] lookup_ref(input [K-1:0] r,
+                                                   output logic found);
+        integer ii;
+        logic [SLOT-1:0] h;
+        h = r[SLOT-1:0];
+        found = 1'b0;
+        lookup_ref = h;
+        for (ii = 0; ii < PROBE; ii = ii + 1) begin
+            if (o_valid[h + SLOT'(ii)] && o_ref[h + SLOT'(ii)] == r) begin
+                found = 1'b1;
+                lookup_ref = h + SLOT'(ii);
+                ii = PROBE;
+            end
+        end
+    endfunction
+
+    function automatic logic [SLOT-1:0] first_empty(input [SLOT-1:0] h,
+                                                    output logic full);
+        integer ii;
+        full = 1'b1;
+        first_empty = h;
+        for (ii = 0; ii < PROBE; ii = ii + 1) begin
+            if (!o_valid[h + SLOT'(ii)]) begin
+                full = 1'b0;
+                first_empty = h + SLOT'(ii);
+                ii = PROBE;
+            end
+        end
+    endfunction
+
+    // ---------------------------------------------------------------
     // FSM principal
     // ---------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             st <= ST_W0;
-            for (int i = 0; i < ORD; i++) o_valid[i] <= 1'b0;
+            for (int i = 0; i < NSLOT; i++) begin
+                o_valid[i] <= 1'b0; o_ref[i] <= 0; o_side[i] <= 1'b0;
+                o_price[i] <= 0; o_qty[i] <= 0;
+            end
             for (int i = 0; i < NSYM*2*P; i++) begin
                 lv_price[i] <= 0; lv_qty[i] <= 0;
             end
@@ -223,11 +281,7 @@ module orderbook #(
                 ST_UADD: begin
                     // mitad add del replace: la segunda level_add ve el estado
                     // del ciclo anterior (la eliminación ya aplicada)
-                    level_add(u_side, u_price, u_shares);
-                    o_valid[u_newref] <= 1'b1;
-                    o_side[u_newref] <= u_side;
-                    o_price[u_newref] <= u_price;
-                    o_qty[u_newref] <= u_shares;
+                    apply_uadd_half();
                     st <= ST_EMIT;
                 end
                 ST_EMIT: begin
@@ -310,25 +364,44 @@ module orderbook #(
     endtask
 
     task automatic reduce_order;
-        input [K-1:0] oref;
+        input [SLOT-1:0] sidx;      // slot ya validado por el lookup del caller
         input [31:0] qty;
         output reg did;
         reg [33:0] rest;
         begin
             did = 1'b0;
-            if (!o_valid[oref]) anomaly_count <= anomaly_count + 1;
-            else begin
-                rest = 34'({2'b0, o_qty[oref]}) - 34'({2'b0, qty});
-                if (rest[33]) error <= 1'b1;
-                else if (rest == 0) begin
-                    reduce_level(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
-                    o_valid[oref] <= 1'b0;
-                    did = 1'b1;
-                end else begin
-                    o_qty[oref] <= QW'(rest);
-                    reduce_level(o_side[oref], o_price[oref], -32'(qty));
-                    did = 1'b1;
-                end
+            rest = 34'({2'b0, o_qty[sidx]}) - 34'({2'b0, qty});
+            if (rest[33]) error <= 1'b1;
+            else if (rest == 0) begin
+                reduce_level(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
+                o_valid[sidx] <= 1'b0;
+                did = 1'b1;
+            end else begin
+                o_qty[sidx] <= QW'(rest);
+                reduce_level(o_side[sidx], o_price[sidx], -32'(qty));
+                did = 1'b1;
+            end
+        end
+    endtask
+
+    task automatic apply_uadd_half;
+        // mitad add del replace (ST_UADD): inserta u_newref en la tabla.
+        // Si los PROBE slots están ocupados -> tabla llena: no se aplica, se
+        // señaliza error y se cancela el BBO del replace (SEC-HASH-02).
+        logic full;
+        logic [SLOT-1:0] nidx;
+        begin
+            nidx = first_empty(u_newref[SLOT-1:0], full);
+            if (full) begin
+                error <= 1'b1;
+                emit_ok <= 1'b0;
+            end else begin
+                level_add(u_side, u_price, u_shares);
+                o_valid[nidx] <= 1'b1;
+                o_ref[nidx]   <= u_newref;
+                o_side[nidx]  <= u_side;
+                o_price[nidx] <= u_price;
+                o_qty[nidx]   <= u_shares;
             end
         end
     endtask
@@ -373,6 +446,8 @@ module orderbook #(
         reg ask;
         reg [7:0] ev;
         reg do_emit;
+        logic found, found2, full;
+        logic [SLOT-1:0] sidx, nidx;
         begin
             do_emit = 1'b0;
             out_uadd = 1'b0;
@@ -380,43 +455,61 @@ module orderbook #(
                 8'h41, 8'h46: begin
                     oref = K'(b64(0)); ask = (pbody(8) == 8'h53);
                     shares = b32(9); price = b32(21);
-                    if (o_valid[oref] || shares == 0) begin
-                        error <= 1'b1;
+                    sidx = lookup_ref(oref, found);
+                    if (found || shares == 0) begin
+                        error <= 1'b1;      // ref duplicada o cantidad inválida
                     end else begin
-                        o_valid[oref] <= 1'b1; o_side[oref] <= ask;
-                        o_price[oref] <= price; o_qty[oref] <= shares;
-                        level_add(ask, price, shares);
-                        do_emit = 1'b1;
+                        nidx = first_empty(oref[SLOT-1:0], full);
+                        if (full) begin
+                            error <= 1'b1;  // tabla llena (SEC-HASH-02)
+                        end else begin
+                            o_valid[nidx] <= 1'b1;
+                            o_ref[nidx]   <= oref;
+                            o_side[nidx]  <= ask;
+                            o_price[nidx] <= price;
+                            o_qty[nidx]   <= shares;
+                            level_add(ask, price, shares);
+                            do_emit = 1'b1;
+                        end
                     end
                 end
                 8'h45, 8'h43, 8'h58: begin
-                    reduce_order(K'(b64(0)), b32(8), do_emit);
+                    oref = K'(b64(0));
+                    sidx = lookup_ref(oref, found);
+                    if (!found) anomaly_count <= anomaly_count + 1;
+                    else reduce_order(sidx, b32(8), do_emit);
                 end
                 8'h44: begin
                     oref = K'(b64(0));
-                    if (!o_valid[oref]) anomaly_count <= anomaly_count + 1;
+                    sidx = lookup_ref(oref, found);
+                    if (!found) anomaly_count <= anomaly_count + 1;
                     else begin
-                        level_add(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
-                        o_valid[oref] <= 1'b0;
+                        level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
+                        o_valid[sidx] <= 1'b0;
                         do_emit = 1'b1;
                     end
                 end
                 8'h55: begin
                     oref = K'(b64(0)); newref = K'(b64(8));
                     shares = b32(16); price = b32(20);
-                    if (!o_valid[oref]) anomaly_count <= anomaly_count + 1;
-                    else if (shares == 0 || o_valid[newref]) error <= 1'b1;
+                    sidx = lookup_ref(oref, found);
+                    if (!found) anomaly_count <= anomaly_count + 1;
+                    else if (shares == 0) error <= 1'b1;
                     else begin
-                        // mitad delete (atómico): la add se aplica en ST_UADD,
-                        // un ciclo después, para que vea la eliminación
-                        level_add(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
-                        o_valid[oref] <= 1'b0;
-                        u_newref <= newref;
-                        u_side <= o_side[oref];
-                        u_price <= price;
-                        u_shares <= shares;
-                        do_emit = 1'b1;
-                        out_uadd = 1'b1;
+                        nidx = lookup_ref(newref, found2);
+                        if (found2) error <= 1'b1;   // newref duplicada
+                        else begin
+                            // mitad delete (atómico): la add se aplica en ST_UADD,
+                            // un ciclo después, para que vea la eliminación
+                            level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
+                            o_valid[sidx] <= 1'b0;
+                            u_newref <= newref;
+                            u_side <= o_side[sidx];
+                            u_price <= price;
+                            u_shares <= shares;
+                            do_emit = 1'b1;
+                            out_uadd = 1'b1;
+                        end
                     end
                 end
                 8'h53: begin
