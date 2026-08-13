@@ -233,3 +233,37 @@ quede cola. Orden sugerido: iter 1 (DW=32 parser+book + regresión 64) → iter 
 (hash+probing) → iter 3 (top-N) → iter 4 (hardening + latencia) → iter 5
 (pipeline URAM + synth artifacts + informe del owner) → iter 6 (cierre/grade).
 Al agotar el límite con criterios en FAIL, escala al owner.
+
+## Addendum iteración 6 (2026-08-14 — revisión exhaustiva post-traslado)
+
+Cierre del criterio 1 (line-rate) y del criterio 8 (latencia) con el hallazgo
+del backlog estacionario de la cola del parser:
+
+1. **Causa raíz de la latencia (medida, no teórica)**: la entrada fluye a
+   4 B/c mientras `qn+4 ≤ QB` y el drenaje puntual del ST_CAP promedia
+   ~2,7 B/c ⇒ la cola se fija en QB y cada mensaje espera ~QB/16 mensajes de
+   turno. Latencia ≈ backlog + procesamiento.
+2. **Parámetro efectivo**: el top de integración `itch_chain.sv` declara su
+   propio `QB` y lo pasa al parser (`.QB(QB)`): los defaults del módulo no
+   aplican en fase 3. Los parámetros de campaña viven en el top y en la línea
+   `-G` del Makefile (gotcha extendido del Makefile de phase3).
+3. **QB 128 → 64** (top de la cadena y default del parser alineados): latencia
+   total media 69,26 → 42,40 ciclos (214,9 → 131,5 ns a 322,265625 MHz;
+   p99 77 → 47), **~1,63×**, con la corrección bit a bit intacta (CHAIN-01:
+   30.729 eventos, 0 gaps). El barrel shifter del parser baja de 1024 a
+   512 bits (área/ruta para el criterio 10).
+4. **Régimen de stalls**: el peor caso probado (4 mensajes A/U back-to-back,
+   LIN-01/P32-02) pasa de 0 a **stalls acotados (~15)** — el criterio 1 exige
+   "sin backpressure sostenida" (feed infinito back-to-back está fuera de
+   alcance, documentado en LIN-01 alcance de fase 1 y en el régimen de la
+   línea 77). QB ≥ 88 conservaría 0 stalls (pico de cola ~80 B) con solo
+   ~1,4× de ganancia; se eligió QB=64 por el balance latencia/área.
+5. **Evidencia**: `verification/vectors/latency/latency_dw32.json` re-medido
+   (determinista, 2 ejecuciones idénticas); `docs/writeup/latencia.md`
+   actualizado; `docs/writeup/revision-exhaustiva-2026-08-14.md` con el
+   análisis completo (incl. los bloqueadores de síntesis B1/B2/B3 para el
+   criterio 10).
+6. **Pendiente para el criterio 10 (externo)**: el book actual (registros
+   planos NSLOT=65.536 con sonda combinacional paralela) no es sintetizable;
+   la iteración URAM (lectura registrada serializada, `docs/writeup/uram.md`)
+   sigue pendiente de implementar en RTL.

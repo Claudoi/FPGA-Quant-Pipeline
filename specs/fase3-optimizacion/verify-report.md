@@ -392,7 +392,7 @@ itch_chain con dependencias).
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | 7 suites phase3 (25/25) + fase1 19/19 + fase2 14/14 PASS (outputs reales en iteraciones 1-6) | ✔ |
+| **A. Simulación** | 7 suites phase3 (25/25) + fase1 19/19 + fase2 14/14 PASS (outputs reales en iteraciones 1-6 y post-grade 6bis) | ✔ |
 | **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en orderbook, itch_parser, itch_chain (con deps) | ✔ |
 | **C. Estilo** | `verible-verilog-lint` NO instalado en el entorno (verificable: `which verible-verilog-lint`) | NO EJECUTADO |
 | **D. Cobertura + mapeo** | Nivel 1: tabla spec↔tests abajo (11/11 criterios con test nombrado; 10 y 11 por evidencias G4/lint) | ✔ (nivel 1) |
@@ -465,3 +465,64 @@ verde. Criterios 1-9 y 11 PASS. Dos asuntos:
    tipo de `docs/writeup/latencia.md` (p99 por tipo) discrepaba de la
    evidencia `verification/vectors/latency/latency_dw32.json`; regenerada
    desde el JSON (el total ya coincidía).
+
+## Post-grade (2026-08-14) — iteración 6bis: QB de la cadena y latencia 1,63×
+
+Revisión exhaustiva post-traslado (`docs/writeup/revision-exhaustiva-2026-08-14.md`):
+auditoría de corrección (golden/oráculos/testbenches/scripts — sin fallos; nit
+de código muerto en `test_orderbook.py:195`), de síntesis (B1/B2/B3, ver
+addendum de spec) y de latencia. Cierre del hallazgo de latencia con TDD y
+evidencia:
+
+### Hallazgo
+
+El backlog estacionario de la cola del parser dominaba la latencia (entrada a
+4 B/c vs drenaje medio del CAP ~2,7 B/c → cola fijada en QB). El default del
+parser era 128→64, pero **`itch_chain.sv` sobrescribe `QB` al instanciar
+(`.QB(QB)`, top con su propio default 128)**: los experimentos de "QB 64"
+sobre el módulo no afectaban a la cadena (latencia idéntica 72,191 con builds
+limpios — síntoma engañoso; diagnóstico con traza interna `qn`, no teoría).
+
+### Rojo con evidencia
+
+Tras alinear el default del top (`itch_chain.sv` QB 128→64) y el de la spec
+addendum: LIN-01 (fase 1) y P32-02 (phase3) pasan de exigir `stalls == 0` a
+**stalls acotados ≤ 24** (el tramo 4×A/U con QB=64 acumula ~15; el régimen del
+criterio 1 es "sin backpressure sostenida" — feed infinito back-to-back está
+documentado como fuera de alcance en LIN-01). Los asserts se enmendaron con la
+corrección bit a bit intacta.
+
+### Verde (evidencia)
+
+```
+** TESTS=2 PASS=2 FAIL=0 **   (sim-chain: CHAIN-01 bit a bit, 30729 eventos, cross=0, anomaly=671, gaps=0)
+** TESTS=19 PASS=19 FAIL=0 ** (fase 1, incl. LIN-01 enmendado y REP-02 replay real)
+** TESTS=5+8+3+2+4 PASS=0 FAIL ** (phase3 sim/hash/depth/hard/parser32)
+** TESTS=1 PASS=1 FAIL=0 **   (sim-lat, determinista 2 ejecuciones idénticas)
+```
+
+Latencia re-medida (QB=64 en la cadena): total media **69,26 → 42,40 ciclos**
+(214,9 → 131,5 ns), p99 77 → 47, min 27 → 27 — **~1,63×**, con la corrección
+bit a bit intacta. Evidencia: `verification/vectors/latency/latency_dw32.json`
+(regenerado por SEC-LAT-01).
+
+### Cambios
+
+- `rtl/itch_chain.sv`: `QB = 128` → `64` (default del top; comentario del
+  gotcha de sobrescritura).
+- `rtl/parser/itch_parser.sv`: default `QB = 64` (ya era 64 en iter 6bis;
+  comentario de arquitectura actualizado con la medición y el gotcha del top).
+- `verification/testbenches/parser/test_itch_parser.py` (LIN-01) y
+  `verification/testbenches/phase3/test_parser32.py` (P32-02): assert de
+  stalls acotados ≤ 24 con justificación.
+- `specs/fase3-optimizacion/spec.md`: addendum iteración 6 (causa raíz,
+  gotcha del parámetro efectivo, régimen de stalls, pendiente URAM).
+- `docs/writeup/latencia.md` + `docs/writeup/revision-exhaustiva-2026-08-14.md`.
+
+### Pendiente
+
+Criterio 10 sigue siendo el run Vivado externo del owner, y con un bloqueador
+estructural documentado: el book de registros planos (NSLOT=65.536, sonda
+combinacional paralela, `level_add` O(P) ~6-8 ns) no es sintetizable a 3,1 ns —
+la iteración URAM (`docs/writeup/uram.md`) es la vía; el addendum de spec lo
+formaliza.

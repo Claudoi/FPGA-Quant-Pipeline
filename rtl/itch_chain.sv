@@ -6,7 +6,7 @@
 // (322,265625 MHz); DW=64 conserva la base de la fase 2.
 module itch_chain #(
     parameter DW   = 32,
-    parameter QB   = 128,
+    parameter QB   = 64,
     parameter K    = 19,
     parameter P    = 32,
     parameter ND   = 5,

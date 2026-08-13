@@ -20,14 +20,20 @@ Reloj objetivo: **322,265625 MHz** → `1 ciclo = 3,1030 ns`.
 
 ## Resultados (subset, 31.400 mensajes → 30.729 eventos)
 
+> Actualizado 2026-08-14 (iteración 6): QB de la cadena 128 → 64. El backlog
+> estacionario de la cola del parser dominaba la latencia (entrada a 4 B/c
+> contra drenaje medio ~2,7 B/c → cola fijada en QB); con QB=64 el backlog
+> se reduce de ~32 a ~16 palabras. El default del parser ya era 64; el de
+> `itch_chain` (que lo sobrescribe al instanciarlo) era 128 y se alineó.
+
 | Tipo | n | min (ciclos) | max | media | media (ns) | p50 | p99 |
 |---|---|---|---|---|---|---|---|
-| A | 12.742 | 27 | 81 | 72,19 | 224,0 | 72 | 77 |
-| D | 12.368 | 61 | 76 | 66,62 | 206,7 | 67 | 72 |
-| E | 14 | 66 | 73 | 69,79 | 216,5 | 71 | 73 |
-| U | 686 | 66 | 77 | 71,83 | 222,9 | 72 | 77 |
-| X | 4.919 | 62 | 77 | 67,94 | 210,8 | 68 | 73 |
-| **Total** | **30.729** | **27** | **81** | **69,26** | **214,9** | **68** | **77** |
+| A | 12.742 | 27 | 51 | 45,39 | 140,8 | 46 | 50 |
+| D | 12.368 | 35 | 46 | 39,86 | 123,7 | 41 | 45 |
+| E | 14 | 40 | 45 | 43,71 | 135,6 | 44 | 45 |
+| U | 686 | 40 | 50 | 45,05 | 139,8 | 46 | 47 |
+| X | 4.919 | 36 | 47 | 40,66 | 126,2 | 42 | 43 |
+| **Total** | **30.729** | **27** | **51** | **42,40** | **131,5** | **42** | **47** |
 
 Histograma completo (sparse, ciclos) y por tipo: ver el JSON.
 
@@ -35,9 +41,14 @@ Histograma completo (sparse, ciclos) y por tipo: ver el JSON.
 
 - El histograma es **determinista** (SEC-LAT-01 re-ejecuta el stream dos veces
   y exige histogramas idénticos; el JSON es la evidencia de esa ejecución).
-- p99 ≈ 77 ciclos ≈ 239 ns; el pico es el add A (mayor cuerpo + escritura de
-  tabla); D/X son los más cortos (borrado directo sin probing largo).
+- **Iteración 6**: p99 77 → **47 ciclos** (~239 → ~146 ns) y media 69,26 →
+  **42,40 ciclos** (214,9 → 131,5 ns) — **~1,63×**, con la corrección bit a
+  bit intacta (CHAIN-01, 30.729 eventos, 0 gaps). El pico sigue siendo el add
+  A (mayor cuerpo); D/X los más cortos.
 - El valor mínimo absoluto (27 ciclos) es el primer add del día sobre un
-  símbolo recién registrado (camino de tabla corto).
+  símbolo recién registrado (camino de tabla corto, cola vacía).
+- El recorte adicional del encabezado de 32 bits (w2/w3 de ts, que el book
+  descarta) y la serialización URAM son las palancas de la próxima campaña
+  (ver `revision-exhaustiva-2026-08-14.md`).
 - La latencia se mide en simulación en ciclos; la conversión a ns usa el reloj
   objetivo (out of scope: wire-to-wire con hardware real).

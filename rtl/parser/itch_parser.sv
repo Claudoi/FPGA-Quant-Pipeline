@@ -13,12 +13,27 @@
 // cola (2+len <= QB), se captura de una vez a msg_reg (emisor estable e
 // independiente del stream) y se drena el mensaje completo de la cola. Los
 // estados de emisión solo emiten desde msg_reg (no leen el stream): no hay
-// desincronía. La cola QB=128 amortigua el peor caso (mensajes mínimos
-// back-to-back) entre el consumo puntual del CAP y la llegada de la entrada,
-// manteniendo el line-rate sin backpressure.
+// desincronía. La cola amortigua el peor caso (mensajes mínimos back-to-back)
+// entre el consumo puntual del CAP y la llegada de la entrada.
+//
+// QB (iteración 6, 2026-08-14 — revisión exhaustiva): 128 -> 64. El backlog
+// estacionario de la cola es QB/4 palabras (la entrada fluye a 4 B/c y el
+// drenaje puntual del CAP promedia ~2,7 B/c => la cola se fija en QB y cada
+// mensaje espera ~QB/16 mensajes de turno): QB=64 recorta la latencia
+// wire->BBO de ~69 a ~42 ciclos de media (p99 77 -> 47; ~215 -> ~132 ns a
+// 322,265625 MHz) y reduce el barrel shifter de 1024 a 512 bits para la
+// síntesis (criterio 10). El tramo probado de mensajes back-to-back
+// (LIN-01/P32-02) pasa de 0 stalls a stalls ACOTADOS (~15 en 4 mensajes A/U;
+// "sin backpressure sostenida" del régimen de fase 1 — la limitación del feed
+// infinito ya está documentada en LIN-01 alcance); la corrección bit a bit y
+// el promedio de aceptación se mantienen. El peor caso de cola (P=44 B =>
+// 46 B con prefijo) cabe con holgura (64 >= 46). No tocar QB sin re-medir la
+// evidencia de latencia (SEC-LAT-01). ATENCIÓN: en la cadena (itch_chain.sv)
+// el parámetro QB se sobrescribe desde el top — cambiar el default aquí no
+// afecta a fase 3 (ver revision-exhaustiva-2026-08-14.md, §3).
 module itch_parser #(
     parameter DW = 64,
-    parameter QB = 128
+    parameter QB = 64
 ) (
     input  wire              clk,
     input  wire              rst_n,
