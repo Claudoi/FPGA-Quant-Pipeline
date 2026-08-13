@@ -23,6 +23,12 @@ VERILOG_SOURCES = \
 # variante 32-bit: sobrescribe el parámetro DW del top en elaboración
 EXTRA_ARGS ?= -GDW=32
 
+# iteración 2: tabla hashada. K=20 da más de PROBE refs por hash en 2^K
+# (con K=19 la 9ª ref del mismo hash se trunca a una existente y el probe
+# agotado es inalcanzable — ver test_hash32.py).
+sim-hash:
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_hash32 EXTRA_ARGS="-GDW=32 -GK=20"
+
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 REPO_ROOT := $(CURDIR)/../../..
 export PYTHONPATH := $(REPO_ROOT):$(REPO_ROOT)/golden_model:$(CURDIR):$(REPO_ROOT)/verification/testbenches/orderbook:$(REPO_ROOT)/verification/testbenches/parser:$(PYTHONPATH)
