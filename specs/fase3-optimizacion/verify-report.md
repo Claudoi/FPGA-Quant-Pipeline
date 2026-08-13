@@ -196,20 +196,90 @@ es SEC-BP-01, iteración 4).
 
 - Criterios 7-11 (hardening F1/F2, latencia, URAM/synth).
 
+## Iteración 4 — hardening (criterios 7-8) y latencia (criterio 8)
+
+### Meta del atacante/diseño
+
+Cierra los dos hallazgos de la lente 9 del grade de fase 2 y mide la latencia:
+
+- **SEC-NSYM-01 (F1)**: un locate fuera del subset con NSYM=20 registrados
+  señaliza `error` (pulso) y el mensaje se descarta **sin tocar el libro**;
+  nunca un índice OOB en `lv_*`/`loc_map`. El guard se implementa en ST_W0
+  (registro `bad_sym` + pulso de error) y se consume en ST_APPLY (el mensaje
+  salta apply_one y vuelve a ST_W0).
+- **SEC-BP-01 (F2)**: el par BBO/depth se **retiene** en AXI: `tvalid`
+  permanece en 1 mientras `tready` no lo acepte, y el guard de ST_APPLY frena
+  el pipeline mientras el par penda (evento entregado exactamente una vez).
+- **SEC-LAT-01 (criterio 8)**: latencia wire→BBO por tipo en la cadena DW=32:
+  desde el handshake en `s_axis` de la word que cubre el primer byte del
+  mensaje hasta el handshake de su evento BBO. Histograma determinista
+  (re-ejecución idéntica) + JSON commiteado en `verification/vectors/latency/`
+  + conversión a ns en `docs/writeup/latencia.md` (1 ciclo = 3,103 ns a
+  322,265625 MHz).
+
+### Rojo con evidencia (TDD)
+
+| Test | Rojo | Causa raíz |
+|---|---|---|
+| SEC-NSYM-01 | `AssertionError: el símbolo 21 no señalizó error` | el RTL no tenía guard: el locate desconocido con loc_cnt=NSYM entraba con `m_loc_idx=31` (OOB en `lv_*`) |
+| SEC-BP-01 | `AssertionError: got(5) exp(7) — evento perdido` | `tvalid` se limpiaba incondicionalmente: un emit durante `tready=0` se perdía (2 de 7 eventos) |
+| regresión fase 3 | `sim-hash: 6/6 -> 5/6` y `fase2: 14/14 -> 3/14` | gotcha del entorno: drivers antiguos sin `depth_tready` (X) + retención nueva → `depth_tvalid` en X → guard de ST_APPLY bloqueado → timeout. Fix: los drivers conducen ambos `tready` (el consumidor AXI debe) |
+
+### Verde (evidencia)
+
+| Suíte | Resultado |
+|---|---|
+| phase3/hard32 (SEC-NSYM-01, SEC-BP-01 con ventanas de tready=0) | **2/2 PASS** |
+| phase3/lat32 (SEC-LAT-01: 2 re-ejecuciones idénticas) | **1/1 PASS** — 31.400 msgs → 30.729 eventos; p99 ≈ 77 ciclos ≈ 239 ns; media 69,3 ciclos ≈ 215 ns |
+| phase3 regresión (book32 5/5, hash 6/6, depth 3/3, parser32 4/4, chain32 2/2) | **20/20 PASS** |
+| fase1 regresión | **19/19 PASS** |
+| fase2 regresión (incl. REPLAY-01) | **14/14 PASS** |
+
+### Cambios
+
+- `rtl/orderbook/orderbook.sv`: reg `bad_sym` (reset + clear en ST_W0 + set en
+  el guard del símbolo 21); ST_APPLY con rama `bad_sym` (descarta sin
+  apply_one); **retención AXI** del par (`tvalid <= tvalid && !tready` para
+  bbo y depth).
+- `verification/testbenches/phase3/test_hard32.py` (nuevo): driver con
+  backpressure opcional (ventanas de 5 ciclos de tready=0 cada 17) y muestreo
+  del pulso `error`; SEC-NSYM-01 (forma cerrada: golden sobre el subset
+  filtrado) y SEC-BP-01 (bit a bit + exactamente una vez).
+- `verification/testbenches/phase3/test_lat32.py` (nuevo): driver con tracking
+  de ciclos de handshake; mapeo evento→mensaje vía índices emisores del golden;
+  histograma por tipo; doble ejecución + comparación; persistencia del JSON.
+- `verification/testbenches/phase3/Makefile`: targets `sim-hard` y `sim-lat`.
+- `verification/testbenches/phase3/test_orderbook32.py`, `test_hash32.py` y
+  `verification/testbenches/orderbook/test_orderbook.py`: los drivers conducen
+  `depth_tready` (consumidor AXI completo).
+- `verification/vectors/latency/latency_dw32.json` (nuevo, evidencia derivada
+  sin datos crudos) y `docs/writeup/latencia.md` (conversión a ns).
+- `scripts/verify/mutate_orderbook.py`: cuarta suite (sim-hard) y 2 mutantes
+  (NSYM-GUARD, BP-NORET).
+
+### Mutación (gate E)
+
+21/21 mutantes muertos (19 previos + NSYM-GUARD + BP-NORET). Evidencia:
+`scripts/verify/mutate_orderbook.py` (runner, cuádruple suite), re-ejecutable.
+
+### Pendiente para iteraciones siguientes
+
+- Criterios 9-11 (URAM/registrada, sin rutas O(P·P), síntesis).
+
 ## Tabla de gates
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | 5 suites phase3 (20/20) + fase1 19/19 + fase2 14/14 PASS | ✔ |
+| **A. Simulación** | 6 suites phase3 (23/23) + fase1 19/19 + fase2 14/14 PASS | ✔ |
 | **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en DW∈{32,64} × K∈{19,20} y chain | ✔ |
 | **C. Estilo** | `verible-verilog-lint` (si instalado) | — |
 | **D. Cobertura + mapeo** | Tabla spec↔tests (pendiente al cierre) | — |
-| **E. Mutación HDL** | 19/19 mutantes muertos (triple suite fase2+hash+depth) | ✔ |
+| **E. Mutación HDL** | 21/21 mutantes muertos (cuádruple suite fase2+hash+depth+hard) | ✔ |
 | **F. Completitud Gherkin** | espejos del `.feature` ↔ tests | — |
 | **G. Rigor + timing** | G0/G2/G3 ✔ (vectores/feed no commiteados); G timing: run externo del owner (criterio 10) | — |
 
 ## Veredicto
 
-Iteración 1 (criterios 1-3 + REG-01), iteración 2 (criterios 4-5) e
-iteración 3 (criterio 6, top-N): **verde con evidencia**; pendiente de
-`/verify` formal y criterios 7-11.
+Iteración 1 (criterios 1-3 + REG-01), iteración 2 (criterios 4-5), iteración 3
+(criterio 6, top-N) e iteración 4 (criterios 7-8: hardening F1/F2 + latencia):
+**verde con evidencia**; pendiente de `/verify` formal y criterios 9-11.
