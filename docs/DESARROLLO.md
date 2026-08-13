@@ -54,6 +54,16 @@ python -c "import cocotb, numpy; print('cocotb', cocotb.__version__)"
   partida (decisión del documento maestro).
 - Verilator es estricto con `--Wall`; el trinquete de warnings del proyecto se
   documenta por área, nunca se silencia un warning real para pasar un gate.
+- **Los parámetros de fase 3 se sobrescriben desde el top**: `itch_chain.sv`
+  declara su propio `QB` (y otros) y los pasa a los módulos con `.QB(QB)` —
+  cambiar un default de módulo NO afecta a la cadena (hallazgo 2026-08-14:
+  "QB 64" en `itch_parser.sv` no movió la latencia; el binario elaboró 128).
+  El parámetro efectivo vive en el top y en la línea `-G` del Makefile. Antes
+  de medir un cambio de parámetro, confirmar QUÉ módulo elabora el valor
+  (traza de señales internas con cocotb o inspección de constantes del C++
+  generado por Verilator).
+- `verible-verilog-lint` (gate C) no está instalado en el entorno; instalable
+  en la próxima sesión para cerrar el único gate pendiente del ciclo.
 
 ## Verificación
 
