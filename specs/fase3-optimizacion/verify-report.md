@@ -55,19 +55,100 @@ BBO bit a bit con el golden sobre el feed real.
 - Criterios 4-11 (hash+probing, top-N, hardening F1/F2, latencia, URAM/synth).
 - F1 (NSYM overflow) y F2 (bbo_tready) son SEC-NSYM-01/SEC-BP-01 (criterios 8-9).
 
+## Iteración 2 — tabla de órdenes hashada + linear probing (criterios 4-6)
+
+### Meta del atacante/diseño
+
+La tabla `o_*[2^K]` de indexación directa (fase 2) se reemplaza por una tabla
+hashada de `NSLOT = 2^SLOT = 65.536` slots con `hash(ref) = ref[SLOT-1:0]` y
+linear probing acotado a `PROBE = 8` pasos, reproduciendo EXACTO el contrato de
+la fase 2 (mismos eventos, anomalías y refs) y añadiendo la semántica del
+criterio 5: ref no encontrada tras agotar probes = anomalía (sin abortar);
+tabla llena = `error` señalizado, nunca wrap ni overwrite silencioso.
+
+Decisión de diseño: tabla en **registros con lookup combinacional de hasta
+PROBE slots/ciclo** (8 comparadores en paralelo) — el mapeo a URAM y la lectura
+registrada se difieren a la iteración 5 (criterio 9); los tiempos ST_APPLY /
+ST_UADD no cambian, así que la regresión de fase 2 pasa sin tocar sus tests.
+Los borrados dejan `valid=0` y el lookup continúa a través de esos slots
+(semántica de tombstones sin bit muerto: el bit `tomb` era lógica no leída y se
+eliminó durante el build — la entrada coincide con la spec `{valid, ref, side,
+price, qty}`); el insert reutiliza el primer slot `valid=0` del camino.
+
+**Radio real del feed (31.400 msgs del subset)**: 12.742 adds, **13.456 refs
+distintas**, pico 272 vivas, carga pico 0,415 % de los 65.536 slots,
+max_ref = 372.297 (19 bits), 12.662 hashes-16 distintos → sin cadenas largas
+ni riesgo de llenado (incluso acumulando borrados, 13.456/65.536 = 20,5 %);
+con carga 20 % la probabilidad de agotar 8 probes es ~2,6e-6.
+
+### Rojo con evidencia (TDD)
+
+| Test | Rojo | Causa raíz |
+|---|---|---|
+| SEC-HASH-02 (tabla llena) | `SEC-HASH-02: la tabla llena debe señalar error` (`assert 0 > 0`) | con indexación directa de 2^K nunca hay llenado: el 9º add del hash cabe siempre |
+| SEC-HASH-02 (tras el hash) | `got` ≠ `expected[:8] + expected[9:]` | el test asumía igualdad bit a bit tras el fallo; el golden no modela la tabla y su estado diverge tras el add fallido → el test se reformuló cerrado (adds previos bit a bit + ausencia del evento del add fallido + BBO posterior verificado de forma cerrada) |
+
+(Nota: con K=19 y PROBE=8, el probe agotado es inalcanzable por construcción
+— 2^19/2^16 = 8 refs por hash; SEC-HASH-01/02 se ejecutan con `-GK=20` vía el
+target `sim-hash` del Makefile para hacer real el 9º ref del hash.)
+
+### Verde (evidencia)
+
+| Suíte | Resultado |
+|---|---|
+| phase3/hash32 (SEC-HASH-01/02/02b/02c/03/04, K=20) | **6/6 PASS** |
+| phase3/book32 (B32-01/02, INV-B32-01/02/03, K=19) | **5/5 PASS** (B32-02: 31.400 msgs → 30.729 eventos bit a bit, cross=0) |
+| phase3/parser32 | **4/4 PASS** |
+| phase3/chain32 (CHAIN-01 real) | **2/2 PASS** (bit a bit, gaps=0) |
+| fase1 regresión DW=64 | **19/19 PASS** |
+| fase2 regresión DW=64 (incl. REPLAY-01) | **14/14 PASS** |
+
+### Cambios
+
+- `rtl/orderbook/orderbook.sv`: parámetros `SLOT=16`, `PROBE=8`; arrays
+  `o_valid/o_ref/o_side/o_price/o_qty` de `NSLOT=2**SLOT` (entrada exacta de la
+  spec, sin bit `tomb` — lógica muerta eliminada); funciones `lookup_ref`
+  (proba hasta PROBE comparando `o_ref`, `found` por salida) y `first_empty`
+  (primer slot `valid=0`, `full` si el camino está lleno); `apply_one`
+  reescrito (A/F: dup-ref o qty 0 o tabla llena → error; E/C/X/D/U: lookup →
+  anomalía si no existe; U con `newref` duplicada → error); `reduce_order` por
+  slot; tarea `apply_uadd_half` para ST_UADD (mitad add: `first_empty` → si
+  llena, error y BBO del replace cancelado vía `emit_ok`); reset de los 5
+  arrays. Tras el refactor el lint queda limpio (BLKSEQ movido a tarea,
+  UNUSEDSIGNAL de bits altos resuelto pasando el hash ya truncado a
+  `first_empty`).
+- `verification/testbenches/phase3/test_hash32.py` (nuevo): 6 tests espejo
+  SEC-HASH-01/02/03 + bordes; driver con muestreo del pulso `error`.
+- `verification/testbenches/phase3/Makefile`: target `sim-hash`
+  (`TOPLEVEL=orderbook MODULE=test_hash32 EXTRA_ARGS="-GDW=32 -GK=20"`).
+- `scripts/verify/mutate_orderbook.py`: runner del gate E con doble suite
+  (fase 2 a DW=64 + hash a K=20) y 7 mutantes nuevos de la tabla hashada
+  (ref sin comparar, bounds de probing off-by-one en lookup e insert, guard de
+  tabla llena en add y en mitad-add del replace, dup-ref sin error, insert sin
+  valid).
+
+### Mutación (gate E)
+
+15/15 mutantes muertos (8 de fase 2 actualizados al RTL hashado + 7 nuevos de
+hash). Evidencia `scripts/verify/mutate_orderbook.py` (runner), re-ejecutable.
+
+### Pendiente para iteraciones siguientes
+
+- Criterios 7-11 (top-N, hardening F1/F2, latencia, URAM/synth).
+
 ## Tabla de gates
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | 3 suites phase3 + 2 regresiones: 11/11 + 19/19 + 14/14 PASS | ✔ |
-| **B. Compilación/lint sintaxis** | Verilator 5.050 limpio en ambas variantes (trinquete documentado) | ✔ |
+| **A. Simulación** | 4 suites phase3 (15/15) + fase1 19/19 + fase2 14/14 PASS | ✔ |
+| **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en DW∈{32,64} × K∈{19,20} y chain | ✔ |
 | **C. Estilo** | `verible-verilog-lint` (si instalado) | — |
 | **D. Cobertura + mapeo** | Tabla spec↔tests (pendiente al cierre) | — |
-| **E. Mutación HDL** | Runner de mutación phase3 (iter 2+) | — |
+| **E. Mutación HDL** | 15/15 mutantes muertos (doble suite fase2+hash) | ✔ |
 | **F. Completitud Gherkin** | espejos del `.feature` ↔ tests | — |
 | **G. Rigor + timing** | G0/G2/G3 ✔ (vectores/feed no commiteados); G timing: run externo del owner (criterio 10) | — |
 
 ## Veredicto
 
-Iteración 1 (criterios 1-3 + REG-01): **verde con evidencia**; pendiente de
-`/verify` formal y criterios 4-11.
+Iteración 1 (criterios 1-3 + REG-01) e iteración 2 (criterios 4-6):
+**verde con evidencia**; pendiente de `/verify` formal y criterios 7-11.
