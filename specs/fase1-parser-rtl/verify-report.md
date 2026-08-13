@@ -96,10 +96,16 @@ REP-02 17937 words byte a byte.
 ## D.2 / hallazgos abiertos
 
 1. Gate C (verible) y D nivel 2 (cobertura runner): NO EJECUTADOS (herramientas
-   no disponibles/configuradas en el entorno). Declarados, no ocultados.
-2. Criterio 9 (cabo fase 0): NO EJECUTADO (pre-trabajo de fase 0).
-3. Line-rate mínimo infinito: físicamente imposible con el Anexo A → decisión
-   de `/spec` (documentado en research-parser-rtl-pendientes.md §C.0).
+   no disponibles/configuradas en el entorno; verible no está en brew ni pip
+   como binario). Declarados, no ocultados.
+2. Criterio 9 (cabo fase 0): **pendiente de descarga de datos**, no de código.
+   El día de regresión `01302019` no está en el entorno (solo `12302019`);
+   descargarlo de emi.nasdaq.com ≈ 4,8 GB a ~350 KB/s (~4 h). El pipeline ya se
+   validó contra el día local `12302019` (fase 0 + REP-02). El cabo se cierra
+   descargando el día y ejecutando `run_golden.py` (pre-trabajo de fase 0).
+3. Line-rate mínimo infinito (criterio 2): **DECISIÓN DE SPEC TOMADA (edit
+   2026-08-13)**: non-goal físico derivado del Anexo A (16 B overhead/mensaje →
+   salida > entrada). Ver spec.md criterio 2.
 4. La mutación deja `sim_build` sucio (los objetos no se recompilan al restaurar
    el RTL); el runner ahora hace `make clean` al final. `make sim` en verde exige
    ese clean o compilación fresca.
@@ -107,6 +113,8 @@ REP-02 17937 words byte a byte.
 ## Veredicto
 
 **Listo para /grade (iteración 3).** Criterio 7 cerrado con test reales que
-pinchan y un mutante TRUNC-EOP muerto. Gates A/B/E/F PASS; C/D-nivel2 declarados
-NO EJECUTADOS (entorno); G0/G1/G3 PASS; G timing NO APLICA (fase 1). Restan
-decisiones de owner: line-rate mínimo infinito (criterio 2) y cabo fase 0.
+pinchan y un mutante TRUNC-EOP muerto. Criterio 2 cerrado por decisión de spec
+(non-goal físico). Gates A/B/E/F PASS; C/D-nivel2 declarados NO EJECUTADOS
+(entorno); G0/G1/G3 PASS; G timing NO APLICA (fase 1). Restan únicamente
+decisiones de datos/entorno de owner: descarga del día 01302019 (criterio 9,
+cabo de fase 0) e instalación de verible. **Campaña fase 1 cerrada para el RTL.**

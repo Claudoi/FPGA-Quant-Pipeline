@@ -157,19 +157,22 @@ El framing + gaps acercan el manejo real del feed (decisión Q8/Q9).
    byte a byte idéntico al `--emit-messages` del golden model (known-answer
    sintético, incl. un mensaje de cada tipo).
    — Gherkin: `parser.feature` §PAR-01, §SEC-PAR-04; `output.feature` §OUT-01
-2. [ ] **Line rate (alcance acotado):** en un tramo de mensajes back-to-back
+2. [x] **Line rate (alcance acotado):** en un tramo de mensajes back-to-back
    que cabe amortiguado en la cola (QB=128, mensajes de tamaño medio A/U/F/P),
    con el downstream consumiendo, el RTL acepta la entrada sin stall interno
    (contador de ciclos de stall == 0 en el test).
    — Gherkin: `datapath.feature` §LIN-01
-   — **Pendiente documentado (aligerár para crear el aligner streaming):** el
-   peor caso de mensajes MÍNIMOS (`D` 19 B, `X` 23 B, `S` 12 B) **back-to-back
-   infinito** exige un aligner con drenaje en los estados de emisión (no solo
-   el consumo puntual del CAP + amortiguación de cola). La arquitectura actual
-   de captura a `msg_reg` (corrección byte a byte probada, PAR-01 verde) no lo
-   sostiene; este sub-requisito se separa para una iteración dedicada de RTL y
-   NO se exige en el test LIN-01 actual (verifico un tramo acotado de mensajes
-   medios con 0 stalls).
+   — **Decisión de spec (edit 2026-08-13, iteración 3):** el peor caso de
+   mensajes MÍNIMOS (`D` 19 B, `X` 23 B, `S` 12 B) **back-to-back infinito** se
+   declara **non-goal físico** de esta campaña. El registro normalizado del
+   Anexo A añade 16 B de overhead por mensaje (word0 + word1), de modo que la
+   salida AXI-Stream siempre excede la entrada (D: 24 B salida por 21 B feed;
+   S: 24/14) y ningún aligner alcanza «1 palabra/ciclo infinito» con una cola
+   finita. Se verifica con el tramo acotado que cabe amortiguado (0 stalls),
+   y el límite se documenta en `docs/research-parser-rtl-pendientes.md` §C.0
+   como non-goal derivado del Anexo A (no como defecto de RTL). Si en el futuro
+   se requiere el caso infinito, la decisión es rediseñar el Anexo A (salida
+   comprimida / bus más ancho), no parchear el parser.
    — Gherkin: `datapath.feature` §LIN-01
 3. [ ] El alineador decodifica correctamente cualquiera de las 8 alineaciones
    de un mensaje dentro de la palabra de 64-bit, incluidos mensajes que
