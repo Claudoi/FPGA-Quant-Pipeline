@@ -8,50 +8,90 @@
 
 | Área | Estado |
 |---|---|
-| RTL `orderbook.sv` | lint `--Wall` 0; **13/13 tests verdes** |
+| RTL `orderbook.sv` | lint `--Wall` 0; **13/13 tests verdes** (mapeo locate→índice en iteración 2) |
 | Tests | BBO-01, SEC-U, SEC-HZ-01/02, SEC-DC-01/02, SEC-AN, SEC-OV, SEC-CR, SEC-EM, MULTI-01, REPLAY-02 |
 | Gate E (mutación) | 6/6 mutantes muertos (`scripts/verify/mutate_orderbook.py`) |
-| **PENDIENTE 1** | REPLAY-01 (feed real multi-símbolo): requiere mapeo locate→índice |
+| **CERRADO iteración 2** | Mapeo locate→índice (register-on-first-seen) — 13/13 sintéticos verde |
+| **PENDIENTE 1** | **BUG-U**: replace con doble level_add en el mismo ciclo (REPLAY-01) |
 | **PENDIENTE 2** | Profundidad de book (N niveles públicos), pipeline URAM optimizado |
 
-## PENDIENTE 1 — mapeo locate → índice de símbolo (REPLAY-01)
+## PENDIENTE 1 — BUG-U: replace `U` con dos level_add en el mismo ciclo
 
-El RTL actual indexa los niveles por `locate[4:0]` (0..19), suficiente para
-hasta 20 símbolos si sus locate[4:0] no colisionan (verificado: `test_multi01`
-con locates 393→9 y 13→13). Un día real de Nasdaq tiene **~2990 locates**
-(medido en una ventana de 150K mensajes: 278 distintos), así que `[4:0]`
-colisiona masivamente → el feed real no se puede replícar bit a bit con este
-mapeo.
+### Síntoma (iteración 2)
 
-### Intento implementado y revertido (esta iteración)
+El feed real multi-símbolo (20 locates, 31400 mensajes) falla REPLAY-01:
+`got(30261) exp(30729)` — 468 eventos de diferencia. El primer desajuste:
 
-Se implementó una tabla contenido-direccionable en el RTL:
-- `loc_map[NSYM-1:0]` (ubicación del locate por índice), `loc_cnt`, `m_loc_idx`.
+```
+evento 769: got=(1101, (425800, 500, 426300, 1400), 0) exp=(1101, (425700, 500, 426300, 1400), 1)
+mensaje: type=U loc=1101, orig=247097, new=247657, shares=500, price=425700
+```
+
+### Reproducción mínima (sintética)
+
+```
+A(1101, 247097, bid, 500, @425800)
+A(1101, 246365, bid, 300, @425500)
+U(1101, 247097→247657, 500, @425700)
+exp: [(1101,(425800,500,0,0),1), (1101,(425800,500,0,0),0), (1101,(425700,500,0,0),1)]
+got: [(1101,(425800,500,0,0),1), (1101,(425800,500,0,0),0), (1101,(425800,500,0,0),0)]
+```
+
+El `U` reemplaza la orden best-bid (425800) por una a 425700; el golden da
+best bid 425700, el RTL sigue en 425800.
+
+### Causa raíz
+
+En `apply_one`, el branch `U` hace DOS llamadas a `level_add` en el MISMO
+ciclo:
+1. `level_add(o_side[oref], o_price[oref], -o_qty[oref])`  → elimina 425800
+2. `level_add(o_side[oref], price, shares)`              → añade 425700
+
+Cada `level_add` copia `lv_qty/lv_price` a variables locales (`lpr/lqt`),
+aplica, y escribe de vuelta con `<=` (non-blocking). La segunda llamada lee
+`lv_qty` ANTES de que la primera actualice (la escritura `<=` es visible el
+ciclo siguiente), así que la segunda ve 425800 con qty 500 (no 0) y el nivel
+resultante queda corrupto (425800 con qty residual, 425700 mal ordenado).
+
+Esto es el MISMO patrón que se arregló en la iteración 1 dentro de una sola
+`level_add` (variables locales), pero ahora son DOS `level_add` consecutivas
+en `apply_one` que comparten el mismo flanco.
+
+### Fix propuesto (iteración 3)
+
+1. **Pipeline del U en 2 ciclos**: aplicar la eliminación de la orig en un
+   ciclo y la adición de la nueva en el siguiente (o un `level_add` que acepte
+   dos operaciones atómicas). Alternativa más simple: serializar las dos
+   operaciones con un `apply_pending` flag que divida el APPLY del U en dos
+   estados.
+2. O: hacer `level_add` **combinacional puro** que devuelva el nuevo estado
+   (no escriba `<=`), y que `apply_one` lo invoque dos veces encadenadas sobre
+   la misma variable local, escribiendo `lv_*` UNA vez al final.
+3. Revalidar REPLAY-01 con el feed real de 20 símbolos (31400 mensajes).
+
+### Cómo reproducir
+
+```bash
+cd verification/testbenches/orderbook
+export PATH="$PWD/../../../.venv/bin:$PATH"
+# suite (REPLAY-01 omitido por BUG-U)
+make clean && make sim
+# para ver el bug: descomentar el cuerpo de test_replay01_feed_real_bbo
+```
+
+## CERRADO — mapeo locate → índice de símbolo (iteración 2)
+
+El RTL indexa los niveles por `m_loc_idx` (register-on-first-seen):
+- `loc_map[NSYM-1:0]` + `loc_cnt` + `m_loc_idx`.
 - `loc_lookup()` — función pura que devuelve el índice existente o 31 si ausente.
-- En ST_W0: si `loc_lookup == 31 && loc_cnt < NSYM`, se registra `loc_map[loc_cnt]
-  <= locate` y `m_loc_idx <= loc_cnt`; si no, `m_loc_idx <= loc_lookup`.
+- En ST_W0: si `loc_lookup == 31 && loc_cnt < NSYM`, se registra
+  `loc_map[loc_cnt] <= locate`, `m_loc_idx <= loc_cnt`; si no,
+  `m_loc_idx <= loc_lookup`.
 
-**Resultado**: regresión — rompió BBO-01/MULTI-01/CR-01 (de 12/12 a 7/13). Se
-revertió al mapeo `[4:0]` (13/13 verde). 
-
-**Hipótesis de la regresión** (a confirmar en la iteración 2):
-1. **Lectura de la tabla en el mismo ciclo que la escritura**: `loc_lookup`
-   lee `loc_map` que se escribe con `<=` en el mismo flanco de ST_W0 — el
-   segundo mensaje del MISMO símbolo debería ver el mapa ya escrito, pero si el
-   primer mensaje NO es el que registra (p. ej. un `S`/`H` que no modifica el
-   book), el `m_loc_idx` del mensaje de datos inmediato posterior usa un valor
-   stale del ciclo anterior.
-2. El `emit_bbo`/`level_add` leen `m_loc_idx` que se asigna en ST_W0 con `<=`
-   y se usa en ST_APPLY/ST_EMIT ciclos después — debería ser estable, pero
-   puede haber un caso donde el registro del símbolo y su uso coinciden mal.
-
-**Plan iteración 2**:
-1. Aislar con un test mínimo: 2 mensajes del MISMO símbolo nuevo, verificar
-   `m_loc_idx` en cada uno; luego 2 símbolos.
-2. Factorizar el mapeo a señal combinacional `wire [4:0] cur_idx` calculada en
-   ST_W0, evitando leer/escribir `loc_map` en el mismo ciclo.
-3. Reescribir REPLAY-01 con el mapeo y el feed real de 1-2 símbolos (para
-   comparar bit a bit contra `book.py`).
+La regresión de la iteración 1 NO era del mapeo (era la corrupción por
+`re.sub` al limpiar displays). El mapeo reimplementado limpio pasa los 13
+tests sintéticos y el feed real de 20 símbolos se procesa (el único fallo
+restante es el BUG-U, independiente del mapeo).
 
 ## PENDIENTE 2 — profundidad y pipeline URAM
 

@@ -85,6 +85,11 @@ module orderbook #(
     reg market_open;
     reg [3:0] trading_state;
 
+    // mapeo locate -> índice de símbolo (register-on-first-seen)
+    reg [15:0] loc_map[NSYM-1:0];
+    reg [4:0]  loc_cnt;         // número de símbolos registrados
+    reg [4:0]  m_loc_idx;       // índice del símbolo del mensaje en curso
+
     // ---------------------------------------------------------------
     // helpers de extracción de bytes (big-endian)
     // ---------------------------------------------------------------
@@ -97,6 +102,18 @@ module orderbook #(
     function automatic logic [63:0] b64(input [6:0] b);
         b64 = {pbody(b), pbody(b+1), pbody(b+2), pbody(b+3),
                pbody(b+4), pbody(b+5), pbody(b+6), pbody(b+7)};
+    endfunction
+
+    // devuelve el índice del locate o 31 si no está registrado
+    function automatic logic [4:0] loc_lookup(input [15:0] l);
+        integer ii;
+        loc_lookup = 5'd31;
+        for (ii = 0; ii < NSYM; ii = ii + 1) begin
+            if (loc_map[ii] == l) begin
+                loc_lookup = 5'(ii);
+                ii = NSYM;
+            end
+        end
     endfunction
 
     // ---------------------------------------------------------------
@@ -116,6 +133,8 @@ module orderbook #(
             cross_events <= 0; anomaly_count <= 0; error <= 1'b0;
             market_open <= 1'b0; trading_state <= 4'h0;
             bi <= 0; nbody_w <= 0; emit_ok <= 1'b0;
+            for (int i = 0; i < NSYM; i++) loc_map[i] <= 16'hffff;
+            loc_cnt <= 0; m_loc_idx <= 0;
         end else begin
             bbo_tvalid <= 1'b0;
             error <= 1'b0;
@@ -127,6 +146,17 @@ module orderbook #(
                         m_locate <= s_axis_tdata[55:40];
                         m_len    <= s_axis_tdata[39:32];
                         m_idx    <= s_axis_tdata[31:0];
+                        // mapeo de símbolo: índice conocido o registro por orden
+                        // (register-on-first-seen). loc_lookup lee loc_map/loc_cnt
+                        // del estado previo; el registro se hace con <= en el flanco.
+                        if (loc_lookup(s_axis_tdata[55:40]) == 5'd31 &&
+                            loc_cnt < NSYM) begin
+                            loc_map[loc_cnt] <= s_axis_tdata[55:40];
+                            loc_cnt <= loc_cnt + 1;
+                            m_loc_idx <= loc_cnt;
+                        end else begin
+                            m_loc_idx <= loc_lookup(s_axis_tdata[55:40]);
+                        end
                         // words de cuerpo = ceil((len-11)/8)
                         nbody_w <= 7'(((8'(s_axis_tdata[39:32]) - 8'd11) + 8'd7) >> 3);
                         bi <= 0;
@@ -180,7 +210,6 @@ module orderbook #(
     // operaciones ahí leen el estado actual y generan el siguiente).
     // ---------------------------------------------------------------
     task automatic level_add;
-        input [15:0] locate;   // se usa locate[4:0] como índice de símbolo
         input        ask;
         input [PXW-1:0] price;
         input signed [31:0] delta;
@@ -191,8 +220,7 @@ module orderbook #(
         reg [PXW-1:0] lpr[0:P-1];   // copias locales (bloqueantes) del lado
         reg [QW-1:0]  lqt[0:P-1];
         begin
-            base = 5'(locate[4:0])*2*P + (ask ? P : 0);
-            if (locate[15:5] != 0 && NSYM == 20) begin end  // mapeo de símbolo (fase profundidad)
+            base = m_loc_idx*2*P + (ask ? P : 0);
             // copiar el estado actual del lado a variables locales
             for (slot = 0; slot < P; slot = slot + 1) begin
                 lpr[slot] = lv_price[base+slot];
@@ -234,12 +262,11 @@ module orderbook #(
     endtask
 
     task automatic reduce_level;
-        input [15:0] locate;
         input        ask;
         input [PXW-1:0] price;
         input signed [31:0] delta;
         begin
-            level_add(locate, ask, price, delta);
+            level_add(ask, price, delta);
         end
     endtask
 
@@ -255,12 +282,12 @@ module orderbook #(
                 rest = 34'({2'b0, o_qty[oref]}) - 34'({2'b0, qty});
                 if (rest[33]) error <= 1'b1;
                 else if (rest == 0) begin
-                    reduce_level(o_locate[oref], o_side[oref], o_price[oref], -$signed(o_qty[oref]));
+                    reduce_level(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
                     o_valid[oref] <= 1'b0;
                     did = 1'b1;
                 end else begin
                     o_qty[oref] <= QW'(rest);
-                    reduce_level(o_locate[oref], o_side[oref], o_price[oref], -32'(qty));
+                    reduce_level(o_side[oref], o_price[oref], -32'(qty));
                     did = 1'b1;
                 end
             end
@@ -276,15 +303,15 @@ module orderbook #(
             // mejor nivel por lado = primer slot con qty>0 (lista ordenada)
             bp = 0; bq = 0;
             for (i = 0; i < P; i = i + 1) begin
-                if (lv_qty[5'(m_locate[4:0])*2*P + i] != 0) begin
-                    bp = lv_price[5'(m_locate[4:0])*2*P + i]; bq = lv_qty[5'(m_locate[4:0])*2*P + i];
+                if (lv_qty[m_loc_idx*2*P + i] != 0) begin
+                    bp = lv_price[m_loc_idx*2*P + i]; bq = lv_qty[m_loc_idx*2*P + i];
                     i = P;
                 end
             end
             ap = 0; aq = 0;
             for (i = 0; i < P; i = i + 1) begin
-                if (lv_qty[5'(m_locate[4:0])*2*P + P + i] != 0) begin
-                    ap = lv_price[5'(m_locate[4:0])*2*P + P + i]; aq = lv_qty[5'(m_locate[4:0])*2*P + P + i];
+                if (lv_qty[m_loc_idx*2*P + P + i] != 0) begin
+                    ap = lv_price[m_loc_idx*2*P + P + i]; aq = lv_qty[m_loc_idx*2*P + P + i];
                     i = P;
                 end
             end
@@ -292,11 +319,11 @@ module orderbook #(
                 cross_events <= cross_events + 1;
             bbo_locate <= m_locate;
             bbo_tdata  <= {bp[31:0], bq[31:0], ap[31:0], aq[31:0]};
-            changed = (bp != prev_bp[5'(m_locate[4:0])]) || (bq != prev_bq[5'(m_locate[4:0])]) ||
-                      (ap != prev_ap[5'(m_locate[4:0])]) || (aq != prev_aq[5'(m_locate[4:0])]);
+            changed = (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||
+                      (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);
             bbo_changed <= changed;
-            prev_bp[5'(m_locate[4:0])] <= bp; prev_bq[5'(m_locate[4:0])] <= bq;
-            prev_ap[5'(m_locate[4:0])] <= ap; prev_aq[5'(m_locate[4:0])] <= aq;
+            prev_bp[m_loc_idx] <= bp; prev_bq[m_loc_idx] <= bq;
+            prev_ap[m_loc_idx] <= ap; prev_aq[m_loc_idx] <= aq;
             bbo_tvalid <= 1'b1;
         end
     endtask
@@ -319,7 +346,7 @@ module orderbook #(
                         o_valid[oref] <= 1'b1; o_side[oref] <= ask;
                         o_locate[oref] <= m_locate;
                         o_price[oref] <= price; o_qty[oref] <= shares;
-                        level_add(m_locate, ask, price, shares);
+                        level_add(ask, price, shares);
                         do_emit = 1'b1;
                     end
                 end
@@ -330,7 +357,7 @@ module orderbook #(
                     oref = K'(b64(0));
                     if (!o_valid[oref]) anomaly_count <= anomaly_count + 1;
                     else begin
-                        level_add(o_locate[oref], o_side[oref], o_price[oref], -$signed(o_qty[oref]));
+                        level_add(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
                         o_valid[oref] <= 1'b0;
                         do_emit = 1'b1;
                     end
@@ -341,8 +368,8 @@ module orderbook #(
                     if (!o_valid[oref]) anomaly_count <= anomaly_count + 1;
                     else if (shares == 0 || o_valid[newref]) error <= 1'b1;
                     else begin
-                        level_add(o_locate[oref], o_side[oref], o_price[oref], -$signed(o_qty[oref]));
-                        level_add(o_locate[oref], o_side[oref], price, shares);
+                        level_add(o_side[oref], o_price[oref], -$signed(o_qty[oref]));
+                        level_add(o_side[oref], price, shares);
                         o_valid[oref] <= 1'b0;
                         o_valid[newref] <= 1'b1;
                         o_locate[newref] <= o_locate[oref];

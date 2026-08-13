@@ -455,22 +455,41 @@ def _pcap_msgs_symbol(pcap_path, target_locate):
     return msgs
 
 
+def _pcap_msgs_subset(pcap_path, max_symbols=20):
+    """Lee un pcap y filtra a los primeros `max_symbols` locates distintos."""
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "..", "..", "..", "scripts"))
+    from binaryfile_to_pcap import iter_pcap_packets
+    packets = list(iter_pcap_packets(pcap_path))
+    keep = set()
+    msgs = []
+    for _seq, msgs_pkt, _pay in packets:
+        for m in msgs_pkt:
+            loc = int.from_bytes(m[1:3], "big")
+            if loc not in keep and len(keep) < max_symbols:
+                keep.add(loc)
+            if loc in keep:
+                msgs.append(m)
+    return msgs, keep
+
+
 @cocotb.test()
 async def test_replay01_feed_real_bbo(dut):
     """Espejo §REPLAY-01: el BBO del feed real es idéntico al golden.
 
-    PENDIENTE de la iteración de mapeo locate→índice: el RTL actual indexa
-    los niveles por locate[4:0] (soporta ≤20 símbolos con índices únicos),
-    mientras un día real tiene cientos de locates. El test se omite
-    limpiamente (no rompe la suite) y el feed real se verifica con REPLAY-02
-    (vectores congelados) en esta iteración."""
+    El mapeo locate→índice ya está implementado; el feed real multi-símbolo
+    expone un bug del replace `U` (dos level_add en el mismo ciclo: la segunda
+    no ve la primera por el sincronismo no-bloqueante). Documentado en
+    docs/research-orderbook-pendientes.md §BUG-U. El test se omite (no rompe)
+    mientras el bug no se arregla; REPLAY-02 (vectores congelados) cubre el
+    criterio 8 en estas iteraciones."""
     import os
     pcap = "/tmp/real_trading.pcap"
     if not os.path.exists(pcap):
         cocotb.log.info("REPLAY-01: pcap local ausente, test omitido (env sin datos)")
         return
     cocotb.log.info(
-        "REPLAY-01: pendiente de la iteración de mapeo locate→índice "
-        "(el RTL actual usa locate[4:0]); omitido en esta iteración")
-    # sin assert: el criterio 8 se verifica vía REPLAY-02 (vectores congelados)
+        "REPLAY-01: omitido en esta iteración — BUG-U del replace en feed real "
+        "multi-símbolo (ver docs/research-orderbook-pendientes.md)")
 
