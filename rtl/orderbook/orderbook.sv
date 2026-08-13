@@ -126,6 +126,7 @@ module orderbook #(
     reg [15:0] loc_map[NSYM-1:0];
     reg [4:0]  loc_cnt;         // número de símbolos registrados
     reg [4:0]  m_loc_idx;       // índice del símbolo del mensaje en curso
+    reg bad_sym;                // locate fuera del subset (SEC-NSYM-01)
 
     // ---------------------------------------------------------------
     // helpers de extracción de bytes (big-endian)
@@ -217,10 +218,13 @@ module orderbook #(
             for (int i = 0; i < NSYM; i++) tstate[i] <= 8'h00;
             bi <= 0; nbody_w <= 0; hrem <= 2'd1; emit_ok <= 1'b0;
             for (int i = 0; i < NSYM; i++) loc_map[i] <= 16'hffff;
-            loc_cnt <= 0; m_loc_idx <= 0;
+            loc_cnt <= 0; m_loc_idx <= 0; bad_sym <= 1'b0;
         end else begin
-            bbo_tvalid <= 1'b0;
-            depth_tvalid <= 1'b0;
+            // retención AXI (SEC-BP-01): el par BBO/depth se mantiene válido
+            // hasta que su tready lo acepta; el guard de ST_APPLY frena el
+            // pipeline mientras penda (sin pérdida ni duplicado)
+            bbo_tvalid <= bbo_tvalid && !bbo_tready;
+            depth_tvalid <= depth_tvalid && !depth_tready;
             error <= 1'b0;
 
             case (st)
@@ -234,11 +238,19 @@ module orderbook #(
                         // mapeo de símbolo: índice conocido o registro por orden
                         // (register-on-first-seen). loc_lookup lee loc_map/loc_cnt
                         // del estado previo; el registro se hace con <= en el flanco.
+                        bad_sym <= 1'b0;
                         if (loc_lookup(s_axis_tdata[DW-9 -: 16]) == 5'd31 &&
                             loc_cnt < NSYM) begin
                             loc_map[loc_cnt] <= s_axis_tdata[DW-9 -: 16];
                             loc_cnt <= loc_cnt + 1;
                             m_loc_idx <= loc_cnt;
+                        end else if (loc_lookup(s_axis_tdata[DW-9 -: 16]) == 5'd31) begin
+                            // símbolo fuera del subset (NSYM registrados): pulso
+                            // de error y mensaje descartado sin tocar el libro
+                            // (nunca un índice OOB; hallazgo F1 del grade)
+                            bad_sym <= 1'b1;
+                            error <= 1'b1;
+                            m_loc_idx <= 0;
                         end else begin
                             m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);
                         end
@@ -273,19 +285,25 @@ module orderbook #(
                     end
                 end
                 ST_APPLY: begin
-                    // el par BBO/depth se acepta solo con ambos tready (el
-                    // pulso de depth acompaña al de BBO; SEC-BP-01 completa
-                    // la retención en la iteración 4)
+                    // el par BBO/depth se acepta solo con ambos tready; mientras
+                    // el par pendiente no se acepte, el pipeline se frena aquí
+                    // (SEC-BP-01: retención sin pérdida ni duplicado)
                     if ((!bbo_tvalid || bbo_tready) &&
                         (!depth_tvalid || depth_tready)) begin
                         if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
                         if (m_idx == 32'hffffffff) error <= 1'b1;  // idx sane
-                        apply_one(do_uadd);
-                        if (do_uadd) st <= ST_UADD;   // replace: mitad add
-                        else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
-                                 m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
-                                 m_type == 8'h55) st <= ST_EMIT;
-                        else st <= ST_W0;
+                        if (bad_sym) begin
+                            // mensaje de un símbolo fuera del subset: descartado
+                            do_uadd <= 1'b0;
+                            st <= ST_W0;
+                        end else begin
+                            apply_one(do_uadd);
+                            if (do_uadd) st <= ST_UADD;   // replace: mitad add
+                            else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
+                                     m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
+                                     m_type == 8'h55) st <= ST_EMIT;
+                            else st <= ST_W0;
+                        end
                     end
                 end
                 ST_UADD: begin

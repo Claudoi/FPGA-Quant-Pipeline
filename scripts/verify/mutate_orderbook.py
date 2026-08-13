@@ -13,12 +13,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 RTL = os.path.join(REPO, "rtl", "orderbook", "orderbook.sv")
 BACKUP = RTL + ".bak"
 # (área, comando make): la fase 2 corre el feed real a DW=64 (REPLAY-01),
-# phase3 corre la suite hash a K=20 (probe agotado y tabla llena reales) y
-# la suite depth a DW=32 (top-N vs golden, DP-01/DP-02).
+# phase3 corre la suite hash a K=20 (probe agotado y tabla llena reales),
+# la suite depth a DW=32 (top-N vs golden, DP-01/DP-02) y la suite hard
+# (símbolo 21 y retención bajo backpressure, SEC-NSYM-01/SEC-BP-01).
 SUITES = [
     ("verification/testbenches/orderbook", ["make", "sim"]),
     ("verification/testbenches/phase3", ["make", "sim-hash"]),
     ("verification/testbenches/phase3", ["make", "sim-depth"]),
+    ("verification/testbenches/phase3", ["make", "sim-hard"]),
 ]
 
 MUTANTS = [
@@ -79,6 +81,12 @@ MUTANTS = [
     ("DP-EMPTYSTALE", "el nivel vacío conserva el precio stale (el depth filtra precios muertos)",
      "lqt[found] = 0;\n                    lpr[found] = 0;",
      "lqt[found] = 0;"),
+    ("NSYM-GUARD", "sin guard del símbolo 21 (el locate fuera del subset entra con m_loc_idx=31 -> OOB)",
+     "bad_sym <= 1'b1;\n                            error <= 1'b1;\n                            m_loc_idx <= 0;\n                        end else begin\n                            m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);",
+     "m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);"),
+    ("BP-NORET", "el par BBO/depth no se retiene (se pierde si tready=0 durante el evento)",
+     "bbo_tvalid <= bbo_tvalid && !bbo_tready;",
+     "bbo_tvalid <= 1'b0;"),
 ]
 
 
