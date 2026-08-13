@@ -53,8 +53,15 @@ confirma el synth del owner (criterio 10) sobre este diseño.
 ## Complejidad del mejor precio (sin O(P·P))
 
 - `emit_bbo`: escaneo **O(P)** por lado (P=32 slots, primer slot con qty≠0).
-- `level_add`: burbuja best-first de una pasada **O(P)** (inserción de un
-  nivel, sin bucles anidados sobre P).
+- `level_add` (iteración 6): reordenamiento **O(P)** garantizado — en borrados
+  compacta el hueco a la cola en una pasada; en inserts, burbuja de inserción
+  de una pasada derecha→izquierda (comparación `ask ? lpr[slot] < lpr[slot-1]
+  : lpr[slot] > lpr[slot-1]`, parada al llegar a posición); un cambio de
+  cantidad no reordena (invariante: la lista ya está ordenada y a lo sumo UN
+  elemento queda fuera de lugar). El precio stale de un nivel vaciado es
+  estructuralmente imposible: la compactación lo barre en el mismo ciclo
+  (antes de la iteración 6 este punto se afirmaba para una burbuja P×P — el
+  refactor hace verdadera la afirmación O(P) de la spec).
 - `lookup_ref`/`first_empty`: **O(PROBE=8)**.
 - Top-N: **O(ND=5)** de empaquetado.
 - No existe ninguna ruta con dos bucles anidados sobre P (ni P² ni P·ND²).

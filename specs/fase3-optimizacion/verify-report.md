@@ -298,20 +298,110 @@ Cierra los dos hallazgos de la lente 9 del grade de fase 2 y mide la latencia:
   `synth/reports/`. La inferencia URAM del synth confirma el criterio 9
   (guardarraíl del contrato sin gate nº 4).
 
+## Iteración 6 — revisión adversarial G5 y refactor O(P) de level_add
+
+### Meta del atacante/diseño
+
+Revisión adversarial independiente (G5) del libro al cerrar la iteración 5:
+0 CRITICO, **2 MAYOR** + 1 hallazgo propio de complejidad:
+
+1. **U no atómico con tabla llena (MAYOR)**: el delete se aplicaba en ST_APPLY
+   y la capacidad del newref solo se comprobaba en ST_UADD; con el camino
+   lleno, la mitad add se cancelaba (emit_ok=0) y la orden original se perdía
+   silenciosamente (libro divergente, sin señal alguna).
+2. **Wrap fantasma en `level_add` (MAYOR)**: un reduce (delta<0) sobre un
+   precio ausente (orden en tabla sin nivel, cascada del overflow de P=32)
+   escribía `QW'(delta)` envuelto en el slot libre -> nivel fantasma ~4,29e9
+   que salía como mejor bid. Reproducible: 33 adds (el 33º desborda y entra
+   en tabla sin nivel) + D que libera slot + D sobre el 33º.
+3. **Burbuja O(P²) en `level_add`** (hallazgo propio): el reordenamiento tras
+   cada operación era una burbuja anidada P×P -> contradecía el criterio 9
+   y el propio `docs/writeup/uram.md` (que afirmaba O(P), falso).
+
+### Rojo con evidencia (TDD)
+
+`test_inv_u01_tabla_llena_no_borra_la_original` e
+`test_inv_ov01_phantom_no_envuelve_cantidad` (sim-hash K=20):
+
+```
+INV-U-01: errores==0 exp>0 (el U con el path del newref lleno no señalizaba)
+INV-OV-01: errores=1 exp>=2 (el reduce sobre nivel ausente no señalizaba)
+** TESTS=8 PASS=6 FAIL=2 **
+```
+
+(Escenario U-01 rediseñado una vez: con un solo grupo de hash el delete
+liberaba un slot del propio path y el U cabía; se usan dos grupos disjuntos
+— A: hash 5 → slots 5..12, B: hash 100 → slots 100..107 — para que el path
+del newref esté lleno con refs ajenas y el delete libere un slot ajeno al
+path. El primer rojo de la iteración 4 (`SEC-HASH-02b: sin errores, vistos 2`)
+era una aserción residual de la versión antigua del INV-OV-01, ya eliminada.)
+
+### Verde (evidencia)
+
+```
+** TESTS=8 PASS=8 FAIL=0 **   (sim-hash)
+** TESTS=5 PASS=5 FAIL=0 **   (sim, orderbook32)
+** TESTS=3 PASS=3 FAIL=0 **   (sim-depth)
+** TESTS=2 PASS=2 FAIL=0 **   (sim-hard)
+** TESTS=1 PASS=1 FAIL=0 **   (sim-lat)
+** TESTS=4 PASS=4 FAIL=0 **   (sim, parser32)
+** TESTS=2 PASS=2 FAIL=0 **   (sim, chain32)
+** TESTS=14 PASS=14 FAIL=0 ** (fase 2)
+** TESTS=19 PASS=19 FAIL=0 ** (fase 1)
+```
+
+### Cambios
+
+- **U atómico**: en ST_APPLY el caso U pre-verifica la capacidad
+  (`first_empty(newref[SLOT-1:0], full)`); si `full` → `error`, SIN delete y
+  SIN emit; si cabe → delete + captura `u_newref/u_side/u_price/u_shares` +
+  `u_nidx` (nueva reg de SLOT bits, reseteada), emit con out_uadd. La mitad
+  add (`apply_uadd_half`, ST_UADD) usa el `u_nidx` ya verificado: ni recompute
+  ni rama full ni `emit_ok` (reg eliminada).
+- **Guard anti-fantasma**: en `level_add`, `found == -1 && delta < 0` →
+  `error` (el reduce sobre nivel ausente jamás escribe cantidad envuelta).
+- **Refactor O(P)**: el reordenamiento ya no es una burbuja P×P: en borrados
+  compacta a la izquierda en una pasada (el hueco queda en la cola, `P-1`
+  limpio con `lpr/lqt = 0`); en inserts, burbuja de inserción de una pasada
+  derecha→izquierda con comparación `(ask ? lpr[slot] < lpr[slot-1] :
+  lpr[slot] > lpr[slot-1])` y parada al llegar a posición; un cambio de
+  cantidad no reordena (invariante: la lista ya está ordenada). Con esto el
+  precio stale de un nivel vaciado es estructuralmente imposible (la
+  compactación lo barre en el mismo ciclo) — el mutante DP-EMPTYSTALE pasó a
+  ser equivalente y se sustituyó por DP-TOPNCOUNT.
+- **Runner de mutación**: `apply_safe` escribe el mutante en `.mut` temporal y
+  usa `os.replace` — un SystemExit de un patrón no encontrado YA NO puede
+  truncar el RTL (incidente en esta iteración: U-NOTATOMIC dejó el archivo en
+  0 bytes por el `open(RTL,"w")` truncador; restaurado desde `.bak`).
+
+### Mutación (gate E)
+
+**22/22 mutantes muertos** (cuádruple suite fase2 + sim-hash + sim-depth +
+sim-hard; OV-BEST re-textado a la comparación nueva, U-NOTATOMIC a
+`o_valid[u_nidx]`, HASH-UADD-FULL a U-NOFULLCHECK del pre-check en ST_APPLY,
+LV-NEGWRAP nuevo, DP-EMPTYSTALE → DP-TOPNCOUNT por equivalencia):
+
+```
+TODOS LOS MUTANTES MUERTOS. Gate E PASS.
+```
+
+Lint: `--lint-only -Wall` limpio en los 3 módulos (orderbook, itch_parser,
+itch_chain con dependencias).
+
 ## Tabla de gates
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | 6 suites phase3 (23/23) + fase1 19/19 + fase2 14/14 PASS | ✔ |
-| **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en DW∈{32,64} × K∈{19,20} y chain | ✔ |
+| **A. Simulación** | 7 suites phase3 (25/25) + fase1 19/19 + fase2 14/14 PASS | ✔ |
+| **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en orderbook, itch_parser, itch_chain (con deps) | ✔ |
 | **C. Estilo** | `verible-verilog-lint` (si instalado) | — |
 | **D. Cobertura + mapeo** | Tabla spec↔tests (pendiente al cierre) | — |
-| **E. Mutación HDL** | 21/21 mutantes muertos (cuádruple suite fase2+hash+depth+hard) | ✔ |
+| **E. Mutación HDL** | 22/22 mutantes muertos (cuádruple suite fase2+hash+depth+hard) | ✔ |
 | **F. Completitud Gherkin** | espejos del `.feature` ↔ tests | — |
-| **G. Rigor + timing** | G0/G2/G3 ✔ (vectores/feed no commiteados); G timing: run externo del owner (criterio 10) | — |
+| **G. Rigor + timing** | G0/G2/G3 ✔; G5 adversarial: 0 CRITICO, 2 MAYOR cerrados en iteración 6 (U atómico + guard anti-fantasma); G timing: run externo del owner (criterio 10) | — |
 
 ## Veredicto
 
-Iteraciones 1-5 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
+Iteraciones 1-6 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
 informe del run externo pendiente de pegar): **verde con evidencia**;
 pendiente de `/verify` formal y del WNS del owner.
