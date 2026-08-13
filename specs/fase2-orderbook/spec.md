@@ -119,7 +119,7 @@ words 2..N cuerpo.
 | Señal | Ancho | Descripción |
 |---|---|---|
 | `bbo_locate` | 16 | locate del símbolo del evento BBO |
-| `bbo_tdata` | 64 | `{bid_px, bid_qty, ask_px, ask_qty}` (4×16 o campo a campo según se pacte en build) |
+| `bbo_tdata` | 128 | `{bid_px[31:0], bid_qty[31:0], ask_px[31:0], ask_qty[31:0]}` (precios ITCH de 32 bits, cantidades 32 bits) |
 | `bbo_tvalid` | 1 | hay un evento BBO de salida (por mensaje modificador) |
 | `bbo_tready` | 1 | backpressure del consumidor de BBO |
 | `bbo_changed` | 1 | cambió el BBO respecto al anterior (semántica `changed` del golden) |
