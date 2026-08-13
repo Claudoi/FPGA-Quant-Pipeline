@@ -33,6 +33,7 @@ module orderbook #(
     parameter SLOT = 16,         // 2^SLOT slots de la tabla hashada (criterio 5).
                                  // hash(ref) = ref[SLOT-1:0]
     parameter PROBE = 8,         // pasos máx de linear probing por op
+    parameter ND   = 5,          // niveles del top-N público (criterio 6)
     parameter P   = 32,          // niveles de precio por lado. Máx medido del
                                  // subset real: 17 (locate 6960 ask, día local);
                                  // el overflow >P sigue señalizándose (SEC-OV)
@@ -51,6 +52,9 @@ module orderbook #(
     output reg               bbo_tvalid,
     input  wire              bbo_tready,
     output reg               bbo_changed,
+    output reg  [2*ND*64-1:0] depth_tdata,
+    output reg               depth_tvalid,
+    input  wire              depth_tready,
     output reg  [31:0]       cross_events,
     output reg  [31:0]       anomaly_count,
     output reg               error
@@ -206,6 +210,7 @@ module orderbook #(
                 prev_bp[i] <= 0; prev_bq[i] <= 0; prev_ap[i] <= 0; prev_aq[i] <= 0;
             end
             bbo_tvalid <= 1'b0; bbo_locate <= 0; bbo_tdata <= 0; bbo_changed <= 1'b0;
+            depth_tvalid <= 1'b0; depth_tdata <= 0;
             cross_events <= 0; anomaly_count <= 0; error <= 1'b0;
             market_open <= 1'b0; u_newref <= 0; u_side <= 0;
             u_price <= 0; u_shares <= 0;
@@ -215,6 +220,7 @@ module orderbook #(
             loc_cnt <= 0; m_loc_idx <= 0;
         end else begin
             bbo_tvalid <= 1'b0;
+            depth_tvalid <= 1'b0;
             error <= 1'b0;
 
             case (st)
@@ -267,7 +273,11 @@ module orderbook #(
                     end
                 end
                 ST_APPLY: begin
-                    if (!bbo_tvalid || bbo_tready) begin
+                    // el par BBO/depth se acepta solo con ambos tready (el
+                    // pulso de depth acompaña al de BBO; SEC-BP-01 completa
+                    // la retención en la iteración 4)
+                    if ((!bbo_tvalid || bbo_tready) &&
+                        (!depth_tvalid || depth_tready)) begin
                         if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
                         if (m_idx == 32'hffffffff) error <= 1'b1;  // idx sane
                         apply_one(do_uadd);
@@ -333,7 +343,12 @@ module orderbook #(
             end else begin
                 newq = $signed(33'(lqt[found])) + $signed(33'(delta));
                 if (newq[32]) error <= 1'b1;
-                else if (newq == 0) lqt[found] = 0;
+                else if (newq == 0) begin
+                    // nivel vacío no existe (invariante golden): se limpia
+                    // precio Y cantidad, o el top-N filtraría precios stale
+                    lqt[found] = 0;
+                    lpr[found] = 0;
+                end
                 else lqt[found] = QW'(newq);
             end
             // burbuja sobre las copias locales (mejor primero)
@@ -410,7 +425,8 @@ module orderbook #(
         reg [PXW-1:0] bp, ap;
         reg [QW-1:0] bq, aq;
         reg changed;
-        integer i;
+        reg [2*ND*64-1:0] dacc;
+        integer i, di;
         begin
             // mejor nivel por lado = primer slot con qty>0 (lista ordenada)
             bp = 0; bq = 0;
@@ -437,6 +453,21 @@ module orderbook #(
             prev_bp[m_loc_idx] <= bp; prev_bq[m_loc_idx] <= bq;
             prev_ap[m_loc_idx] <= ap; prev_aq[m_loc_idx] <= aq;
             bbo_tvalid <= 1'b1;
+            // top-N público (criterio 6): ND niveles por lado del símbolo del
+            // evento, mejor primero (slot 0 de la lista = mejor), vacíos a 0.
+            // Bus: {bid[ND-1..0], ask[ND-1..0]} MSB->LSB, cada nivel
+            // {px[31:0], qty[31:0]} -> depth[639:576] = mejor bid.
+            dacc = 0;
+            for (di = 0; di < ND; di = di + 1)
+                dacc = {dacc[2*ND*64-65:0],
+                        lv_price[m_loc_idx*2*P + di][31:0],
+                        lv_qty[m_loc_idx*2*P + di][31:0]};
+            for (di = 0; di < ND; di = di + 1)
+                dacc = {dacc[2*ND*64-65:0],
+                        lv_price[m_loc_idx*2*P + P + di][31:0],
+                        lv_qty[m_loc_idx*2*P + P + di][31:0]};
+            depth_tdata <= dacc;
+            depth_tvalid <= 1'b1;
         end
     endtask
 

@@ -12,11 +12,13 @@ import subprocess, sys, os, shutil, re
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RTL = os.path.join(REPO, "rtl", "orderbook", "orderbook.sv")
 BACKUP = RTL + ".bak"
-# (área, comando make): la fase 2 corre el feed real a DW=64 (REPLAY-01) y
-# phase3 corre la suite hash a K=20 (probe agotado y tabla llena reales).
+# (área, comando make): la fase 2 corre el feed real a DW=64 (REPLAY-01),
+# phase3 corre la suite hash a K=20 (probe agotado y tabla llena reales) y
+# la suite depth a DW=32 (top-N vs golden, DP-01/DP-02).
 SUITES = [
     ("verification/testbenches/orderbook", ["make", "sim"]),
     ("verification/testbenches/phase3", ["make", "sim-hash"]),
+    ("verification/testbenches/phase3", ["make", "sim-depth"]),
 ]
 
 MUTANTS = [
@@ -65,6 +67,18 @@ MUTANTS = [
     ("HASH-INSERT-NOVALID", "el insert no marca valid (la orden nunca aparece)",
      "o_valid[nidx] <= 1'b1;\n                            o_ref[nidx]   <= oref;",
      "o_ref[nidx]   <= oref;"),
+    ("DP-BADORDER", "el top-N invierte el orden (peor nivel primero)",
+     "dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};",
+     "dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + (ND-1-di)][31:0],\n                        lv_qty[m_loc_idx*2*P + (ND-1-di)][31:0]};"),
+    ("DP-ASKSWAP", "el top-N emite el ask en el grupo del bid (y viceversa)",
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + P + di][31:0]};",
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};"),
+    ("DP-NOVALID", "depth nunca se valida (el consumidor ve 0)",
+     "depth_tdata <= dacc;\n            depth_tvalid <= 1'b1;",
+     "depth_tdata <= dacc;"),
+    ("DP-EMPTYSTALE", "el nivel vacío conserva el precio stale (el depth filtra precios muertos)",
+     "lqt[found] = 0;\n                    lpr[found] = 0;",
+     "lqt[found] = 0;"),
 ]
 
 

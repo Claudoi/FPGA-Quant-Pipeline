@@ -9,6 +9,7 @@ module itch_chain #(
     parameter QB   = 128,
     parameter K    = 19,
     parameter P    = 32,
+    parameter ND   = 5,
     parameter NSYM = 20,
     parameter PXW  = 32,
     parameter QW   = 32
@@ -24,6 +25,9 @@ module itch_chain #(
     output reg               bbo_tvalid,
     input  wire              bbo_tready,
     output reg               bbo_changed,
+    output reg  [2*ND*64-1:0] depth_tdata,
+    output reg               depth_tvalid,
+    input  wire              depth_tready,
     output reg  [31:0]       cross_events,
     output reg  [31:0]       anomaly_count,
     output wire              error,
@@ -49,7 +53,9 @@ module itch_chain #(
         .s_axis_tready(p_m_axis_tready), .s_axis_tlast(p_m_axis_tlast),
         .bbo_locate(bbo_locate), .bbo_tdata(bbo_tdata),
         .bbo_tvalid(bbo_tvalid), .bbo_tready(bbo_tready),
-        .bbo_changed(bbo_changed), .cross_events(cross_events),
+        .bbo_changed(bbo_changed), .depth_tdata(depth_tdata),
+        .depth_tvalid(depth_tvalid), .depth_tready(depth_tready),
+        .cross_events(cross_events),
         .anomaly_count(anomaly_count), .error(b_error)
     );
 
