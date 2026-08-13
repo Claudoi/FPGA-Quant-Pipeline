@@ -18,7 +18,9 @@
 
 ```bash
 # entorno python (cocotb, numpy)
-python3 -m venv .venv && source .venv/bin/activate
+# IMPORTANTE: cocotb 2.0.1 NO soporta Python >= 3.14. Usa Python 3.11/3.12.
+#   En Homebrew con python@3.11:  /opt/homebrew/opt/python@3.11/bin/python3.11
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt   # cocotb, cocotb-bus, numpy, verilator scripts
 
 # verificación de instalación
