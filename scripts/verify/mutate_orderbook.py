@@ -25,17 +25,17 @@ SUITES = [
 
 MUTANTS = [
     ("OV-BEST", "best bid <= en vez de >= (cambio de mejor precio)",
-     "ask ? (lpr[j] < lpr[i]) : (lpr[j] > lpr[i])",
-     "ask ? (lpr[j] > lpr[i]) : (lpr[j] < lpr[i])"),
+     "ask ? (lpr[slot] < lpr[slot-1]) : (lpr[slot] > lpr[slot-1]))) begin",
+     "ask ? (lpr[slot] > lpr[slot-1]) : (lpr[slot] < lpr[slot-1]))) begin"),
     ("OV-EMPTY", "nunca marca overflow de niveles (acepta silencioso)",
      "if (found == -1 && empty == -1) begin",
      "if (found == -1 && empty == -1) begin error <= 1'b1; end else if (found == -1) begin\n                lpr[empty] = price; lpr[empty] = price;"),
     ("U-NOTATOMIC", "replace no atómico (borra la orig pero no añade la nueva)",
-     "level_add(u_side, u_price, u_shares);\n                o_valid[nidx] <= 1'b1;",
-     "o_valid[nidx] <= 1'b1;"),
+     "level_add(u_side, u_price, u_shares);\n            o_valid[u_nidx] <= 1'b1;",
+     "o_valid[u_nidx] <= 1'b1;"),
     ("U-DELETE-HALF", "replace conserva la qty de la orig en el nivel (doble cuenta)",
-     "level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));\n                            o_valid[sidx] <= 1'b0;\n                            u_newref <= newref;",
-     "o_valid[sidx] <= 1'b0;\n                            u_newref <= newref;"),
+     "level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));\n                                o_valid[sidx] <= 1'b0;\n                                u_newref <= newref;",
+     "o_valid[sidx] <= 1'b0;\n                                u_newref <= newref;"),
     ("U-SKIP-ROUTE", "replace no entra en ST_UADD (la nueva ref nunca se registra)",
      "if (do_uadd) st <= ST_UADD;",
      "if (do_uadd) st <= ST_EMIT;"),
@@ -60,9 +60,9 @@ MUTANTS = [
     ("HASH-FULLNOCHECK", "tabla llena inserta igual (wrap/overwrite silencioso)",
      "if (full) begin\n                            error <= 1'b1;  // tabla llena (SEC-HASH-02)",
      "if (1'b0) begin\n                            error <= 1'b1;  // tabla llena (SEC-HASH-02)"),
-    ("HASH-UADD-FULL", "la mitad add del replace llena inserta igual (wrap)",
-     "if (full) begin\n                error <= 1'b1;\n                emit_ok <= 1'b0;",
-     "if (1'b0) begin\n                error <= 1'b1;\n                emit_ok <= 1'b0;"),
+    ("HASH-UADD-FULL", "el U con el camino del newref lleno aplica el delete igualmente (la original se pierde)",
+     "nidx = first_empty(newref[SLOT-1:0], full);\n                            if (full) begin\n                                error <= 1'b1;   // tabla llena: la original sobrevive",
+     "if (full) begin\n                                error <= 1'b1;   // tabla llena: la original sobrevive"),
     ("HASH-DUPNOCHECK", "add con ref duplicada no señala error",
      "if (found || shares == 0) begin",
      "if (shares == 0) begin"),
@@ -78,15 +78,18 @@ MUTANTS = [
     ("DP-NOVALID", "depth nunca se valida (el consumidor ve 0)",
      "depth_tdata <= dacc;\n            depth_tvalid <= 1'b1;",
      "depth_tdata <= dacc;"),
-    ("DP-EMPTYSTALE", "el nivel vacío conserva el precio stale (el depth filtra precios muertos)",
-     "lqt[found] = 0;\n                    lpr[found] = 0;",
-     "lqt[found] = 0;"),
+    ("DP-TOPNCOUNT", "el top-N emite ND-1 niveles (el último queda fuera del bus)",
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};",
+     "for (di = 0; di < ND-1; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};"),
     ("NSYM-GUARD", "sin guard del símbolo 21 (el locate fuera del subset entra con m_loc_idx=31 -> OOB)",
      "bad_sym <= 1'b1;\n                            error <= 1'b1;\n                            m_loc_idx <= 0;\n                        end else begin\n                            m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);",
      "m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);"),
     ("BP-NORET", "el par BBO/depth no se retiene (se pierde si tready=0 durante el evento)",
      "bbo_tvalid <= bbo_tvalid && !bbo_tready;",
      "bbo_tvalid <= 1'b0;"),
+    ("LV-NEGWRAP", "el reduce sobre nivel ausente escribe la cantidad envuelta (phantom ~4,29e9)",
+     "end else if (found == -1 && delta < 0) begin\n                // reduce sobre un nivel que no existe (orden en tabla sin\n                // nivel por overflow previo): jamás una cantidad envuelta\n                // (phantom ~4,29e9; hallazgo G5)\n                error <= 1'b1;\n            end else if (found == -1) begin",
+     "end else if (found == -1) begin"),
 ]
 
 
@@ -98,6 +101,15 @@ def apply(mutant, raw):
     if n > 1:
         raise SystemExit(f"ERROR: {mutant[0]} {n} coincidencias (se esperaba 1)")
     return raw.replace(old, new)
+
+
+def apply_safe(mutant, raw):
+    # escribe el mutante en un archivo temporal y solo reemplaza el RTL si el
+    # patrón se encontró: un SystemExit de apply() NUNCA puede truncar el RTL
+    mutated = apply(mutant, raw)
+    with open(RTL + ".mut", "w") as f:
+        f.write(mutated)
+    os.replace(RTL + ".mut", RTL)
 
 
 def run_suites():
@@ -138,8 +150,7 @@ def main():
                 continue
             with open(BACKUP, "w") as f:
                 f.write(raw)
-            with open(RTL, "w") as f:
-                f.write(apply(mutant, raw))
+            apply_safe(mutant, raw)
             fails = run_suites()
             shutil.move(BACKUP, RTL)
             clean()
