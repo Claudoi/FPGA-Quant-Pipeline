@@ -39,6 +39,7 @@ data/itch_sample/**
 # ── Simulación (cocotb / Verilator) ──
 sim_build/
 **/sim_build/
+**/sim_build_*/
 **/obj_dir/
 **/xsim.dir/
 **/work/
