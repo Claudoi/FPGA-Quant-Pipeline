@@ -222,6 +222,7 @@ async def drive_and_collect_bbo(dut, messages, max_cycles=200000):
         # a un burst único para el feed completo (el book no usa tlast por msg)
         dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
         dut.bbo_tready.value = 1
+        dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.bbo_tvalid.value) == 1 and int(dut.bbo_tready.value) == 1:
             loc = int(dut.bbo_locate.value)

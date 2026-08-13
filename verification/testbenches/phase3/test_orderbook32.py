@@ -44,6 +44,7 @@ async def drive_and_collect_bbo32(dut, messages, max_cycles=200000):
         dut.s_axis_tdata.value = words[ci] if ci < n else 0
         dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
         dut.bbo_tready.value = 1
+        dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.bbo_tvalid.value) == 1 and int(dut.bbo_tready.value) == 1:
             loc = int(dut.bbo_locate.value)

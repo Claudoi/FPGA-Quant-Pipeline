@@ -33,6 +33,15 @@ sim-hash:
 sim-depth:
 	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_depth32 EXTRA_ARGS="-GDW=32"
 
+# iteración 4: hardening — símbolo 21 (SEC-NSYM-01) y retención del par
+# BBO/depth bajo backpressure (SEC-BP-01)
+sim-hard:
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_hard32 EXTRA_ARGS="-GDW=32"
+
+# iteración 4: latencia wire->BBO por tipo en la cadena (SEC-LAT-01)
+sim-lat:
+	$(MAKE) sim TOPLEVEL=itch_chain MODULE=test_lat32 EXTRA_ARGS="-GDW=32"
+
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 REPO_ROOT := $(CURDIR)/../../..
 export PYTHONPATH := $(REPO_ROOT):$(REPO_ROOT)/golden_model:$(CURDIR):$(REPO_ROOT)/verification/testbenches/orderbook:$(REPO_ROOT)/verification/testbenches/parser:$(PYTHONPATH)
