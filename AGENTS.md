@@ -29,14 +29,16 @@ El proyecto ganador es el **pipeline completo por fases**, no un parser suelto.
 **Fase 1 (parser RTL) CERRADA** — contrato en `specs/fase1-parser-rtl/`.
 19/19 tests, 10/10 mutantes; criterio 7 (frame truncado) cerrado en iteración 3.
 
-**Fase 2 (order book RTL) — iteración 3 CERRADA, lista para /grade.** Contrato
-en `specs/fase2-orderbook/`. 14/14 tests, 8/8 mutantes. Cerrados: mapeo
-locate→índice (iter 2) y REPLAY-01 con el feed real (iter 3): 31.400 mensajes
-de 20 símbolos → **30.729 eventos BBO bit a bit vs golden** (anomaly 671,
-cross 0). Hallazgos de la iteración 3: BUG-U del replace (U en 2 ciclos),
-truncado de order_ref (K=19), overflow de niveles (P=32), trading state por
-símbolo de 8 bits. Pendiente de fase 2: veredicto de `/grade`.
-- **Siguiente paso: `/grade` de fase 2 → fase 3 (optimización 322 MHz / URAM).**
+**Fase 2 (order book RTL) CERRADA con PASS** — contrato en
+`specs/fase2-orderbook/`. Ciclo completo en 3 iteraciones: mapeo
+locate→índice (iter 2) y REPLAY-01 con el feed real (iter 3). 14/14 tests,
+8/8 mutantes. Evidencia final: 31.400 mensajes de 20 símbolos → **30.729
+eventos BBO bit a bit vs golden** (anomaly 671, cross 0). Hallazgos de la
+iteración 3 resueltos: BUG-U del replace (U en 2 ciclos), truncado de
+order_ref (K=19), overflow de niveles (P=32), trading state por símbolo de 8
+bits. Hardening documentado para fase 3 (grade, lente 9): guard de NSYM
+contra OOB y handshake bbo_tready en ST_EMIT.
+- **Siguiente paso: fase 3 (optimización 322 MHz / URAM) — `/spec` primero.**
 
 ## Ciclo de trabajo (loop verificado, portado a FPGA + opencode)
 
