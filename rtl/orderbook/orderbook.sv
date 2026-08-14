@@ -4,32 +4,40 @@
 //   word0 = {msg_type[7:0], locate[15:0], length[7:0], msg_idx[31:0]}
 //   word1 = ts_ns (no usado por el book en esta fase)
 //   words 2..N = cuerpo del mensaje (campos del wire, big-endian)
+// A DW=32 (fase3-uram, recorte del Anexo A): w0={type,locate,len},
+// w1=msg_idx, w2..=cuerpo — SIN words de timestamp (contrato enmendado).
 //
 // Replica la semántica EXACTA de golden_model/src/book.py (fase 0).
 //
-// ESTRUCTURAS (iteración 2, fase 3: tabla de órdenes con hash + linear probing):
-//   - orders en tabla hashada de NSLOT = 2^SLOT slots: {valid, tomb, ref, side
-//     (0=bid,1=ask), price, qty}. hash(ref) = ref[SLOT-1:0]; la inserción
-//     proba linealmente hasta PROBE slots (reutiliza slots con valid=0, p. ej.
-//     tombstones); el lookup continúa a través de slots ocupados por otras refs
-//     y tombstones, comparando el ref: encontrada -> hit; slot libre sin tomb
-//     -> no existe; PROBE pasos sin hueco -> no existe (anomalía, igual que la
-//     indexación directa de fase 2). Insert sin hueco en PROBE pasos -> tabla
-//     llena -> error (SEC-HASH-02), nunca wrap ni overwrite silencioso.
-//     La tabla se mapea a URAM en la iteración 5 (criterio 9).
+//   ESTRUCTURAS (fase3-uram, iteración 2: tabla en URAM + sonda serializada):
+//   - orders en URAM de NSLOT = 2^SLOT entradas de OW=86 bits:
+//     {qty[31:0], price[31:0], side, ref[19:0], valid}. hash(ref) =
+//     ref[SLOT-1:0]; linear probing acotado a PROBE pasos. La lectura es
+//     SÍNCRONA REGISTRADA (patrón de inferencia URAM): un puerto de lectura
+//     (rd_addr -> rd_data 1 ciclo después) y un puerto de escritura
+//     (escritura condicional vía la tarea mem_wr, 1 write máx por ciclo,
+//     nunca en el mismo ciclo que una lectura de la sonda). NUNCA indexación
+//     combinacional de la tabla (bloqueador B1 del criterio 10, documentado
+//     en docs/writeup/revision-exhaustiva-2026-08-14.md).
+//   - La sonda (probe engine) serializa el lookup a ≤1 slot/ciclo y arranca
+//     DURANTE ST_BODY (prefetch del grupo de hash: la order_ref viaja en las
+//     primeras words del cuerpo y el hash se conoce antes de ST_APPLY):
+//     los resultados (found/slot/entry, primer empty, full) quedan en
+//     registros y ST_APPLY los consume SIN volver a leer la tabla.
+//   - El reset NO toca el contenido de la URAM (mataría la inferencia): un
+//     estado ST_INVAL invalida los 65.536 slots a 1 slot/ciclo (la URAM
+//     arranca a 0 en silicio; el patrón de invalidación por escritura es el
+//     estándar y el único compatible con la síntesis).
 //   - levels por (lado): lista ordenada de P niveles {price, qty}, mejor
-//     primero (bid = mayor, ask = menor).
-//   La aplicación se hace en el ciclo ST_APPLY: se leen orders (de la misma
-//   cola del ciclo pasado, ya capturadas en flanco), se modifican levels y
-//   orders, y se emite el BBO. `changed` compara contra el BBO previo.
+//     primero (bid = mayor, ask = menor) — sin cambios en esta iteración
+//     (el pipeline de niveles es la iteración 3).
 //
-// CORRECCIÓN > velocidad: 1 mensaje/ciclo de reloj, lógica O(P). El pipeline
-// URAM y la latencia registrada se optimizan en la iteración de profundidad.
+// CORRECCIÓN > velocidad: 1 mensaje/ciclo de reloj, lógica O(P).
 module orderbook #(
     parameter DW  = 64,
     parameter K   = 19,          // ancho de order_ref (bits). 2^19 >= max ref
-                                 // del subset real (372.297); el mapeo a URAM
-                                 // se dimensiona en fase 3.
+                                 // del subset real (372.297); el campo en
+                                 // memoria es REFW=20 bits (uram.md)
     parameter SLOT = 16,         // 2^SLOT slots de la tabla hashada (criterio 5).
                                  // hash(ref) = ref[SLOT-1:0]
     parameter PROBE = 8,         // pasos máx de linear probing por op
@@ -61,6 +69,8 @@ module orderbook #(
 );
 
     localparam NSLOT = 2**SLOT;
+    localparam REFW  = 20;      // campo ref en memoria (K <= REFW; uram.md)
+    localparam OW    = 1 + REFW + 1 + PXW + QW;   // 86 bits {qty,px,side,ref,valid}
 
     // bytes por palabra y su log2: 64 bits -> 8 B (b>>3), 32 bits -> 4 B (b>>2)
     localparam BYTES = DW / 8;
@@ -69,15 +79,18 @@ module orderbook #(
     // ---------------------------------------------------------------
     // FSM de recepción
     // ---------------------------------------------------------------
-    localparam ST_W0    = 3'd0;
-    localparam ST_TS    = 3'd1;
-    localparam ST_BODY  = 3'd2;
-    localparam ST_APPLY = 3'd3;
-    localparam ST_EMIT  = 3'd4;
-    localparam ST_UADD  = 3'd5;
-    reg [2:0]  st;
+    localparam ST_W0         = 3'd0;
+    localparam ST_TS         = 3'd1;
+    localparam ST_BODY       = 3'd2;
+    localparam ST_APPLY      = 3'd3;
+    localparam ST_EMIT       = 3'd4;
+    localparam ST_UADD       = 3'd5;
+    localparam ST_WAIT_PROBE = 3'd6;   // el prefetch no acabó durante el cuerpo
+    localparam ST_INVAL      = 3'd7;   // invalidación post-reset (1 slot/ciclo)
+    reg [2:0]  st /* verilator public */;
+    reg [SLOT-1:0] st_inval_cnt;   // contador de la invalidación post-reset (1/ciclo)
     reg [6:0] nbody_w;      // words de cuerpo restantes por consumir
-    reg [1:0]  hrem;        // words de cabecera restantes tras w0 (DW=32: 3)
+    reg [1:0]  hrem;        // words de cabecera restantes tras w0 (DW=32: 1)
     reg emit_ok;            // la operación aplicada se emite (no fue anomalía/error)
     reg do_uadd;            // el replace U de este ciclo necesita ST_UADD
     // handshake combinacional: acepta entrada en W0/TS/BODY
@@ -87,23 +100,115 @@ module orderbook #(
     reg [15:0] m_locate;
     reg [7:0]  m_len;
     reg [31:0] m_idx;
-    // (body_rem eliminado; se usa nbody_w)
     reg [3:0]  bi;
     reg [DW-1:0] body_acc[0:15];   // 16 words cubren el cuerpo máximo a DW=32
 
     // ---------------------------------------------------------------
-    // estado del libro: tabla de órdenes hashada (criterio 5, iter 2).
-    // NSLOT slots: valid=1 ocupado, valid=0 libre o borrado; ref guardado
-    // para distinguir colisiones del hash. Los borrados dejan valid=0 y el
-    // lookup continúa a través de esos slots (semántica de tombstones sin
-    // bit muerto); el insert reutiliza el primer slot valid=0 del camino.
-    // La entrada es exactamente {valid, ref, side, price, qty} (spec).
+    // tabla de órdenes en URAM (fase3-uram): array único de NSLOT x OW bits
+    // (65.536 x 86 ≈ 20 URAM del VU9P). SIN reset de contenido (patrón de
+    // inferencia); la invalidación post-reset corre en ST_INVAL.
+    // Entrada: {valid[0], ref[REFW:1], side[21], price[PXW+22-1:22], qty[85:54]}
     // ---------------------------------------------------------------
-    reg           o_valid [NSLOT-1:0];
-    reg [K-1:0]   o_ref   [NSLOT-1:0];
-    reg           o_side  [NSLOT-1:0];
-    reg [PXW-1:0] o_price [NSLOT-1:0];
-    reg [QW-1:0]  o_qty   [NSLOT-1:0];
+    reg [OW-1:0] o_mem [NSLOT-1:0];
+    // puerto de lectura de la sonda (registrado: rd_data <= o_mem[rd_addr])
+    reg [SLOT-1:0] rd_addr /* verilator public */;
+    reg [OW-1:0]  rd_data /* verilator public */;
+
+    // acceso de la entrada (cada accesor recibe SOLO su campo: el bit valid
+    // se lee directo con rd_data[0])
+    function automatic logic [REFW-1:0] e_ref(input [REFW-1:0] e);
+        e_ref = e;
+    endfunction
+    function automatic logic e_side(input e);
+        e_side = e;
+    endfunction
+    function automatic logic [PXW-1:0] e_price(input [PXW-1:0] e);
+        e_price = e;
+    endfunction
+    function automatic logic [QW-1:0] e_qty(input [QW-1:0] e);
+        e_qty = e;
+    endfunction
+    function automatic logic [OW-1:0] entry_new(input [K-1:0] r,
+                                                input        side,
+                                                input [PXW-1:0] px,
+                                                input [QW-1:0]  q);
+        entry_new = {q, px, side, REFW'(r), 1'b1};
+    endfunction
+
+    // escritura de la tabla: la tarea escribe el ARRAY directamente (patrón de
+    // la fase 3 con lv_price: un solo driver, la tarea — un puerto scalares
+    // + tarea dispararía MULTIDRIVEN en Verilator). Cada camino de apply_one
+    // emite a lo sumo UN write por ciclo; la sonda NUNCA lee durante
+    // ST_APPLY/ST_UADD (URAM 1R+1W sin colisión)
+    task automatic mem_wr(input [SLOT-1:0] a, input [OW-1:0] d);
+        begin
+            o_mem[a] <= d;
+        end
+    endtask
+
+    // ---------------------------------------------------------------
+    // probe engine (sonda serializada + prefetch, fase3-uram).
+    // Runs: old (order_ref del mensaje) y new (newref del replace U). Un run
+    // recorre h..h+PROBE-1 a 1 slot/ciclo con lecturas REGISTRADAS:
+    //   T0   arranque (rd_addr = h, WARM)
+    //   T1   rd_data = mem[h]; rd_addr = h+1 (WALK)
+    //   T2.. evala rd_data (slot h+i-1); sigue o termina
+    // El run termina al encontrar la ref (found) o al agotar los PROBE slots
+    // (not found; full si el camino no tenía ningún slot libre). Los
+    // tombstones (valid=0) NO cortan el recorrido (semántica de fase 3:
+    // una ref puede vivir más allá de un borrado). Resultados en registros:
+    // pr_found/pr_slot/pr_entry (la entrada completa leída), pr_empty_found/
+    // pr_empty (primer hueco), pr_full.
+    // ---------------------------------------------------------------
+    localparam PR_IDLE = 2'd0, PR_WARM = 2'd1, PR_WALK = 2'd2;
+    reg [1:0]  pr_phase /* verilator public */;
+    reg        pr_pending_old /* verilator public */;
+    reg        pr_pending_new /* verilator public */;
+    reg [K-1:0] pr_oref;
+    reg [K-1:0] pr_newref;
+    reg        pr_need_empty;      // el run old busca también primer hueco (A/F)
+    reg [SLOT-1:0] pr_base;
+    reg [REFW-1:0] pr_target;
+    reg [15:0] pr_i;               // paso 0..PROBE-1 del slot en evaluación
+    reg        pr_rec_empty;
+    reg        pr_is_old;          // identidad del run en curso (latch de salida)
+    // registros de trabajo del run en curso (condiciones de la pasada)
+    reg        w_empty_found;
+    // resultados LATCHADOS del run OLD (order_ref del mensaje): consumidos por
+    // apply_one para A/F/E/C/X/D y para la mitad delete del U
+    reg        pr_found /* verilator public */;
+    reg [SLOT-1:0] pr_slot /* verilator public */;
+    reg [OW-1:0]  pr_entry;
+    reg        pr_empty_found /* verilator public */;
+    reg [SLOT-1:0] pr_empty /* verilator public */;
+    reg        pr_full;
+    // resultados LATCHADOS del run NEW (newref del replace): capacity check y
+    // slot de insert del U. Los dos runs corren EN SERIE y terminan ANTES de
+    // ST_APPLY: el U es atómico — la tabla se lee pre-apply y la original
+    // sobrevive si el insert no cabe (hallazgo G5)
+    reg        pr_new_found;
+    reg [SLOT-1:0] pr_new_empty;
+    reg        pr_new_full;
+
+    wire pr_active = (pr_phase != PR_IDLE);
+    wire pr_start_old = pr_pending_old && !pr_active;
+    wire pr_start_new = pr_pending_new && !pr_active && !pr_pending_old;
+
+    // tipos que leen la tabla (prefetch en ST_BODY)
+    function automatic logic lt(input [7:0] t);
+        lt = (t == 8'h41) || (t == 8'h46) || (t == 8'h45) || (t == 8'h43) ||
+             (t == 8'h58) || (t == 8'h44) || (t == 8'h55);
+    endfunction
+
+    // el FSM decide la salida de ST_BODY con la COMBINACIÓN de armado del
+    // ciclo: el armado es NB (invisible hasta el flanco) y ningún mensaje
+    // puede escapar a ST_APPLY con un probe en vuelo o a punto de armarse
+    wire arm_old_this = (DW == 32) ? (bi == 4'd1 && lt(m_type))
+                                   : (bi == 4'd0 && lt(m_type));
+    wire arm_new_this = (DW == 32) ? (bi == 4'd3 && m_type == 8'h55)
+                                   : (bi == 4'd1 && m_type == 8'h55);
+    wire probe_inflight = pr_pending_old || pr_pending_new || pr_active ||
+                          arm_old_this || arm_new_this;
 
     // niveles: [side*P + slot] = precio, qty (mejor primero)
     reg [PXW-1:0] lv_price [NSYM*2*P-1:0];
@@ -156,55 +261,15 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
     endfunction
 
     // ---------------------------------------------------------------
-    // tabla hashada: hash(ref) = ref[SLOT-1:0], linear probing <= PROBE.
-    // lookup_ref: devuelve el slot si la ref está (found=1); si no, recorre
-    // hasta PROBE slots de refs ajenas/borradas y acaba con found=0 (slot
-    // con valid=0 -> no existe; camino lleno -> probe agotado -> no existe,
-    // anomalía igual que la fase 2).
-    // first_empty: primer slot con valid=0 del camino (reutiliza borrados);
-    // full=1 si los PROBE slots están ocupados -> tabla llena (SEC-HASH-02).
-    // Entrada: el hash ya truncado (los bits altos del ref no participan).
-    // ---------------------------------------------------------------
-    function automatic logic [SLOT-1:0] lookup_ref(input [K-1:0] r,
-                                                   output logic found);
-        integer ii;
-        logic [SLOT-1:0] h;
-        h = r[SLOT-1:0];
-        found = 1'b0;
-        lookup_ref = h;
-        for (ii = 0; ii < PROBE; ii = ii + 1) begin
-            if (o_valid[h + SLOT'(ii)] && o_ref[h + SLOT'(ii)] == r) begin
-                found = 1'b1;
-                lookup_ref = h + SLOT'(ii);
-                ii = PROBE;
-            end
-        end
-    endfunction
-
-    function automatic logic [SLOT-1:0] first_empty(input [SLOT-1:0] h,
-                                                    output logic full);
-        integer ii;
-        full = 1'b1;
-        first_empty = h;
-        for (ii = 0; ii < PROBE; ii = ii + 1) begin
-            if (!o_valid[h + SLOT'(ii)]) begin
-                full = 1'b0;
-                first_empty = h + SLOT'(ii);
-                ii = PROBE;
-            end
-        end
-    endfunction
-
+    // probe engine: avanza 1 slot/ciclo aunque el FSM esté recibiendo el
+    // cuerpo (prefetch). Vive DENTRO del always_ff del FSM (un solo driver:
+    // el armado en ST_BODY y el arranque/avance comparten flanco y proceso)
     // ---------------------------------------------------------------
     // FSM principal
     // ---------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (!rst_n) begin
-            st <= ST_W0;
-            for (int i = 0; i < NSLOT; i++) begin
-                o_valid[i] <= 1'b0; o_ref[i] <= 0; o_side[i] <= 1'b0;
-                o_price[i] <= 0; o_qty[i] <= 0;
-            end
+            st <= ST_INVAL;
             for (int i = 0; i < NSYM*2*P; i++) begin
                 lv_price[i] <= 0; lv_qty[i] <= 0;
             end
@@ -220,6 +285,20 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             bi <= 0; nbody_w <= 0; hrem <= 2'd1; emit_ok <= 1'b0;
             for (int i = 0; i < NSYM; i++) loc_map[i] <= 16'hffff;
             loc_cnt <= 0; m_loc_idx <= 0; bad_sym <= 1'b0;
+            // la URAM no se resetea (patrón de inferencia): ST_INVAL la
+            // invalida entera a 1 slot/ciclo
+            st_inval_cnt <= 0;
+            // estado del probe engine (mismo flanco, un solo driver)
+            pr_phase <= PR_IDLE;
+            pr_pending_old <= 1'b0; pr_pending_new <= 1'b0;
+            rd_addr <= 0; rd_data <= 0;
+            pr_base <= 0; pr_target <= 0; pr_i <= 0;
+            pr_rec_empty <= 1'b0; pr_need_empty <= 1'b0; pr_is_old <= 1'b1;
+            w_empty_found <= 1'b0;
+            pr_found <= 1'b0; pr_slot <= 0; pr_entry <= 0;
+            pr_empty_found <= 1'b0; pr_empty <= 0; pr_full <= 1'b0;
+            pr_new_found <= 1'b0; pr_new_empty <= 0; pr_new_full <= 1'b0;
+            pr_oref <= 0; pr_newref <= 0;
         end else begin
             // retención AXI (SEC-BP-01): el par BBO/depth se mantiene válido
             // hasta que su tready lo acepta; el guard de ST_APPLY frena el
@@ -228,7 +307,94 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             depth_tvalid <= depth_tvalid && !depth_tready;
             error <= 1'b0;
 
+            // ---- probe engine (sonda serializada): avanza 1 slot/ciclo
+            // aunque el FSM esté recibiendo el cuerpo (prefetch). La lectura
+            // es REGISTRADA (rd_data <= o_mem[rd_addr]) — patrón URAM.
+            rd_data <= o_mem[rd_addr];
+            if (pr_start_old) begin
+                pr_pending_old <= 1'b0;
+                pr_phase <= PR_WARM;
+                pr_i <= 16'd0;
+                pr_base <= pr_oref[SLOT-1:0];
+                pr_target <= REFW'(pr_oref);
+                pr_rec_empty <= pr_need_empty;
+                pr_is_old <= 1'b1;
+                w_empty_found <= 1'b0;
+                pr_found <= 1'b0; pr_slot <= 0; pr_entry <= 0;
+                pr_empty_found <= 1'b0; pr_empty <= 0; pr_full <= 1'b0;
+                rd_addr <= pr_oref[SLOT-1:0];
+            end else if (pr_start_new) begin
+                pr_pending_new <= 1'b0;
+                pr_phase <= PR_WARM;
+                pr_i <= 16'd0;
+                pr_base <= pr_newref[SLOT-1:0];
+                pr_target <= REFW'(pr_newref);
+                pr_rec_empty <= 1'b1;
+                pr_is_old <= 1'b0;
+                w_empty_found <= 1'b0;
+                pr_new_found <= 1'b0; pr_new_empty <= 0; pr_new_full <= 1'b0;
+                rd_addr <= pr_newref[SLOT-1:0];
+            end else if (pr_phase == PR_WARM) begin
+                pr_phase <= PR_WALK;
+                rd_addr <= pr_base + 16'd1;
+            end else if (pr_phase == PR_WALK) begin
+                // evalúa el dato leído hace 1 ciclo (rd_data); el slot en
+                // evaluación es pr_base + pr_i (pr_i previo al incremento).
+                // Los resultados se LATCHAN en el set del run en curso con
+                // writes directos (un latch task con NB leería el valor viejo
+                // de los registros de trabajo: race de 1 ciclo)
+                if (rd_data[0] && (rd_data[REFW:1] == pr_target)) begin
+                    if (pr_is_old) begin
+                        pr_found <= 1'b1;
+                        pr_slot <= pr_base + pr_i;
+                        pr_entry <= rd_data;
+                    end else begin
+                        pr_new_found <= 1'b1;
+                    end
+                    pr_phase <= PR_IDLE;
+                end else begin
+                    if (!rd_data[0] && pr_rec_empty && !w_empty_found) begin
+                        w_empty_found <= 1'b1;
+                        if (pr_is_old) begin
+                            pr_empty_found <= 1'b1;
+                            pr_empty <= pr_base + pr_i;
+                        end else begin
+                            pr_new_empty <= pr_base + pr_i;
+                        end
+                    end
+                    if (pr_i == 16'(PROBE-1)) begin
+                        // último slot del camino: no encontrada; llena si el
+                        // camino no tenía ningún hueco (insert A/F, U-new).
+                        // OJO: el hueco del slot ACTUAL se latchea en la rama
+                        // de arriba en este mismo ciclo (w_empty_found NB); la
+                        // lectura de w_empty_found aquí vería el valor VIEJO —
+                        // por eso se exige además rd_data[0] (slot ocupado):
+                        // si el hueco es el propio slot terminal, el empty ya
+                        // quedó registrado y NO es tabla llena (race 2026-08-14).
+                        if (pr_rec_empty && !w_empty_found && rd_data[0]) begin
+                            if (pr_is_old) pr_full <= 1'b1;
+                            else pr_new_full <= 1'b1;
+                        end
+                        pr_phase <= PR_IDLE;
+                    end else begin
+                        pr_i <= pr_i + 1;
+                        // el addr del PRÓXIMO slot: pr_i+2 (pr_i es el slot en
+                        // evaluación; la transición WARM ya emitió base+1 y
+                        // pr_i+1 re-emitiría el slot actual: desfase de 1
+                        // ciclo entre el dato leído y el slot evaluado)
+                        rd_addr <= pr_base + (pr_i + 2);
+                    end
+                end
+            end
+
             case (st)
+                ST_INVAL: begin
+                    // invalidación post-reset: los 65.536 slots a valid=0
+                    // (jamás reset global del array: mataría la URAM)
+                    mem_wr(st_inval_cnt, {OW{1'b0}});
+                    if (st_inval_cnt == NSLOT-1) st <= ST_W0;
+                    else st_inval_cnt <= st_inval_cnt + 1;
+                end
                 ST_W0: begin
                     if (s_axis_tvalid) begin
                         // campos del w0: {type, locate, len, idx} a 64 bits;
@@ -278,15 +444,54 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                 ST_BODY: begin
                     if (s_axis_tvalid) begin
                         body_acc[bi] <= s_axis_tdata;
+                        // PREFETCH (fase3-uram): el grupo de hash del mensaje
+                        // en curso se lee durante la recepción del cuerpo. La
+                        // order_ref (bytes 0-7) se completa con la 2ª word a
+                        // DW=32 (o la 1ª a DW=64); la newref del U con la 4ª
+                        // (o la 2ª). El probe engine las recoge al arrancar.
+                        if (DW == 32) begin
+                            if (bi == 4'd1 && lt(m_type)) begin
+                                pr_pending_old <= 1'b1;
+                                pr_oref <= K'({body_acc[0], s_axis_tdata});
+                                pr_need_empty <= (m_type == 8'h41 ||
+                                                  m_type == 8'h46);
+                            end
+                            if (bi == 4'd3 && m_type == 8'h55) begin
+                                pr_pending_new <= 1'b1;
+                                pr_newref <= K'({body_acc[2], s_axis_tdata});
+                            end
+                        end else begin
+                            if (bi == 4'd0 && lt(m_type)) begin
+                                pr_pending_old <= 1'b1;
+                                pr_oref <= K'(s_axis_tdata);
+                                pr_need_empty <= (m_type == 8'h41 ||
+                                                  m_type == 8'h46);
+                            end
+                            if (bi == 4'd1 && m_type == 8'h55) begin
+                                pr_pending_new <= 1'b1;
+                                pr_newref <= K'(s_axis_tdata);
+                            end
+                        end
                         if (s_axis_tlast) begin
-                            st <= ST_APPLY;   // tlast: fin del burst (cuerpo)
+                            // fin del burst (cuerpo): el prefetch pudo no
+                            // acabar (cuerpo corto) -> ST_WAIT_PROBE. probe_
+                            // inflight incluye el armado de ESTE ciclo (NB no
+                            // visible): ningún mensaje escapa a ST_APPLY con
+                            // un probe en vuelo o a punto de armarse
+                            st <= probe_inflight ? ST_WAIT_PROBE : ST_APPLY;
                         end else if (nbody_w <= 1) begin
-                            st <= ST_APPLY;
+                            st <= probe_inflight ? ST_WAIT_PROBE : ST_APPLY;
                         end else begin
                             bi <= bi + 1;
                             nbody_w <= nbody_w - 1;
                         end
                     end
+                end
+                ST_WAIT_PROBE: begin
+                    // espera del probe serializado (solo cuerpos cortos; el
+                    // prefetch lo evita en el caso normal)
+                    if (!pr_pending_old && !pr_pending_new && !pr_active)
+                        st <= ST_APPLY;
                 end
                 ST_APPLY: begin
                     // el par BBO/depth se acepta solo con ambos tready; mientras
@@ -423,37 +628,12 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         end
     endtask
 
-    task automatic reduce_order;
-        input [SLOT-1:0] sidx;      // slot ya validado por el lookup del caller
-        input [31:0] qty;
-        output reg did;
-        reg [33:0] rest;
-        begin
-            did = 1'b0;
-            rest = 34'({2'b0, o_qty[sidx]}) - 34'({2'b0, qty});
-            if (rest[33]) error <= 1'b1;
-            else if (rest == 0) begin
-                reduce_level(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
-                o_valid[sidx] <= 1'b0;
-                did = 1'b1;
-            end else begin
-                o_qty[sidx] <= QW'(rest);
-                reduce_level(o_side[sidx], o_price[sidx], -32'(qty));
-                did = 1'b1;
-            end
-        end
-    endtask
-
     task automatic apply_uadd_half;
         // mitad add del replace (ST_UADD): inserta u_newref en el slot ya
         // verificado u_nidx (la capacidad se chequeó en ST_APPLY, U atómico).
         begin
             level_add(u_side, u_price, u_shares);
-            o_valid[u_nidx] <= 1'b1;
-            o_ref[u_nidx]   <= u_newref;
-            o_side[u_nidx]  <= u_side;
-            o_price[u_nidx] <= u_price;
-            o_qty[u_nidx]   <= u_shares;
+            mem_wr(u_nidx, entry_new(u_newref, u_side, u_price, u_shares));
         end
     endtask
 
@@ -513,80 +693,82 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         reg ask;
         reg [7:0] ev;
         reg do_emit;
-        logic found, found2, full;
-        logic [SLOT-1:0] sidx, nidx;
+        reg [33:0] rest;
+        reg [QW-1:0] qty_old;
         begin
             do_emit = 1'b0;
             out_uadd = 1'b0;
+            // la tabla ya fue leída por la sonda (prefetch): los resultados
+            // pr_found/pr_slot/pr_entry/pr_empty/pr_full son del run que
+            // terminó ANTES de ST_APPLY (ST_WAIT_PROBE lo garantiza)
             case (m_type)
                 8'h41, 8'h46: begin
                     oref = K'(b64(0)); ask = (pbody(8) == 8'h53);
                     shares = b32(9); price = b32(21);
-                    sidx = lookup_ref(oref, found);
-                    if (found || shares == 0) begin
+                    if (pr_found || shares == 0) begin
                         error <= 1'b1;      // ref duplicada o cantidad inválida
+                    end else if (pr_full) begin
+                        error <= 1'b1;      // tabla llena (SEC-HASH-02)
                     end else begin
-                        nidx = first_empty(oref[SLOT-1:0], full);
-                        if (full) begin
-                            error <= 1'b1;  // tabla llena (SEC-HASH-02)
-                        end else begin
-                            o_valid[nidx] <= 1'b1;
-                            o_ref[nidx]   <= oref;
-                            o_side[nidx]  <= ask;
-                            o_price[nidx] <= price;
-                            o_qty[nidx]   <= shares;
-                            level_add(ask, price, shares);
-                            do_emit = 1'b1;
-                        end
+                        mem_wr(pr_empty, entry_new(oref, ask, price, shares));
+                        level_add(ask, price, shares);
+                        do_emit = 1'b1;
                     end
                 end
                 8'h45, 8'h43, 8'h58: begin
                     oref = K'(b64(0));
-                    sidx = lookup_ref(oref, found);
-                    if (!found) anomaly_count <= anomaly_count + 1;
-                    else reduce_order(sidx, b32(8), do_emit);
+                    if (!pr_found) begin
+                        anomaly_count <= anomaly_count + 1;
+                    end else begin
+                        // reduce desde la entrada capturada por la sonda
+                        qty_old = e_qty(pr_entry[OW-1:OW-QW]);
+                        rest = {2'b0, qty_old} - {2'b0, b32(8)};
+                        if (rest[33]) error <= 1'b1;   // execute > restante
+                        else if (rest == 0) begin
+                            reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                         -$signed(qty_old));
+                            mem_wr(pr_slot, {OW{1'b0}});   // valid=0
+                            do_emit = 1'b1;
+                        end else begin
+                            mem_wr(pr_slot, {rest[31:0], e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                             e_side(pr_entry[REFW+1]), e_ref(pr_entry[REFW:1]),
+                                             1'b1});
+                            reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                         -32'(b32(8)));
+                            do_emit = 1'b1;
+                        end
+                    end
                 end
                 8'h44: begin
                     oref = K'(b64(0));
-                    sidx = lookup_ref(oref, found);
-                    if (!found) anomaly_count <= anomaly_count + 1;
+                    if (!pr_found) anomaly_count <= anomaly_count + 1;
                     else begin
-                        level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
-                        o_valid[sidx] <= 1'b0;
+                        reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                     -$signed(e_qty(pr_entry[OW-1:OW-QW])));
+                        mem_wr(pr_slot, {OW{1'b0}});
                         do_emit = 1'b1;
                     end
                 end
                 8'h55: begin
                     oref = K'(b64(0)); newref = K'(b64(8));
                     shares = b32(16); price = b32(20);
-                    sidx = lookup_ref(oref, found);
-                    if (!found) anomaly_count <= anomaly_count + 1;
+                    if (!pr_found) anomaly_count <= anomaly_count + 1;
                     else if (shares == 0) error <= 1'b1;
+                    else if (pr_new_found) error <= 1'b1;   // newref duplicada
+                    else if (pr_new_full) error <= 1'b1;    // U atómico: la
+                        // original sobrevive (la capacidad se chequeó en la
+                        // sonda, ANTES del delete — hallazgo G5)
                     else begin
-                        nidx = lookup_ref(newref, found2);
-                        if (found2) error <= 1'b1;   // newref duplicada
-                        else begin
-                            // U atómico (hallazgo G5): la capacidad de la mitad
-                            // add se verifica ANTES del delete; si el camino
-                            // del newref está lleno, no se toca la original
-                            nidx = first_empty(newref[SLOT-1:0], full);
-                            if (full) begin
-                                error <= 1'b1;   // tabla llena: la original sobrevive
-                            end else begin
-                                // mitad delete (atómica): la add se aplica en
-                                // ST_UADD, un ciclo después, en el slot ya
-                                // verificado u_nidx
-                                level_add(o_side[sidx], o_price[sidx], -$signed(o_qty[sidx]));
-                                o_valid[sidx] <= 1'b0;
-                                u_newref <= newref;
-                                u_side <= o_side[sidx];
-                                u_price <= price;
-                                u_shares <= shares;
-                                u_nidx <= nidx;
-                                do_emit = 1'b1;
-                                out_uadd = 1'b1;
-                            end
-                        end
+                        reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                     -$signed(e_qty(pr_entry[OW-1:OW-QW])));
+                        mem_wr(pr_slot, {OW{1'b0}});
+                        u_newref <= newref;
+                        u_side <= e_side(pr_entry[REFW+1]);
+                        u_price <= price;
+                        u_shares <= shares;
+                        u_nidx <= pr_new_empty;
+                        do_emit = 1'b1;
+                        out_uadd = 1'b1;
                     end
                 end
                 8'h53: begin

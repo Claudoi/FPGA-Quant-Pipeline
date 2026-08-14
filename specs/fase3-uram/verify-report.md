@@ -3,6 +3,110 @@
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
 
+## Iteración 2 — tabla en URAM con sonda serializada + prefetch (SEC-URAM-01/02)
+
+### Meta del atacante/diseño
+
+El book pasa del array de registros a `reg [OW-1:0] o_mem [NSLOT-1:0]` (OW=86:
+`{qty[31:0], price[31:0], side[21], ref[20:1], valid[0]}`) que sintetiza a
+URAM. Sin reset global del array (mataría la URAM): `ST_INVAL` invalida 1
+slot/ciclo (65.536 ciclos post-reset). El lookup es una **sonda serializada**
+a 1 slot/ciclo (WARM + WALK) con lectura **registrada** (`rd_addr` → `rd_data`
+1 ciclo; nunca combinacional — SEC-URAM-01) y **prefetch** del grupo de hash
+durante `ST_BODY` (el `order_ref` viaja en las primeras words del cuerpo; el
+run termina antes de `ST_APPLY` — SEC-URAM-02). El U atómico corre **dos runs
+en serie** (old: lookup/delete; new: chequeo de capacidad) con latches de
+resultados separados (`pr_*` / `pr_new_*`): si el new no cabe, la original
+sobrevive (INV-U-01).
+
+### Rojo con evidencia (TDD)
+
+| Test | Rojo | Causa raíz |
+|---|---|---|
+| SEC-URAM-01/02 (uram) | `AttributeError: orderbook contains no child object named pr_phase` — 2/2 FAIL | RTL aún sin sonda (el área uram nació antes que el RTL URAM: rojo de TDD genuino) |
+| SEC-URAM-01 (b) | discriminador de lectura registrada fallaba | el check comparaba contra el apply del S previo (sin probe) en vez del arranque del propio run |
+| SEC-HASH-02 (regresión) | `la tabla llena debe señalar error` — errores=0 | dos bugs de la sonda (abajo) |
+
+### Dos bugs de la sonda (hallazgos de traza con test_dbg_full)
+
+1. **Off-by-one del WALK**: la transición WARM→WALK ya emitía `base+1` y el
+   continue emitía `pr_base + pr_i + 1` → dirección duplicada → a partir del
+   slot 2 el dato leído iba un ciclo por delante del slot evaluado (los datos
+   leídos eran `5,6,6,7,8,9,10,11`: se duplicaba el 6 y el último slot del
+   camino, `base+7`, jamás se leía). El 8º add "cabía" siempre en el hueco
+   permanente del slot 7 → la tabla llena nunca señalaba error. Fix:
+   `rd_addr <= pr_base + (pr_i + 2)` (alinea slot evaluado con dato leído;
+   el run sigue durando 9 ciclos, pinza (c) intacta).
+2. **Race del terminal**: cuando el hueco libre era el **último** slot del
+   camino, la rama terminal leía `w_empty_found` con su valor **viejo** (0)
+   mientras la rama de hueco lo asertaba en el mismo ciclo → `pr_full` se
+   latcheaba con el hueco ya registrado → el 8º add daba error sin serlo (y
+   su ref no entraba → anomalía fantasma en SEC-HASH-01). Fix: la condición
+   de llena exige `rd_data[0]` (slot terminal ocupado):
+   `pr_rec_empty && !w_empty_found && rd_data[0]`.
+
+### Verde (evidencia)
+
+```
+** TESTS=2 PASS=2 FAIL=0 **   (uram sim-uram: SEC-URAM-01 10 runs/87 lecturas
+                              + SEC-URAM-02 prefetch en el ciclo 65545 con st=ST_BODY)
+** TESTS=2 PASS=2 FAIL=0 **   (uram sim-anx: ANX-01/02 contra el layout recortado)
+** TESTS=8 PASS=8 FAIL=0 **   (phase3 sim-hash: SEC-HASH-01..04 + 02b/02c + INV-U-01/OV-01)
+** TESTS=5 PASS=5 FAIL=0 **   (phase3 sim: B32-02 feed real 31.400 msgs -> 30.729 eventos bit a bit, anomaly=671, cross=0)
+** TESTS=3 PASS=3 FAIL=0 **   (phase3 sim-depth)
+** TESTS=2 PASS=2 FAIL=0 **   (phase3 sim-hard)
+** TESTS=4 PASS=4 FAIL=0 **   (phase3 sim-parser)
+** TESTS=2 PASS=2 FAIL=0 **   (phase3 sim-chain: CHAIN-01 bit a bit)
+** TESTS=1 PASS=1 FAIL=0 **   (phase3 sim-lat: determinista, JSON regenerado)
+** TESTS=14 PASS=14 FAIL=0 ** (fase 2)
+** TESTS=19 PASS=19 FAIL=0 ** (fase 1)
+** 32/32 OK **                (golden model)
+```
+
+Latencia re-medida con el RTL URAM (`latency_dw32.json` regenerado por
+SEC-LAT-01, 30.729 eventos, anomaly=671, cross=0):
+
+| Métrica | Iter 1 (recorte) | Iter 2 (URAM) | Δ |
+|---|---|---|---|
+| Media total | 34,835 (108,1 ns) | **54,943** (170,5 ns) | +20,1 ciclos |
+| p99 / p50 / min | 39 / 34 / 24 | **66 / 50 / 39** | +27 / +16 / +15 |
+| A media | 37,67 | 65,26 | +27,6 |
+| D media | 32,41 | 47,59 | +15,2 |
+| U media | 37,49 | 59,46 | +22,0 |
+| X media | 33,20 | 46,10 | +12,9 |
+| max (A) | 41 | **65.579** | arranque: espera los 65.536 ciclos de ST_INVAL (~203 µs @322 MHz) |
+
+La sonda serializada (10 ciclos por operación de tabla, solapada con ST_BODY
+solo en mensajes largos) sube la latencia media por encima del umbral ≤45 del
+criterio: **SEC-URAM-04 queda pendiente para la iteración 3** (pipeline de la
+sonda o recorte del run: el slot en WARM/WALK de 8 lecturas a 1 slot/ciclo es
+el costo dominante).
+
+### Cambios
+
+- `rtl/orderbook/orderbook.sv`: reescritura del book — `o_mem` URAM (86 bits,
+  sin reset global), FSM con `ST_INVAL`/`WAIT_PROBE`, sonda serializada
+  WARM/WALK con prefetch en ST_BODY, latches dobles para el U atómico
+  (`pr_*`/`pr_new_*`), `mem_wr` escribiendo el array directamente, fixes del
+  off-by-one del WALK y de la race del terminal; `pr_i` a 16 bits (aritmética
+  de direcciones sin WIDTHEXPAND).
+- `verification/testbenches/uram/test_uram32.py` (nuevo): SEC-URAM-01/02
+  (importan `_reset` de test_orderbook; checks (a) serialización por-run, (b)
+  dato registrado inalterado en el arranque del run, (c) run de 9 ciclos).
+- `verification/testbenches/uram/Makefile`: targets `sim-uram`, `sim-anx`,
+  `clean-all`.
+- `verification/vectors/latency/latency_dw32.json`: regenerado (evidencia de
+  la latencia URAM, ver tabla).
+
+### Pendiente para iteraciones siguientes
+
+- SEC-URAM-03: pipeline de niveles registrado (la mitad del book sigue con
+  lógica combinacional de 32 niveles por lado).
+- SEC-URAM-04: latencia media ≤ 45 ciclos — **abierta** (54,9 con la sonda;
+  iteración 3 debe recuperar ~10+ ciclos).
+- REG-01/CHAIN-01: ya verdes bit a bit con el RTL URAM.
+- Criterio 10: synth en Vivado (timing 322,265625 MHz + URAM).
+
 ## Iteración 1 — recorte del Anexo A de 32 bits (criterio 1, ANX-01/ANX-02)
 
 ### Meta del atacante/diseño

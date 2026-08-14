@@ -3,7 +3,7 @@
 #   SIM=verilator, cocotb 2.x. Top itch_parser/orderbook a DW=32 vía -G.
 #   Uso:
 #     make sim-anx                        -> itch_parser DW=32 (ANX-01/02)
-#     (los targets de la campaña se añaden iteración a iteración)
+#     make sim-uram                       -> orderbook DW=32 K=20 (SEC-URAM-01/02)
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 TOPLEVEL ?= itch_parser
@@ -25,8 +25,13 @@ EXTRA_ARGS ?= -GDW=32
 sim-anx:
 	$(MAKE) sim TOPLEVEL=itch_parser MODULE=test_anx32 EXTRA_ARGS="-GDW=32" SIM_BUILD=sim_build_anx
 
+# criterios 2-3: sonda serializada + prefetch. K=20 para hacer real el probe
+# agotado (9ª ref del mismo hash) — igual régimen que sim-hash de phase3.
+sim-uram:
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_uram32 EXTRA_ARGS="-GDW=32 -GK=20" SIM_BUILD=sim_build_uram
+
 clean-all:
-	rm -rf sim_build sim_build_anx
+	rm -rf sim_build sim_build_anx sim_build_uram
 
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 REPO_ROOT := $(CURDIR)/../../..
