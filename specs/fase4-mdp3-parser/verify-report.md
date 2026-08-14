@@ -51,3 +51,26 @@ derivación por template (ReferenceID del 46 resuelto por índice).
 
 Pendiente: iter 2 (RTL `mdp3_parser.sv`: framing + Anexo M bit a bit vs
 golden, criterios 2-3).
+## Iteración 2 — RTL `mdp3_parser.sv` (criterios 2-3: framing + Anexo M bit a bit)
+
+**Progreso frente al baseline** con la corrección estructural de captura
+(ventana deslizante de 8 B → FIFO circular de 256 B, `qc` con conteo preciso,
+`qh` avanzado en lugar de `qh<=0` en la rama parcial):
+- `verilator --lint-only -Wall -Wno-DECLFILENAME -Wno-PINCONNECTEMPTY
+  --top-module mdp3_parser rtl/parser/mdp3_parser.sv` → **0 warnings** (gate B/C).
+- Simulación `make sim` → `longitud 6056 != 9664` (mejora desde el `0` previo
+  a esta corrección y corroborado en 3 frentes M3-FRM-01/02/03).
+
+**Hallazgo (estructural, pendiente de iter 3):** la captura `CS_SIZE→CS_BODY`
+descorrelaciona la cola en el **reuso de buffer ping-pong**. La rama parcial
+de `CS_BODY` consumía todos los bytes de la ventana y hacía `qh<=0; qc<=0`;
+al alternar `cap_sel` a un buffer ya usado, bytes pre-cargados (greedy
+prefetch de la word siguiente) quedaban huérfanos y `qc` los subcontaba →
+el header SBE (`blockLength`+`templateId`, 4 B) se corrompía a ceros y el
+cuerpo se desplazaba 4 B. Los mensajes del primer uso de cada buffer salen
+correctos; los del reuso, no.
+
+**Horizonte iter 3:** cerrar la contabilidad en el handoff `CS_WAIT→CS_SIZE`
+(la tready de 1 ciclo deja `qc=0` tras leer el tamaño; `CS_BODY` debe leer la
+word retenida vía `qc_eff` en el consumo, no desde `tdata` ya avanzada) y dejar
+los 3 espejos en verde, luego correlación con corpus completo y commit.

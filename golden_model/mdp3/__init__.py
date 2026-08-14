@@ -14,6 +14,8 @@ from golden_model.mdp3.codec import (
     decode_message,
     anexo_m_records,
     message_body_bytes,
+    passthrough_record,
+    record_bytes,
 )
 from golden_model.mdp3.generator import Corpus
 

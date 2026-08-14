@@ -358,11 +358,21 @@ def _entry_type_int(v):
 
 
 def passthrough_record(schema: Schema, pm: PacketMessage) -> list[int]:
-    """w0/w1 + cuerpo crudo rellenado a palabra (32 bits), cero al final."""
+    """w0/w1 + cuerpo crudo rellenado a palabra (32 bits), cero al final.
+
+    El cuerpo se empaqueta en words big-endian: el stream del Anexo M es
+    byte-continuo con words MSB-first, así que los bytes del cuerpo se
+    preservan exactamente (record_bytes == w0_be + w1_be + cuerpo + pad).
+    """
     words = [pm.template_id << 16 | (pm.msg_size & 0xFFFF),
              (pm.schema_id << 16) | (pm.version & 0xFFFF)]
     body = pm.body
     if len(body) % 4:
         body = body + b"\x00" * (4 - len(body) % 4)
-    words += [int.from_bytes(body[i:i + 4], "little") for i in range(0, len(body), 4)]
+    words += [int.from_bytes(body[i:i + 4], "big") for i in range(0, len(body), 4)]
     return words
+
+
+def record_bytes(record: list[int]) -> bytes:
+    """Bytes del record en el stream: cada word MSB-first, concatenadas."""
+    return b"".join((w & 0xFFFFFFFF).to_bytes(4, "big") for w in record)
