@@ -76,18 +76,24 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
     localparam [31:0] O53_SEC=8, O53_TS=20, O53_DIM=28, O53_ENT=31, O53_BL=29;
     localparam [31:0] O53_OID=0, O53_PRI=8, O53_PX=16, O53_DQ=24, O53_TYP=28;
 
-    // ── cola de bytes de entrada (FIFO circular de MAX_MSG bytes; qc
-// siempre refleja el número real de bytes pendientes por consumir) ────
-reg [7:0] qbytes [0:MAX_MSG-1];
-reg [7:0] qc, qh;   // qc = bytes ocupados, qh = índice del más antiguo
+    // ── cola de bytes de entrada (FIFO circular de MAX_MSG bytes) ──────────
+    // qw = puntero de escritura, qh = puntero de lectura (mod MAX_MSG).
+    // qavail = bytes ya escritos sin consumir; qbyte() lee del FIFO y, para
+    // el word que entra en este ciclo (k >= qavail), directamente de tdata.
+    reg [7:0] qbytes [0:MAX_MSG-1];
+    reg [7:0] qw, qh;
 
-function automatic [7:0] qbyte;
-    input [31:0] k;
-    if (k < 32'(qc))
-        qbyte = qbytes[(32'(qh) + k) % 32'(MAX_MSG)];
-    else
-        qbyte = s_axis_tdata[8*(32'(BYTES) - 1 - (k - 32'(qc))) +: 8];
-endfunction
+    function automatic [7:0] qbyte;
+        input [31:0] k;
+        if (k < 32'(qavail))
+            qbyte = qbytes[(32'(qh) + k) % 32'(MAX_MSG)];
+        else
+            qbyte = s_axis_tdata[8*(32'(BYTES) - 1 - (k - 32'(qavail))) +: 8];
+    endfunction
+
+    wire [15:0] qavail = 16'((32'(qw) + 32'(MAX_MSG) - 32'(qh)) % 32'(MAX_MSG));
+    wire [15:0] qavail_eff =
+        16'(qavail) + (s_axis_tvalid && s_axis_tready ? 16'(BYTES) : 16'd0);
 
     // ── buffers de mensaje ping-pong ─────────────────────────────────────────
     reg [7:0] mbuf0 [0:MAX_MSG-1];
@@ -120,8 +126,8 @@ endfunction
 
     function automatic [15:0] hdr_cons;
         // bytes consumibles del header de paquete en este ciclo (CS_HDR)
-        hdr_cons = (qc_eff > 16'(PKT_HDR) - 16'(hdr_pos)) ?
-                   (16'(PKT_HDR) - 16'(hdr_pos)) : qc_eff;
+        hdr_cons = (qavail_eff > 16'(PKT_HDR) - 16'(hdr_pos)) ?
+                   (16'(PKT_HDR) - 16'(hdr_pos)) : qavail_eff;
     endfunction
 
     // ── captura ──────────────────────────────────────────────────────────────
@@ -161,7 +167,6 @@ endfunction
     reg [8:0]  f_cnt;          // words ocupadas (push - pop, un solo escritor)
     reg [7:0]  f_head, f_tail; // punteros circulares (wrappean solos)
 
-    wire [15:0] qc_eff = 16'(qc) + (s_axis_tvalid && s_axis_tready ? 16'(BYTES) : 16'd0);
 
     // push/pop de la FIFO: el núcleo emite push_commit (combinacional sobre su
     // estado) y el emisor muestra/popa. f_cnt se actualiza en el núcleo con el
@@ -196,7 +201,7 @@ endfunction
     always @(posedge clk) begin
         if (!rst_n) begin
             s_axis_tready <= 0;
-            qc <= 0; qh <= 0;
+            qw <= 0; qh <= 0;
             cst <= CS_HDR; hdr_pos <= 0;
             gap_check <= 0; first_pkt <= 0; wait_hdr <= 0;
             seq <= 0; exp_seq <= 0;
@@ -214,23 +219,23 @@ endfunction
             gap_detected <= 0;
             error <= 0;
 
-            // cola de bytes: append del word entrante
+            // cola de bytes: apend del word entrante
             if (s_axis_tvalid && s_axis_tready) begin
                 for (integer k = 0; k < BYTES; k = k + 1)
-                    qbytes[(32'(qh) + 32'(qc) + k) % 32'(MAX_MSG)] <=
+                    qbytes[(32'(qw) + 32'(k)) % 32'(MAX_MSG)] <=
                         s_axis_tdata[8*(32'(BYTES) - 1 - k) +: 8];
+                qw <= 8'((32'(qw) + 32'(BYTES)) % 32'(MAX_MSG));
             end
 
             // ── captura ────────────────────────────────────────────────────
             case (cst)
                 CS_HDR: begin
-                    if (qc_eff != 16'd0) begin
+                    if (qavail_eff != 16'd0) begin
                         if (hdr_pos < PKT_HDR) begin
                             for (integer k = 0; k < PKT_HDR; k = k + 1)
                                 if (k < 32'(hdr_cons()) && (32'(hdr_pos) + k) < 4)
                                     seq[8*(32'(hdr_pos) + k) +: 8] <= qbyte(k);
                             qh <= 8'((16'(qh) + hdr_cons()) % 16'(MAX_MSG));
-                            qc <= 8'(qc_eff - hdr_cons());
                             hdr_pos <= 8'(16'(hdr_pos) + hdr_cons());
                             if (16'(hdr_pos) + hdr_cons() >= 16'(PKT_HDR)) begin
                                 gap_check <= 1;
@@ -240,13 +245,13 @@ endfunction
                     end
                     if (s_axis_tlast) begin
                         error <= 1;
-                        hdr_pos <= 0; qc <= 0; qh <= 0;
+                        hdr_pos <= 0;
                         cst <= CS_HDR;
                     end
                 end
 
                 CS_SIZE: begin
-                    if (qc_eff >= 16'd2) begin
+                    if (qavail_eff >= 16'd2) begin
                         if (gap_check) begin
                             if (first_pkt && seq != exp_seq)
                                 gap_detected <= 1;
@@ -259,7 +264,6 @@ endfunction
                             error <= 1;
                             skip_left <= {qbyte(1), qbyte(0)} - 16'd2;
                             qh <= 8'((16'(qh) + 16'd2) % 16'(MAX_MSG));
-                            qc <= 8'(qc_eff - 16'd2);
                             cst <= CS_SKIP;
                         end else begin
                             // msg_size (2 B) forma parte del mensaje: se
@@ -275,19 +279,18 @@ endfunction
                             cap_size <= {qbyte(1), qbyte(0)};
                             cap_len <= 2;
                             qh <= 8'((16'(qh) + 16'd2) % 16'(MAX_MSG));
-                            qc <= 8'(qc_eff - 16'd2);
                             cst <= CS_BODY;
                         end
                     end
                     if (s_axis_tlast) begin
                         error <= 1;
-                        hdr_pos <= 0; qc <= 0; qh <= 0;
+                        hdr_pos <= 0;
                         cst <= CS_HDR;
                     end
                 end
 
                 CS_BODY: begin
-                    if (32'(qc_eff) >= 32'(cap_size) - 32'(cap_len)) begin
+                    if (32'(qavail_eff) >= 32'(cap_size) - 32'(cap_len)) begin
                         // mensaje completo
                         for (integer k = 0; k < 2*BYTES; k = k + 1)
                             if (k < 32'(cap_size) - 32'(cap_len))
@@ -299,7 +302,7 @@ endfunction
                         if (s_axis_tlast) begin
                             // paquete termina justo en el borde del mensaje:
                             // el siguiente burst empieza con header de 12 B
-                            hdr_pos <= 0; qc <= 0; qh <= 0;
+                            hdr_pos <= 0;
                             if (occ[~cap_sel] == 0) begin
                                 cap_sel <= ~cap_sel;
                                 wait_hdr <= 0;
@@ -316,39 +319,35 @@ endfunction
                             wait_hdr <= 0;
                             cst <= CS_WAIT;
                         end
-                        qc <= 8'(qc_eff - (32'(cap_size) - 32'(cap_len)));
                         qh <= 8'((32'(qh) + 32'(cap_size) - 32'(cap_len)) % 32'(MAX_MSG));
-                    end else begin
+                    end else if (qavail_eff != 16'd0) begin
                         for (integer k = 0; k < 2*BYTES; k = k + 1)
-                            if (k < 32'(qc_eff))
+                            if (k < 32'(qavail_eff))
                                 if (cap_sel)
                                     mbuf1[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
                                 else
                                     mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
-                        cap_len <= cap_len + qc_eff;
-                        qc <= 8'(0);
-                        qh <= 8'((32'(qh) + 32'(qc_eff)) % 32'(MAX_MSG));
+                        cap_len <= cap_len + qavail_eff;
+                        qh <= 8'((32'(qh) + 32'(qavail_eff)) % 32'(MAX_MSG));
                         if (s_axis_tlast) begin
                             error <= 1;   // mensaje truncado por tlast
-                            hdr_pos <= 0; qc <= 0; qh <= 0;
+                            hdr_pos <= 0;
                             cst <= CS_HDR;
                         end
                     end
                 end
 
                 CS_SKIP: begin
-                    if (qc_eff >= skip_left) begin
-                        qc <= 8'(qc_eff - skip_left);
+                    if (qavail_eff >= skip_left) begin
                         qh <= 8'((16'(qh) + skip_left) % 16'(MAX_MSG));
                         cst <= CS_SIZE;
-                    end else begin
-qc <= 8'(0);
-                        qh <= 8'((16'(qh) + 16'(qc_eff)) % 16'(MAX_MSG));
-                        skip_left <= skip_left - qc_eff;
+                    end else if (qavail_eff != 16'd0) begin
+                        qh <= 8'((16'(qh) + 16'(qavail_eff)) % 16'(MAX_MSG));
+                        skip_left <= skip_left - qavail_eff;
                     end
                     if (s_axis_tlast) begin
                         error <= 1;
-                        hdr_pos <= 0; qc <= 0; qh <= 0;
+                        hdr_pos <= 0;
                         cst <= CS_HDR;
                     end
                 end
@@ -364,12 +363,12 @@ qc <= 8'(0);
                     // cst no puede alcanzar 5..7 con la lógica actual; por
                     // robustez se vuelve a CS_HDR (recuperación ante X)
                     error <= 1;
-                    hdr_pos <= 0; qc <= 0; qh <= 0;
+                    hdr_pos <= 0;
                     cst <= CS_HDR;
                 end
             endcase
 
-            s_axis_tready <= (16'(qc_eff) <= 16'(2*BYTES)) && (cst != CS_WAIT);
+            s_axis_tready <= (16'(qavail_eff) <= 16'(MAX_MSG) - 16'(BYTES)) && (cst != CS_WAIT);
 
             // ── decodificación ─────────────────────────────────────────────
             case (dst)
