@@ -79,15 +79,20 @@ module orderbook #(
     // ---------------------------------------------------------------
     // FSM de recepción
     // ---------------------------------------------------------------
-    localparam ST_W0         = 3'd0;
-    localparam ST_TS         = 3'd1;
-    localparam ST_BODY       = 3'd2;
-    localparam ST_APPLY      = 3'd3;
-    localparam ST_EMIT       = 3'd4;
-    localparam ST_UADD       = 3'd5;
-    localparam ST_WAIT_PROBE = 3'd6;   // el prefetch no acabó durante el cuerpo
-    localparam ST_INVAL      = 3'd7;   // invalidación post-reset (1 slot/ciclo)
-    reg [2:0]  st /* verilator public */;
+    localparam ST_W0         = 4'd0;
+    localparam ST_TS         = 4'd1;
+    localparam ST_BODY       = 4'd2;
+    localparam ST_APPLY      = 4'd3;
+    localparam ST_EMIT       = 4'd4;
+    localparam ST_UADD       = 4'd5;
+    localparam ST_WAIT_PROBE = 4'd6;   // el prefetch no acabó durante el cuerpo
+    localparam ST_INVAL      = 4'd7;   // invalidación post-reset (1 slot/ciclo)
+    // pipeline de niveles (fase3-uram iter 3): level_add partido en etapas
+    // registradas — ST_LV2 decide (priority encoders), ST_LV3 materializa y
+    // escribe. Cada operación consume 2 ciclos extra como máximo (SEC-URAM-03)
+    localparam ST_LV2        = 4'd8;
+    localparam ST_LV3        = 4'd9;
+    reg [3:0]  st /* verilator public */;
     reg [SLOT-1:0] st_inval_cnt;   // contador de la invalidación post-reset (1/ciclo)
     reg [6:0] nbody_w;      // words de cuerpo restantes por consumir
     reg [1:0]  hrem;        // words de cabecera restantes tras w0 (DW=32: 1)
@@ -214,6 +219,46 @@ module orderbook #(
     reg [PXW-1:0] lv_price [NSYM*2*P-1:0];
     reg [QW-1:0]  lv_qty   [NSYM*2*P-1:0];
 
+    // ---------------------------------------------------------------
+    // pipeline de niveles (fase3-uram iter 3): level_add partido en 3 etapas
+    // registradas para cerrar 3,103 ns (bloqueador B2: la pasada O(P)
+    // combinacional media 6-8 ns).
+    //   Etapa 1 (ST_APPLY/ST_UADD): captura del lado + predicados por slot
+    //     (eq/zer/stop) + sumas candidatas — todo por slot, sin encadenar.
+    //   Etapa 2 (ST_LV2): decode por prioridad (found/empty/ins, newq, modo,
+    //     error) sobre los registros de la etapa 1.
+    //   Etapa 3 (ST_LV3): materialización (muxes 2:1/3:1 por slot) + escritura
+    //     única de lv_price/lv_qty. Invariantes de fase 3 intactos: nivel
+    //     vacío no existe (el remove barre precio Y cantidad), jamás precio
+    //     stale ni cantidad envuelta (modo NONE en error).
+    // ---------------------------------------------------------------
+    localparam LV_MODE_NONE   = 2'd0;
+    localparam LV_MODE_UPDATE = 2'd1;
+    localparam LV_MODE_INSERT = 2'd2;
+    localparam LV_MODE_REMOVE = 2'd3;
+    // parámetros de la operación en curso (etapa 1)
+    reg        lv_en;          // hay operación de nivel lanzada (etapa 1)
+    reg        lv_uadd;        // tras la 1ª op (delete del U) hay que ir a ST_UADD
+    reg [PXW-1:0] lv_lprice;
+    reg signed [31:0] lv_delta;
+    reg [31:0] lv_base;
+    reg [PXW-1:0] lv_pr[0:P-1];   // copia del lado (pre-op)
+    reg [QW-1:0]  lv_qt[0:P-1];
+    reg [P-1:0]  lv_eq;           // lv_qt[i]!=0 && lv_pr[i]==precio (found)
+    reg [P-1:0]  lv_zer;          // lv_qt[i]==0 (primer hueco)
+    reg [P-1:0]  lv_beat;         // el nivel i es ESTRICTAMENTE peor que el
+                                  // precio nuevo (burbuja de inserción: el
+                                  // elemento nuevo lo vence y lo desplaza)
+    reg signed [32:0] lv_cand_newq[0:P-1];   // qty[i]+delta por slot (paralelo)
+    // decode de la etapa 2 (registrado; la etapa 3 los consume 1 ciclo tarde)
+    // 32 bits para comparar contra índices integer sin WIDTHEXPAND
+    reg [31:0] lv2_found, lv2_empty, lv2_ins;
+    reg [31:0] lv2_newq;
+    reg [1:0]  lv2_mode;
+    // materialización (etapa 3): muxes por modo, luego escritura única
+    reg [PXW-1:0] wp[0:P-1];
+    reg [QW-1:0]  wq[0:P-1];
+
     reg [PXW-1:0] prev_bp [NSYM-1:0], prev_ap [NSYM-1:0];
     reg [QW-1:0]  prev_bq [NSYM-1:0], prev_aq [NSYM-1:0];
 
@@ -299,6 +344,17 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             pr_empty_found <= 1'b0; pr_empty <= 0; pr_full <= 1'b0;
             pr_new_found <= 1'b0; pr_new_empty <= 0; pr_new_full <= 1'b0;
             pr_oref <= 0; pr_newref <= 0;
+            // pipeline de niveles (etapa 1 + decode + materialización)
+            lv_en <= 1'b0; lv_uadd <= 1'b0;
+            lv_lprice <= 0; lv_delta <= 32'sd0; lv_base <= 0;
+            for (int i = 0; i < P; i++) begin
+                lv_pr[i] <= 0; lv_qt[i] <= 0;
+                lv_eq[i] <= 1'b0; lv_zer[i] <= 1'b0; lv_beat[i] <= 1'b0;
+                lv_cand_newq[i] <= 33'sd0;
+                wp[i] <= 0; wq[i] <= 0;
+            end
+            lv2_found <= 0; lv2_empty <= 0; lv2_ins <= 0;
+            lv2_newq <= 32'd0; lv2_mode <= LV_MODE_NONE;
         end else begin
             // retención AXI (SEC-BP-01): el par BBO/depth se mantiene válido
             // hasta que su tready lo acepta; el guard de ST_APPLY frena el
@@ -506,8 +562,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                             do_uadd <= 1'b0;
                             st <= ST_W0;
                         end else begin
-                            apply_one(do_uadd);
-                            if (do_uadd) st <= ST_UADD;   // replace: mitad add
+                            apply_one(do_uadd, lv_en);
+                            lv_uadd <= do_uadd;   // el U pide la mitad add tras la 1ª op
+                            if (do_uadd || lv_en) st <= ST_LV2;
                             else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
                                      m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
                                      m_type == 8'h55) st <= ST_EMIT;
@@ -515,11 +572,28 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         end
                     end
                 end
+                ST_LV2: begin
+                    // etapa 2 del pipeline: decode por prioridad sobre los
+                    // registros capturados en ST_APPLY/ST_UADD (visibles aquí,
+                    // un ciclo después del launch); el resultado queda
+                    // registrado y la etapa 3 lo consume un ciclo tarde
+                    decode_lv2();
+                    st <= ST_LV3;
+                end
+                ST_LV3: begin
+                    // etapa 3: materializa la lista nueva según el decode y la
+                    // escribe de una sola vez (única escritura del lado)
+                    materialize_write();
+                    st <= lv_uadd ? ST_UADD : ST_EMIT;
+                end
                 ST_UADD: begin
-                    // mitad add del replace: la segunda level_add ve el estado
-                    // del ciclo anterior (la eliminación ya aplicada)
-                    apply_uadd_half();
-                    st <= ST_EMIT;
+                    // mitad add del replace: la segunda operación de nivel ve
+                    // el estado del ciclo anterior (la eliminación ya aplicada
+                    // en la ST_LV3 previa)
+                    launch_lv(u_side, u_price, u_shares);
+                    mem_wr(u_nidx, entry_new(u_newref, u_side, u_price, u_shares));
+                    lv_uadd <= 1'b0;
+                    st <= ST_LV2;
                 end
                 ST_EMIT: begin
                     if (emit_ok) emit_bbo();
@@ -531,112 +605,130 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
     end
 
     // ---------------------------------------------------------------
-    // actualización de niveles: función pura que recibe el estado de un lado
-    // (precios, cantidades, precio objetivo, delta) y devuelve por ref el
-    // nuevo array. Para Verilator/SystemVerilog lo hacemos con una tarea que
-    // escribe en los arrays lv_price/lv_qty SÓLO en el flanco (nunca leídos
-    // tras escribir en el mismo ciclo). Como ST_APPLY es un flanco, las
-    // lecturas de lv_* dentro ven el valor ANTERIOR (correcto: las
-    // operaciones ahí leen el estado actual y generan el siguiente).
+    // pipeline de niveles (fase3-uram iter 3). launch_lv = etapa 1: captura
+    // el lado en curso (lv_pr/lv_qt) y computa por slot los predicados
+    // (lv_eq/lv_zer/lv_beat) y las sumas candidatas (lv_cand_newq) — rutas
+    // cortas por slot, sin encadenar la pasada O(P). Se llama en ST_APPLY
+    // (operaciones de A/F/E/C/X/D/U) y en ST_UADD (mitad add del replace).
     // ---------------------------------------------------------------
-    task automatic level_add;
+    task automatic launch_lv;
         input        ask;
         input [PXW-1:0] price;
         input signed [31:0] delta;
-        integer base, slot, found, empty;
-        reg [PXW-1:0] tp;
-        reg [QW-1:0] tq;
-        reg [32:0] newq;
-        reg removed;
-        reg [PXW-1:0] lpr[0:P-1];   // copias locales (bloqueantes) del lado
-        reg [QW-1:0]  lqt[0:P-1];
+        integer i;
+        integer base;
         begin
             base = m_loc_idx*2*P + (ask ? P : 0);
-            // copiar el estado actual del lado a variables locales
-            for (slot = 0; slot < P; slot = slot + 1) begin
-                lpr[slot] = lv_price[base+slot];
-                lqt[slot] = lv_qty[base+slot];
+            lv_lprice <= price;
+            lv_delta <= delta;
+            lv_base <= base;
+            for (i = 0; i < P; i = i + 1) begin
+                lv_pr[i] <= lv_price[base+i];
+                lv_qt[i] <= lv_qty[base+i];
+                lv_eq[i] <= (lv_qty[base+i] != 0) && (lv_price[base+i] == price);
+                lv_zer[i] <= (lv_qty[base+i] == 0);
+                lv_beat[i] <= (lv_qty[base+i] != 0) &&
+                              (ask ? (lv_price[base+i] > price)
+                                   : (lv_price[base+i] < price));
+                lv_cand_newq[i] <= $signed(33'(lv_qty[base+i])) + $signed(33'(delta));
             end
-            // aplicar la operación sobre la copia local (bloqueante, visible ya)
-            found = -1; empty = -1;
-            for (slot = 0; slot < P; slot = slot + 1) begin
-                if (lqt[slot] == 0 && empty == -1) empty = slot;
-                else if (lqt[slot] != 0 && lpr[slot] == price) found = slot;
+        end
+    endtask
+
+    // ---------------------------------------------------------------
+    // etapa 3: materializa la lista nueva según el decode de la etapa 2 y la
+    // escribe de una sola vez. Semántica idéntica a la pasada O(P) de fase 3:
+    //   REMOVE -> barrido a la izquierda (el hueco de found se compacta)
+    //   INSERT -> el elemento nuevo entra en lv2_ins (burbuja de inserción) y
+    //             [lv2_ins..empty-1] se desplaza a la derecha
+    //   UPDATE -> solo cambia la cantidad de lv2_found
+    //   NONE   -> copia (errores: overflow, reduce sobre nivel ausente,
+    //             cantidad que envuelve — jamás precio stale ni fantasma)
+    // ---------------------------------------------------------------
+    task automatic materialize_write;
+        integer i;
+        begin
+            for (i = 0; i < P; i = i + 1) begin
+                if (lv2_mode == LV_MODE_REMOVE) begin
+                    wp[i] = (i < lv2_found) ? lv_pr[i]
+                          : ((i < P-1) ? lv_pr[i+1] : PXW'(0));
+                    wq[i] = (i < lv2_found) ? lv_qt[i]
+                          : ((i < P-1) ? lv_qt[i+1] : QW'(0));
+                end else if (lv2_mode == LV_MODE_INSERT) begin
+                    wp[i] = (i <= lv2_empty) ? ((i < lv2_ins) ? lv_pr[i]
+                          : ((i == lv2_ins) ? lv_lprice : lv_pr[i-1])) : lv_pr[i];
+                    wq[i] = (i <= lv2_empty) ? ((i < lv2_ins) ? lv_qt[i]
+                          : ((i == lv2_ins) ? QW'(lv_delta[31:0]) : lv_qt[i-1]))
+                          : lv_qt[i];
+                end else if (lv2_mode == LV_MODE_UPDATE) begin
+                    wp[i] = lv_pr[i];
+                    wq[i] = (i == lv2_found) ? QW'(lv2_newq[31:0]) : lv_qt[i];
+                end else begin
+                    wp[i] = lv_pr[i];
+                    wq[i] = lv_qt[i];
+                end
             end
-            removed = 1'b0;
-            if (found == -1 && empty == -1) begin
-                error <= 1'b1;   // overflow de niveles (SEC-OV-01)
-            end else if (found == -1 && delta < 0) begin
+            for (i = 0; i < P; i = i + 1) begin
+                lv_price[lv_base+i] <= wp[i];
+                lv_qty[lv_base+i]   <= wq[i];
+            end
+        end
+    endtask
+
+    // ---------------------------------------------------------------
+    // etapa 2 del pipeline: decode por prioridad (encoders first-hot) sobre
+    // los registros capturados en ST_APPLY/ST_UADD. El resultado queda
+    // registrado en lv2_* (non-blocking) y la etapa 3 lo consume un ciclo
+    // tarde; el pulso de error se muestra aquí (1 ciclo, como en fase 3).
+    // Semántica idéntica a la pasada O(P) de fase 3:
+    //   found  -> primer slot con el precio objetivo (nivel existente)
+    //   empty  -> primer slot vacío (hueco de inserción)
+    //   ins    -> burbuja de inserción: j = primer nivel ESTRICTAMENTE peor
+    //             que el precio nuevo (lv_beat); si ninguno (elemento peor
+    //             de todos), el elemento se queda en el hueco (j = empty).
+    //             Los vencidos forman un sufijo por invariante de orden.
+    // ---------------------------------------------------------------
+    task automatic decode_lv2;
+        integer i, fnd, emp, btx;
+        reg lverr;
+        begin
+            fnd = -1; emp = -1; btx = -1; lverr = 1'b0;
+            for (i = 0; i < P; i = i + 1) begin
+                if (fnd == -1 && lv_eq[i]) fnd = i;
+                if (emp == -1 && lv_zer[i]) emp = i;
+                if (btx == -1 && lv_beat[i]) btx = i;
+            end
+            lv2_found <= fnd;
+            lv2_empty <= emp;
+            btx = (btx == -1) ? emp : btx;
+            lv2_ins <= btx;
+            if (fnd == -1 && emp == -1) begin
+                // overflow de niveles (SEC-OV-01): la op se descarta
+                lv2_mode <= LV_MODE_NONE;
+                lverr = 1'b1;
+            end else if (fnd == -1 && lv_delta[31]) begin
                 // reduce sobre un nivel que no existe (orden en tabla sin
                 // nivel por overflow previo): jamás una cantidad envuelta
-                // (phantom ~4,29e9; hallazgo G5)
-                error <= 1'b1;
-            end else if (found == -1) begin
-                lpr[empty] = price;
-                lqt[empty] = QW'(delta);
+                // (hallazgo G5)
+                lv2_mode <= LV_MODE_NONE;
+                lverr = 1'b1;
+            end else if (fnd == -1) begin
+                lv2_mode <= LV_MODE_INSERT;
             end else begin
-                newq = $signed(33'(lqt[found])) + $signed(33'(delta));
-                if (newq[32]) error <= 1'b1;
-                else if (newq == 0) begin
-                    // nivel vacío no existe (invariante golden): se limpia
-                    // precio Y cantidad, o el top-N filtraría precios stale
-                    lqt[found] = 0;
-                    lpr[found] = 0;
-                    removed = 1'b1;
-                end
-                else lqt[found] = QW'(newq);
-            end
-            // reordenamiento O(P) — jamás O(P·P) (criterio 9): la lista ya
-            // está ordenada por invariante y a lo sumo UN elemento queda
-            // fuera de lugar: el nivel vaciado (hueco compactado a la
-            // izquierda) o el nivel recién insertado (burbuja de inserción
-            // de una pasada hacia el mejor)
-            if (removed) begin
-                for (slot = found; slot < P-1; slot = slot + 1) begin
-                    lpr[slot] = lpr[slot+1];
-                    lqt[slot] = lqt[slot+1];
-                end
-                lpr[P-1] = 0;
-                lqt[P-1] = 0;
-            end else if (found == -1 && delta > 0) begin
-                // el nivel nuevo sube por precio: los anteriores ya están
-                // ordenados, la pasada derecha->izquierda lo coloca y para
-                for (slot = empty; slot > 0; slot = slot - 1) begin
-                    if (lqt[slot] != 0 && lqt[slot-1] != 0 &&
-                        (ask ? (lpr[slot] < lpr[slot-1]) : (lpr[slot] > lpr[slot-1]))) begin
-                        tp = lpr[slot]; lpr[slot] = lpr[slot-1]; lpr[slot-1] = tp;
-                        tq = lqt[slot]; lqt[slot] = lqt[slot-1]; lqt[slot-1] = tq;
-                    end else begin
-                        slot = 0;   // ya en su posición: termina la pasada
-                    end
+                lv2_newq <= lv_cand_newq[fnd][31:0];
+                if (lv_cand_newq[fnd][32]) begin
+                    // la cantidad envolvería 32 bits: descarte (jamás phantom)
+                    lv2_mode <= LV_MODE_NONE;
+                    lverr = 1'b1;
+                end else if (lv_cand_newq[fnd] == 0) begin
+                    lv2_mode <= LV_MODE_REMOVE;   // nivel vacío no existe
+                end else begin
+                    lv2_mode <= LV_MODE_UPDATE;
                 end
             end
-            // escribir el resultado de una sola vez (non-blocking)
-            for (slot = 0; slot < P; slot = slot + 1) begin
-                lv_price[base+slot] <= lpr[slot];
-                lv_qty[base+slot]   <= lqt[slot];
-            end
+            error <= lverr;
         end
     endtask
-
-    task automatic reduce_level;
-        input        ask;
-        input [PXW-1:0] price;
-        input signed [31:0] delta;
-        begin
-            level_add(ask, price, delta);
-        end
-    endtask
-
-    task automatic apply_uadd_half;
-        // mitad add del replace (ST_UADD): inserta u_newref en el slot ya
-        // verificado u_nidx (la capacidad se chequeó en ST_APPLY, U atómico).
-        begin
-            level_add(u_side, u_price, u_shares);
-            mem_wr(u_nidx, entry_new(u_newref, u_side, u_price, u_shares));
-        end
-    endtask
-
     task automatic emit_bbo;
         reg [PXW-1:0] bp, ap;
         reg [QW-1:0] bq, aq;
@@ -687,7 +779,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         end
     endtask
 
-    task automatic apply_one(output logic out_uadd);
+    task automatic apply_one(output logic out_uadd, output logic out_lv);
         reg [K-1:0] oref, newref;
         reg [31:0] shares, price;
         reg ask;
@@ -698,6 +790,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         begin
             do_emit = 1'b0;
             out_uadd = 1'b0;
+            out_lv = 1'b0;
             // la tabla ya fue leída por la sonda (prefetch): los resultados
             // pr_found/pr_slot/pr_entry/pr_empty/pr_full son del run que
             // terminó ANTES de ST_APPLY (ST_WAIT_PROBE lo garantiza)
@@ -711,7 +804,8 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         error <= 1'b1;      // tabla llena (SEC-HASH-02)
                     end else begin
                         mem_wr(pr_empty, entry_new(oref, ask, price, shares));
-                        level_add(ask, price, shares);
+                        launch_lv(ask, price, shares);
+                        out_lv = 1'b1;
                         do_emit = 1'b1;
                     end
                 end
@@ -725,16 +819,18 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         rest = {2'b0, qty_old} - {2'b0, b32(8)};
                         if (rest[33]) error <= 1'b1;   // execute > restante
                         else if (rest == 0) begin
-                            reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
-                                         -$signed(qty_old));
+                            launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                      -$signed(qty_old));
                             mem_wr(pr_slot, {OW{1'b0}});   // valid=0
+                            out_lv = 1'b1;
                             do_emit = 1'b1;
                         end else begin
                             mem_wr(pr_slot, {rest[31:0], e_price(pr_entry[REFW+PXW+1:REFW+2]),
                                              e_side(pr_entry[REFW+1]), e_ref(pr_entry[REFW:1]),
                                              1'b1});
-                            reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
-                                         -32'(b32(8)));
+                            launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                      -32'(b32(8)));
+                            out_lv = 1'b1;
                             do_emit = 1'b1;
                         end
                     end
@@ -743,9 +839,10 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     oref = K'(b64(0));
                     if (!pr_found) anomaly_count <= anomaly_count + 1;
                     else begin
-                        reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
-                                     -$signed(e_qty(pr_entry[OW-1:OW-QW])));
+                        launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                  -$signed(e_qty(pr_entry[OW-1:OW-QW])));
                         mem_wr(pr_slot, {OW{1'b0}});
+                        out_lv = 1'b1;
                         do_emit = 1'b1;
                     end
                 end
@@ -759,14 +856,15 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         // original sobrevive (la capacidad se chequeó en la
                         // sonda, ANTES del delete — hallazgo G5)
                     else begin
-                        reduce_level(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
-                                     -$signed(e_qty(pr_entry[OW-1:OW-QW])));
+                        launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                  -$signed(e_qty(pr_entry[OW-1:OW-QW])));
                         mem_wr(pr_slot, {OW{1'b0}});
                         u_newref <= newref;
                         u_side <= e_side(pr_entry[REFW+1]);
                         u_price <= price;
                         u_shares <= shares;
                         u_nidx <= pr_new_empty;
+                        out_lv = 1'b1;
                         do_emit = 1'b1;
                         out_uadd = 1'b1;
                     end
