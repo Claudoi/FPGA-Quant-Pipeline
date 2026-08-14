@@ -6,7 +6,15 @@
 // (322,265625 MHz); DW=64 conserva la base de la fase 2.
 module itch_chain #(
     parameter DW   = 32,
-    parameter QB   = 64,
+    // QB (iter 4, SEC-URAM-04): 64 -> 46. La latencia wire->BBO media del
+    // feed real (make sim-lat) baja de 55,9 (QB=64) a 47,1 (QB=48); con la
+    // medición en estado estacionario (espera de la INVAL post-reset antes
+    // de alimentar, ~65,5k ciclos) queda en ~45.0 con QB=46 — el backlog de
+    // la cola del parser adelantándose al book (sonda URAM serializada
+    // ~13-15 c/msg) es el componente dominante; el QB acota el adelanto a
+    // ~1,5 mensajes. QB=46 es el piso: el peor caso (P=44 B => 46 B con
+    // prefijo) cabe exacto; QB=32 DEADLOCKEA (2+len=46 > 32).
+    parameter QB   = 46,
     parameter K    = 19,
     parameter P    = 32,
     parameter ND   = 5,

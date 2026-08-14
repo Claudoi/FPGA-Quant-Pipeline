@@ -11,13 +11,13 @@ verification/vectors/latency/latency_dw32.json.
 """
 import json
 import os
-import struct
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
 
-from test_orderbook import run_book, _pcap_msgs_subset, _fields_from_body
+from test_orderbook import run_book, _pcap_msgs_subset, _fields_from_body, iter_records
+from test_itch_parser import _packet_seq
 from golden_model.src import book as book_golden
 from golden_model.src import message_oracle
 
@@ -25,6 +25,9 @@ LAT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "../../vectors/latency/latency_dw32.json")
 NS_PER_CYCLE = 1e9 / 322.265625e6
+# invalidación post-reset del book (NSLOT=65.536 slots a 1 slot/ciclo, URAM
+# sin reset global): la cadena arranca a medir tras el warm-up
+INVAL_CYCLES = 65536 + 32
 
 
 async def _reset(dut):
@@ -49,20 +52,17 @@ def _chunks32(payload):
     return chunks
 
 
-def _payload_seq(messages, seq):
-    payload = struct.pack(">10sQH", b"SIM0000001", seq, len(messages))
-    payload += b"".join(len(m).to_bytes(2, "big") + m for m in messages)
-    return payload
-
-
-def _msg_offsets(messages):
-    """Byte de inicio de cada mensaje dentro del payload MoldUDP64."""
-    offs = []
-    cur = 20  # cabecera MoldUDP64: sesión 10 B + seq 8 B + count 2 B
+def _msg_word_starts(messages):
+    """Índice de word (en el stream troceado del payload MoldUDP64) de la word
+    que cubre el primer byte de cada mensaje: 20 B de cabecera Mold + 2 B de len
+    por mensaje. El handshake de esa word en s_axis es la referencia de llegada
+    de la latencia wire->BBO (la cadena recibe el payload, no el Anexo A)."""
+    starts = []
+    offs = 20
     for m in messages:
-        offs.append(cur)
-        cur += 2 + len(m)
-    return offs
+        starts.append(offs // 4)
+        offs += 2 + len(m)
+    return starts
 
 
 def _emitting_indexes(messages):
@@ -82,23 +82,26 @@ def _emitting_indexes(messages):
     return idxs
 
 
-async def drive_lat(dut, payloads, max_cycles=3_000_000, window=8000):
-    """Conduce payloads a la cadena y devuelve (accepts, events, cross, anomaly,
-    gaps): accepts[i] = ciclo del handshake de la i-ésima word aceptada en
-    s_axis; events = [(ciclo, locate, tdata, changed)] de cada handshake BBO."""
+async def drive_lat(dut, payload, starts, max_cycles=3_000_000, window=8000):
+    """Conduce el payload MoldUDP64 a la cadena y devuelve (accepts, events,
+    cross, anomaly, gaps): accepts[i] = ciclo del handshake de la i-ésima word
+    aceptada en s_axis; events = [(ciclo, locate, tdata, changed)] de cada
+    handshake BBO."""
     await _reset(dut)
-    concat = b"".join(payloads)
-    chunks = _chunks32(concat)
-    len_acc = 0
-    lastbyte = set()
-    for p in payloads:
-        len_acc += len(p)
-        lastbyte.add(len_acc - 1)
-    lasts = set()
-    for bi in range(len(concat)):
-        if bi in lastbyte:
-            lasts.add(bi // 4)
-    n = len(chunks)
+    # warm-up post-reset: el book invalida los 65.536 slots de la URAM a
+    # 1 slot/ciclo antes de aceptar (SEC-URAM-04, iter 4). Sin esta espera,
+    # el parser pre-acepta los primeros ~2-3 mensajes durante la INVAL y su
+    # latencia incluye los 65.536 ciclos de arranque (artefacto de medición,
+    # no latencia de pipeline: la INVAL es un costo único post-reset).
+    for _ in range(INVAL_CYCLES):
+        dut.s_axis_tvalid.value = 0
+        dut.s_axis_tdata.value = 0
+        dut.s_axis_tlast.value = 0
+        dut.bbo_tready.value = 1
+        dut.depth_tready.value = 1
+        await RisingEdge(dut.clk)
+    words = _chunks32(payload)
+    n = len(words)
     ci = 0
     out = []
     accepts = []
@@ -108,8 +111,8 @@ async def drive_lat(dut, payloads, max_cycles=3_000_000, window=8000):
     gaps = 0
     for cycle in range(max_cycles):
         dut.s_axis_tvalid.value = 1 if ci < n else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < n else 0
-        dut.s_axis_tlast.value = 1 if ci in lasts else 0
+        dut.s_axis_tdata.value = words[ci] if ci < n else 0
+        dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
         dut.bbo_tready.value = 1
         dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
@@ -134,18 +137,16 @@ async def drive_lat(dut, payloads, max_cycles=3_000_000, window=8000):
     return accepts, out, cross, anomaly, gaps
 
 
-def _latencies(msgs, accepts, events):
+def _latencies(msgs, starts, accepts, events):
     """Latencia por tipo: para cada evento, ciclo del BBO menos ciclo del
     handshake de la word que cubre el primer byte de su mensaje."""
-    offs = _msg_offsets(msgs)
     emitters = _emitting_indexes(msgs)
     assert len(emitters) == len(events), (
         f"SEC-LAT-01: {len(emitters)} eventos golden vs {len(events)} del RTL")
     lat = {}
     for j, (cycle, _, _, _) in enumerate(events):
         mi = emitters[j]
-        wi = offs[mi] // 4
-        arrival = accepts[wi]
+        arrival = accepts[starts[mi]]
         t = msgs[mi][0]
         lat.setdefault(t, []).append(cycle - arrival)
     return lat
@@ -188,11 +189,12 @@ async def test_sec_lat01_histograma_determinista_por_tipo(dut):
             A(AMZN, 1_000_000_004, 3, b"B", 200, b"AMZN    ", 999_00),
         ]
         stream = "corpus sintético (env sin pcap local)"
-    payload = _payload_seq(msgs, 1)
-    accepts1, ev1, cross, anomaly, gaps = await drive_lat(dut, [payload])
-    accepts2, ev2, cross2, anomaly2, gaps2 = await drive_lat(dut, [payload])
-    lat1 = _latencies(msgs, accepts1, ev1)
-    lat2 = _latencies(msgs, accepts2, ev2)
+    payload = _packet_seq(msgs, 1)
+    starts = _msg_word_starts(msgs)
+    accepts1, ev1, cross, anomaly, gaps = await drive_lat(dut, payload, starts)
+    accepts2, ev2, cross2, anomaly2, gaps2 = await drive_lat(dut, payload, starts)
+    lat1 = _latencies(msgs, starts, accepts1, ev1)
+    lat2 = _latencies(msgs, starts, accepts2, ev2)
     assert lat1 == lat2, (
         f"SEC-LAT-01: histogramas distintos entre re-ejecuciones "
         f"({lat1} vs {lat2})")
@@ -218,6 +220,12 @@ async def test_sec_lat01_histograma_determinista_por_tipo(dut):
         "por_tipo": by_type,
         "total": _hist_summary(total),
     }
+    if _os.path.exists(pcap):
+        # SEC-URAM-04 (fase 3, iter 4): la media wire->BBO de la secuencia fija
+        # del feed real debe quedar <= 45 ciclos. Iter 3: 64,586 (ROJO TDD).
+        _mean = doc["total"]["mean_ciclos"]
+        assert _mean <= 45, (
+            f"SEC-URAM-04: media total {_mean} ciclos > 45 (ROJO iter 4)")
     _os.makedirs(_os.path.dirname(LAT_PATH), exist_ok=True)
     with open(LAT_PATH, "w") as f:
         json.dump(doc, f, indent=2)

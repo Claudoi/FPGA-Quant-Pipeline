@@ -92,14 +92,27 @@ module orderbook #(
     // escribe. Cada operación consume 2 ciclos extra como máximo (SEC-URAM-03)
     localparam ST_LV2        = 4'd8;
     localparam ST_LV3        = 4'd9;
+    localparam ST_SWAP       = 4'd10;   // swap atómico del doble buffer (iter 4)
     reg [3:0]  st /* verilator public */;
     reg [SLOT-1:0] st_inval_cnt;   // contador de la invalidación post-reset (1/ciclo)
     reg [6:0] nbody_w;      // words de cuerpo restantes por consumir
     reg [1:0]  hrem;        // words de cabecera restantes tras w0 (DW=32: 1)
     reg emit_ok;            // la operación aplicada se emite (no fue anomalía/error)
     reg do_uadd;            // el replace U de este ciclo necesita ST_UADD
-    // handshake combinacional: acepta entrada en W0/TS/BODY
-    assign s_axis_tready = (st == ST_W0) || (st == ST_TS) || (st == ST_BODY);
+    // handshake combinacional (fase3-uram iter 4, versión B): acepta entrada
+    // en TODOS los estados salvo la invalidación post-reset y el swap. La cola
+    // del mensaje en curso (WAIT_PROBE/APPLY/LV2/LV3/EMIT/UADD) recibe las
+    // words del mensaje SIGUIENTE en un doble buffer nx_*: el pipeline de
+    // niveles se solapa con el feed en vez de frenarlo. El swap es un estado
+    // dedicado de 1 ciclo (tready=0): jamás se decide un swap sobre un nx
+    // recién escrito en el mismo ciclo (race de 1 ciclo, hallazgo iter 4).
+    // Cuando nx_done (cuerpo del mensaje siguiente COMPLETO) la entrada se
+    // corta hasta el swap: nunca más de un mensaje en el buffer (over-fill
+    // del cuerpo) ni un w0 aterrizando sobre un cuerpo completo. ST_TS/
+    // ST_BODY conservan tready=1 aunque nx_done: el mensaje EN CURSO sigue
+    // necesitando su stream — cortar ahí sería un deadlock.
+    assign s_axis_tready = (st != ST_INVAL) && (st != ST_SWAP) &&
+                           (!nx_done || st == ST_TS || st == ST_BODY);
 
     reg [7:0]  m_type;
     reg [15:0] m_locate;
@@ -107,6 +120,27 @@ module orderbook #(
     reg [31:0] m_idx;
     reg [3:0]  bi;
     reg [DW-1:0] body_acc[0:15];   // 16 words cubren el cuerpo máximo a DW=32
+
+    // ---------------------------------------------------------------
+    // receptor del mensaje siguiente (fase3-uram iter 4, versión B): mientras
+    // la cola del mensaje en curso procesa (WAIT_PROBE/APPLY/LV2/LV3/EMIT/
+    // UADD), las words del mensaje siguiente se acumulan aquí (doble buffer)
+    // y el swap a los registros del mensaje en curso ocurre al final de la
+    // cola (ST_EMIT o el descarte de ST_APPLY). Espejo de W0/TS/BODY.
+    // ---------------------------------------------------------------
+    reg        nx_active;          // hay mensaje siguiente recibiéndose
+    reg        nx_done;            // cuerpo del mensaje siguiente COMPLETO
+    reg [1:0]  nx_st;              // 0=w0 pendiente, 1=w1, 2=cuerpo
+    reg [7:0]  nx_type;
+    reg [15:0] nx_locate;
+    reg [7:0]  nx_len;
+    reg [31:0] nx_idx;
+    reg [1:0]  nx_hrem;
+    reg [3:0]  nx_bi;
+    reg [6:0]  nx_nbody_w;
+    reg        nx_bad_sym;
+    reg [4:0]  nx_loc_idx;
+    reg [DW-1:0] nx_body_acc[0:15];
 
     // ---------------------------------------------------------------
     // tabla de órdenes en URAM (fase3-uram): array único de NSLOT x OW bits
@@ -195,9 +229,31 @@ module orderbook #(
     reg [SLOT-1:0] pr_new_empty;
     reg        pr_new_full;
 
+    // ---------------------------------------------------------------
+    // contabilidad de runs (fase3-uram iter 4): la sonda es single-buffer e
+    // in-order (los runs se sirven en orden de armado). Cada mensaje que lee
+    // la tabla ancla el contador de runs LANZADOS al arrancar su cuerpo
+    // (cur_anchor_started) y espera en ST_WAIT_PROBE hasta que
+    //   (pr_runs_started - cur_anchor_started) >= cur_runs_needed  &&  !pr_active
+    // Así el pending/run del mensaje SIGUIENTE (que ya se recibe en la cola)
+    // ni bloquea ni pisa los resultados del mensaje en curso (hallazgo del
+    // análisis iter 4: la condición naive !pending&&!active no distingue).
+    // ---------------------------------------------------------------
+    reg [15:0] pr_runs_started;    // runs lanzados por la sonda (total)
+    reg [15:0] cur_anchor_started; // pr_runs_started al arrancar el cuerpo
+    reg [1:0]  cur_runs_needed;    // runs del mensaje en curso (1; 2 si U; 0 si no lee)
+    reg        pr_pause;           // pausa de 1 ciclo tras ST_APPLY/ST_UADD
+
     wire pr_active = (pr_phase != PR_IDLE);
-    wire pr_start_old = pr_pending_old && !pr_active;
-    wire pr_start_new = pr_pending_new && !pr_active && !pr_pending_old;
+    // iter 4: la sonda no arranca ni avanza mientras el FSM escribe la tabla
+    // (ST_APPLY/ST_UADD): (a) el arranque se difiere para que apply_one lea los
+    // resultados del run del mensaje en curso ANTES de que el run del mensaje
+    // siguiente los pise (la sonda es single-buffer); (b) un run en vuelo se
+    // PAUSA un ciclo para que la lectura registrada jamás colisione en la
+    // misma fase con el write del apply (URAM 1R+1W, patrón registrado).
+    wire engine_hold = (st == ST_APPLY) || (st == ST_UADD);
+    wire pr_start_old = pr_pending_old && !pr_active && !engine_hold;
+    wire pr_start_new = pr_pending_new && !pr_active && !pr_pending_old && !engine_hold;
 
     // tipos que leen la tabla (prefetch en ST_BODY)
     function automatic logic lt(input [7:0] t);
@@ -344,6 +400,14 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             pr_empty_found <= 1'b0; pr_empty <= 0; pr_full <= 1'b0;
             pr_new_found <= 1'b0; pr_new_empty <= 0; pr_new_full <= 1'b0;
             pr_oref <= 0; pr_newref <= 0;
+            // contabilidad de runs y receptor nx (fase3-uram iter 4)
+            pr_runs_started <= 0; cur_anchor_started <= 0;
+            cur_runs_needed <= 2'd0; pr_pause <= 1'b0;
+            nx_active <= 1'b0; nx_done <= 1'b0; nx_st <= 2'd0;
+            nx_type <= 0; nx_locate <= 0; nx_len <= 0; nx_idx <= 0;
+            nx_hrem <= 2'd0; nx_bi <= 0; nx_nbody_w <= 0;
+            nx_bad_sym <= 1'b0; nx_loc_idx <= 0;
+            for (int i = 0; i < 16; i++) nx_body_acc[i] <= 0;
             // pipeline de niveles (etapa 1 + decode + materialización)
             lv_en <= 1'b0; lv_uadd <= 1'b0;
             lv_lprice <= 0; lv_delta <= 32'sd0; lv_base <= 0;
@@ -367,8 +431,19 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             // aunque el FSM esté recibiendo el cuerpo (prefetch). La lectura
             // es REGISTRADA (rd_data <= o_mem[rd_addr]) — patrón URAM.
             rd_data <= o_mem[rd_addr];
-            if (pr_start_old) begin
+            if (engine_hold) begin
+                // la sonda no avanza mientras el FSM escribe la tabla (ver
+                // wire engine_hold): se marca la pausa y se descarta la
+                // captura de este ciclo (podría ser stale si el apply escribió
+                // el slot evaluado — re-sync en el ciclo siguiente)
+                pr_pause <= 1'b1;
+            end else if (pr_pause) begin
+                // re-sync: un ciclo sin eval tras la pausa; la captura del
+                // ciclo de pausa no se evalúa jamás
+                pr_pause <= 1'b0;
+            end else if (pr_start_old) begin
                 pr_pending_old <= 1'b0;
+                pr_runs_started <= pr_runs_started + 1;
                 pr_phase <= PR_WARM;
                 pr_i <= 16'd0;
                 pr_base <= pr_oref[SLOT-1:0];
@@ -381,6 +456,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                 rd_addr <= pr_oref[SLOT-1:0];
             end else if (pr_start_new) begin
                 pr_pending_new <= 1'b0;
+                pr_runs_started <= pr_runs_started + 1;
                 pr_phase <= PR_WARM;
                 pr_i <= 16'd0;
                 pr_base <= pr_newref[SLOT-1:0];
@@ -493,8 +569,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     // único resto tras el recorte del Anexo A — sin ts)
                     if (s_axis_tvalid) begin
                         if (DW == 32) m_idx <= s_axis_tdata[31:0];
-                        if (hrem == 2'd1) st <= ST_BODY;
-                        else hrem <= hrem - 1;
+                        if (hrem == 2'd1) begin
+                            st <= ST_BODY;
+                        end else hrem <= hrem - 1;
                     end
                 end
                 ST_BODY: begin
@@ -511,6 +588,16 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                                 pr_oref <= K'({body_acc[0], s_axis_tdata});
                                 pr_need_empty <= (m_type == 8'h41 ||
                                                   m_type == 8'h46);
+                                // ancla del mensaje en curso EN EL CICLO DE
+                                // ARMADO (iter 4): los runs lanzados antes de
+                                // este ciclo (mensaje previo, cola aún en
+                                // curso) no cuentan para su espera. Fijarla
+                                // al arrancar el cuerpo inflaría el contador
+                                // con esos runs y ST_WAIT_PROBE saldría con
+                                // resultados stale (hallazgo del análisis)
+                                cur_anchor_started <= pr_runs_started;
+                                cur_runs_needed <= (lt(m_type) ? 2'd1 : 2'd0) +
+                                                   (m_type == 8'h55 ? 2'd1 : 2'd0);
                             end
                             if (bi == 4'd3 && m_type == 8'h55) begin
                                 pr_pending_new <= 1'b1;
@@ -522,6 +609,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                                 pr_oref <= K'(s_axis_tdata);
                                 pr_need_empty <= (m_type == 8'h41 ||
                                                   m_type == 8'h46);
+                                cur_anchor_started <= pr_runs_started;
+                                cur_runs_needed <= (lt(m_type) ? 2'd1 : 2'd0) +
+                                                   (m_type == 8'h55 ? 2'd1 : 2'd0);
                             end
                             if (bi == 4'd1 && m_type == 8'h55) begin
                                 pr_pending_new <= 1'b1;
@@ -544,12 +634,22 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     end
                 end
                 ST_WAIT_PROBE: begin
-                    // espera del probe serializado (solo cuerpos cortos; el
-                    // prefetch lo evita en el caso normal)
-                    if (!pr_pending_old && !pr_pending_new && !pr_active)
-                        st <= ST_APPLY;
+                    // cola del mensaje en curso: acepta el mensaje siguiente
+                    // (jamás con nx_done: el cuerpo ya está completo en el
+                    // buffer y una word más sería un w0 de M+2 — over-fill)
+                    if (s_axis_tvalid && !nx_done) nx_recv();
+                    // el probe del mensaje en curso terminó: los runs lanzados
+                    // desde el ANCLA (ciclo de armado de su sonda) son
+                    // cur_runs_needed y el engine está idle. El pending/run del
+                    // mensaje SIGUIENTE no cuenta (la sonda arranca su run en
+                    // orden, al liberarse)
+                    if ((pr_runs_started - cur_anchor_started) >= 16'(cur_runs_needed) &&
+                        !pr_active) st <= ST_APPLY;
                 end
                 ST_APPLY: begin
+                    // cola del mensaje en curso: acepta el mensaje siguiente
+                    // (jamás con nx_done: over-fill del doble buffer)
+                    if (s_axis_tvalid && !nx_done) nx_recv();
                     // el par BBO/depth se acepta solo con ambos tready; mientras
                     // el par pendiente no se acepte, el pipeline se frena aquí
                     // (SEC-BP-01: retención sin pérdida ni duplicado)
@@ -560,7 +660,15 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         if (bad_sym) begin
                             // mensaje de un símbolo fuera del subset: descartado
                             do_uadd <= 1'b0;
-                            st <= ST_W0;
+                            // swap atómico (iter 4): con word del mensaje
+                            // siguiente en el bus (nx aún sin completar), se
+                            // consume en nx (ya se llamó a nx_recv arriba) y el
+                            // swap se difiere un ciclo (ST_SWAP) — decidir el
+                            // swap en este mismo ciclo sobre un nx recién
+                            // escrito (NB invisible) era la race que mandaba el
+                            // FSM a ST_W0 y perdía la word (hallazgo iter 4)
+                            if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
+                            else swap_next(st);
                         end else begin
                             apply_one(do_uadd, lv_en);
                             lv_uadd <= do_uadd;   // el U pide la mitad add tras la 1ª op
@@ -568,7 +676,8 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                             else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
                                      m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
                                      m_type == 8'h55) st <= ST_EMIT;
-                            else st <= ST_W0;
+                            else if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
+                            else swap_next(st);
                         end
                     end
                 end
@@ -577,12 +686,14 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     // registros capturados en ST_APPLY/ST_UADD (visibles aquí,
                     // un ciclo después del launch); el resultado queda
                     // registrado y la etapa 3 lo consume un ciclo tarde
+                    if (s_axis_tvalid && !nx_done) nx_recv();
                     decode_lv2();
                     st <= ST_LV3;
                 end
                 ST_LV3: begin
                     // etapa 3: materializa la lista nueva según el decode y la
                     // escribe de una sola vez (única escritura del lado)
+                    if (s_axis_tvalid && !nx_done) nx_recv();
                     materialize_write();
                     st <= lv_uadd ? ST_UADD : ST_EMIT;
                 end
@@ -590,19 +701,197 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     // mitad add del replace: la segunda operación de nivel ve
                     // el estado del ciclo anterior (la eliminación ya aplicada
                     // en la ST_LV3 previa)
+                    if (s_axis_tvalid && !nx_done) nx_recv();
                     launch_lv(u_side, u_price, u_shares);
                     mem_wr(u_nidx, entry_new(u_newref, u_side, u_price, u_shares));
                     lv_uadd <= 1'b0;
                     st <= ST_LV2;
                 end
                 ST_EMIT: begin
+                    // cola del mensaje en curso: acepta el mensaje siguiente y,
+                    // al salir, el mensaje siguiente pasa a ser el mensaje en
+                    // curso (swap del doble buffer nx_*)
                     if (emit_ok) emit_bbo();
-                    st <= ST_W0;
+                    // swap atómico (iter 4): con word del mensaje siguiente en
+                    // el bus (nx aún sin completar), se consume en nx y el
+                    // swap se difiere un ciclo (ST_SWAP); sin word (o con nx
+                    // completo — la word sostenida sería un w0 de M+2, no se
+                    // toca), el swap se decide ya — nunca sobre un nx a medio
+                    // escribir ni sobre un nx completo
+                    if (s_axis_tvalid && !nx_done) begin
+                        nx_recv();
+                        st <= ST_SWAP;
+                    end else begin
+                        swap_next(st);
+                    end
+                end
+                ST_SWAP: begin
+                    // swap del doble buffer en estado dedicado: tready=0 (el
+                    // bus se congela) y nx_* está estable — las escrituras del
+                    // ciclo anterior ya son visibles. Aquí NO se recibe nada.
+                    swap_next(st);
                 end
                 default: st <= ST_W0;
             endcase
         end
     end
+
+    // ---------------------------------------------------------------
+    // receptor del mensaje siguiente (fase3-uram iter 4): consume las words
+    // que llegan durante la cola del mensaje en curso. Espejo de W0/TS/BODY
+    // (misma semántica de campos, arming de la sonda y registro de símbolos)
+    // pero sobre nx_*; un solo mensaje en vuelo (doble buffer de 1 elemento).
+    // ---------------------------------------------------------------
+    task automatic nx_recv;
+        begin
+            if (!nx_active) begin
+                nx_active <= 1'b1;
+                nx_st    <= 2'd1;
+                nx_done  <= 1'b0;
+                nx_bi    <= 4'd0;
+                nx_hrem  <= 2'd1;
+                nx_type   <= s_axis_tdata[DW-1 -: 8];
+                nx_locate <= s_axis_tdata[DW-9 -: 16];
+                nx_len    <= s_axis_tdata[DW-25 -: 8];
+                nx_nbody_w <= 7'(((8'(s_axis_tdata[DW-25 -: 8]) - 8'd11) +
+                                  8'(BYTES-1)) >> L2B);
+                nx_bad_sym <= 1'b0;
+                if (loc_lookup(s_axis_tdata[DW-9 -: 16]) == 5'd31 &&
+                    loc_cnt < NSYM) begin
+                    loc_map[loc_cnt] <= s_axis_tdata[DW-9 -: 16];
+                    loc_cnt <= loc_cnt + 1;
+                    nx_loc_idx <= loc_cnt;
+                end else if (loc_lookup(s_axis_tdata[DW-9 -: 16]) == 5'd31) begin
+                    // símbolo fuera del subset (SEC-NSYM-01): pulso de error y
+                    // descarte en su ST_APPLY (misma semántica que ST_W0)
+                    nx_bad_sym <= 1'b1;
+                    error <= 1'b1;
+                    nx_loc_idx <= 5'd0;
+                end else begin
+                    nx_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);
+                end
+            end else if (nx_st == 2'd1) begin
+                // w1 del mensaje siguiente (idx a DW=32; a DW=64 el idx viajó
+                // en w0 y esta word de ts no se consume)
+                if (DW == 32) nx_idx <= s_axis_tdata[31:0];
+                nx_st <= 2'd2;
+            end else begin
+                // cuerpo (nx_st == 2): SOLO acumulación en el doble buffer. El
+                // armado de la sonda del mensaje siguiente NO ocurre aquí sino
+                // en el swap (swap_next): la sonda es single-buffer in-order y
+                // un armado durante la cola del mensaje en curso invertiría la
+                // prioridad (el run old de M2 bloquearía el run new de un M1
+                // en ST_WAIT_PROBE) y corrompería el U — hallazgo iter 4
+                nx_body_acc[nx_bi] <= s_axis_tdata;
+                if (s_axis_tlast) begin
+                    nx_done <= 1'b1;
+                end else if (nx_nbody_w <= 1) begin
+                    nx_done <= 1'b1;
+                end else begin
+                    nx_bi <= nx_bi + 1;
+                    nx_nbody_w <= nx_nbody_w - 1;
+                end
+            end
+        end
+    endtask
+
+    // ---------------------------------------------------------------
+    // swap: el mensaje siguiente (nx_*) pasa a ser el mensaje en curso al
+    // terminar la cola del anterior (ST_EMIT, el descarte de ST_APPLY o, con
+    // word en el bus, el estado dedicado ST_SWAP — jamás en el mismo ciclo
+    // que una escritura de nx). Estado de arranque según lo recibido:
+    //   nada     -> ST_W0   (la cola no solapó ninguna word)
+    //   solo w0  -> ST_TS   (cabecera a medias: falta w1)
+    //   cuerpo   -> ST_BODY (reanuda en la word siguiente a nx_bi)
+    //   completo -> WAIT_PROBE/APPLY según la sonda del mensaje nuevo
+    // El ARMADO de la sonda del mensaje entrante ocurre AQUÍ (desde
+    // nx_body_acc, según las words ya recibidas), no en nx_recv: la sonda es
+    // single-buffer in-order y los pending de un mensaje solo nacen cuando
+    // este es el mensaje en curso (sin inversión de prioridad entre el run
+    // new de M1 y el run old de M2). El ancla del mensaje se fija en este
+    // mismo ciclo (pr_runs_started previo al lanzamiento de SUS runs).
+    // ---------------------------------------------------------------
+    task automatic swap_next(output reg [3:0] nxt);
+        reg will_arm_old, will_arm_new, will_probe;
+        begin
+            will_arm_old = (DW == 32) ? (nx_bi >= 4'd1 && lt(nx_type))
+                                      : (nx_bi >= 4'd0 && lt(nx_type));
+            will_arm_new = (DW == 32) ? (nx_bi >= 4'd3 && nx_type == 8'h55)
+                                      : (nx_bi >= 4'd1 && nx_type == 8'h55);
+            // la sonda del mensaje entrante estará en vuelo: pending previos,
+            // run activo o el armado de ESTE swap (los pending del swap son NB:
+            // probe_inflight los vería 1 ciclo tarde — por eso se computa aquí
+            // de forma explícita y no con el wire de m_type/bi del mensaje viejo)
+            will_probe = pr_pending_old || pr_pending_new || pr_active ||
+                         will_arm_old || will_arm_new;
+            if (!nx_active) begin
+                nxt = ST_W0;
+            end else begin
+                m_type   <= nx_type;
+                m_locate <= nx_locate;
+                m_len    <= nx_len;
+                m_idx    <= nx_idx;
+                hrem     <= nx_hrem;
+                bad_sym  <= nx_bad_sym;
+                m_loc_idx <= nx_loc_idx;
+                for (int i = 0; i < 16; i++)
+                    body_acc[i] <= nx_body_acc[i];
+                if (nx_done || will_arm_old || will_arm_new) begin
+                    // armado del probe del mensaje entrante en el ciclo del
+                    // swap (nx_body_acc ya es estable): las refs se arman con
+                    // las words recibidas durante la cola del mensaje previo
+                    if (will_arm_old) begin
+                        pr_pending_old <= 1'b1;
+                        if (DW == 32)
+                            pr_oref <= K'({nx_body_acc[0], nx_body_acc[1]});
+                        else
+                            pr_oref <= K'(nx_body_acc[0]);
+                        pr_need_empty <= (nx_type == 8'h41 || nx_type == 8'h46);
+                    end
+                    if (will_arm_new) begin
+                        pr_pending_new <= 1'b1;
+                        if (DW == 32)
+                            pr_newref <= K'({nx_body_acc[2], nx_body_acc[3]});
+                        else
+                            pr_newref <= K'(nx_body_acc[1]);
+                    end
+                    // ancla del mensaje en curso en el ciclo de armado: los
+                    // runs del mensaje PREVIO ya lanzados (cola solapada) no
+                    // cuentan para la espera de este mensaje
+                    cur_anchor_started <= pr_runs_started;
+                    cur_runs_needed <= (lt(nx_type) ? 2'd1 : 2'd0) +
+                                       (nx_type == 8'h55 ? 2'd1 : 2'd0);
+                end
+                if (nx_done) begin
+                    nxt = will_probe ? ST_WAIT_PROBE : ST_APPLY;
+                end else if (nx_st == 2'd1) begin
+                    // cabecera a medias: ST_TS consume w1 (idx) y sigue el
+                    // cuerpo desde cero (bi/nbody_w del mensaje ENTERO)
+                    bi <= 0;
+                    nbody_w <= nx_nbody_w;
+                    nxt = ST_TS;
+                end else if (nx_st == 2'd2) begin
+                    // el cuerpo ya consumió words 0..nx_bi-1: nx_bi ES el
+                    // índice de la PRÓXIMA word (contador de consumidas) y
+                    // nx_nbody_w las restantes — reanudar es copiar AMBOS sin
+                    // ajustes. La versión previa sumaba 1 a bi (escribía la
+                    // última word del cuerpo en bi+1, dejando body_acc[bi]
+                    // stale — precio corrompido en la cola: 140000 -> 140016)
+                    // y restaba nx_bi de nbody_w (terminaba el cuerpo antes
+                    // de tiempo) — hallazgo iter 4, traza INV-B32-03
+                    bi <= nx_bi;
+                    nbody_w <= nx_nbody_w;
+                    nxt = ST_BODY;
+                end else begin
+                    nxt = ST_W0;
+                end
+                nx_active <= 1'b0;
+                nx_done <= 1'b0;
+                nx_st <= 2'd0;
+                nx_bi <= 4'd0;
+            end
+        end
+    endtask
 
     // ---------------------------------------------------------------
     // pipeline de niveles (fase3-uram iter 3). launch_lv = etapa 1: captura

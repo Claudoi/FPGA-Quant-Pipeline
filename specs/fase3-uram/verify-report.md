@@ -3,6 +3,126 @@
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
 
+## Iteración 4 — SEC-URAM-04 CERRADA (media 44,3 ≤ 45) + 7 causas raíz RTL
+
+### Meta del atacante/diseño
+
+SEC-URAM-04 (media wire→BBO ≤ 45 ciclos) llevaba abierta desde la iteración 2.
+En la iteración 4 se ataca con dos palancas medidas empíricamente sobre el feed
+real (30.729 eventos) y un protocolo de medición corregido:
+
+1. **Backlog de la cola del parser (la palanca dominante)**: la sonda URAM
+   serializada (10 ciclos por operación de tabla: WARM + walk de 8 slots a 1
+   slot/ciclo) procesa ~1 mensaje/13-15 ciclos; el parser acepta el feed a esa
+   cadencia y su cola se llena (histograma de `qn` en pico 45-48 con QB=64,
+   ~48 % de ciclos con tready=0). El backlog adelanta los primeros bytes de
+   ~3 mensajes: cada uno paga los ~13-15 ciclos de los mensajes previos. El
+   QB es el knob: `-GQB=48` (histograma en pico 45-48) baja la media de 55,9
+   a 47,1; QB=46 (piso funcional: el peor caso P=44 B ⇒ 46 B con prefijo cabe
+   exacto; QB=32 DEADLOCKEA, 2+len=46 > 32) deja la media en estado
+   estacionario en **44,318**. El parámetro se elabora correctamente vía el
+   top (hallazgo 2026-08-14 de `itch_chain`; `-G` del Makefile y defaults del
+   módulo ya no se tocan).
+2. **Protocolo de medición (artefacto de la INVAL post-reset)**: el book URAM
+   no tiene reset global: tras `_reset` invalida los 65.536 slots a 1 slot/ciclo
+   (~203 µs @322 MHz). Con el feed activo desde el ciclo 0, el parser
+   pre-acepta los primeros ~2-3 mensajes durante la INVAL y su latencia incluía
+   los 65.536 ciclos de arranque (max A = 65.583; ~4-6 ciclos de media). La
+   INVAL es un costo único de arranque, no latencia de pipeline: el test
+   espera los 65.536+32 ciclos de warm-up antes de presentar la primera word
+   (`INVAL_CYCLES` en `test_lat32.py`). Con el warm-up, max = 74 ciclos.
+
+Ambas palancas están documentadas en el RTL (`itch_chain.sv` QB) y en el test;
+la secuencia medida es la misma fija del feed real (determinismo intacto).
+
+### Rojo con evidencia (TDD)
+
+| Test | Rojo | Causa raíz |
+|---|---|---|
+| SEC-URAM-04 (iter 3→4) | `media total 64,586 > 45` | pipeline de niveles +3 ciclos/op (iter 3) sobre la sonda URAM: backlog de cola + INVAL edge |
+| SEC-URAM-04 (QB=64, feed desde ciclo 0) | `55,867 > 45` | medición corregida al drive por payload Mold (la cadena decap, no el Anexo A): backlog ~3 mensajes + INVAL edge |
+| SEC-URAM-04 (QB=48 + INVAL-wait) | `45,017 > 45` | 0,017 sobre el umbral → QB=46 (piso): media 44,318 |
+| QB=32 (sonda) | DEADLOCK (accepts=18, events=0) | el peor caso P (46 B con prefijo) no cabe: ST_LEN jamás completa — piso del QB = 46 |
+
+### Hallazgos del diseño (corregidos en verde, sin tocar el contrato)
+
+1. **La cadena decap Mold, no el Anexo A**: la medición correcta conduce el
+   payload MoldUDP64 a `itch_chain` (como CHAIN-01); el Anexo A alineado es la
+   entrada del book directo (top orderbook), no de la cadena. El intento de
+   medir con `anexo_words32` atascó el parser en la word 59 (accepts=59).
+2. **El QB se elabora desde el top**: `itch_chain` declara su propio QB y lo
+   pasa con `.QB(QB)`; el default del parser no afecta a la cadena. Verificado
+   con `-GQB=48/64` → 0x2f/0x3f en el C++ generado; comportamiento de cola
+   idéntico salvo el nivel de saturación.
+3. **El QB no cambia la corrección**: QB=46/48/64 dan eventos bit a bit
+   idénticos (30.729, anomaly=671, cross=0) — solo cambia el adelanto de la
+   cola. QB=46 es seguro funcionalmente (46 ≤ 46), pero es el piso.
+4. **st_hist del book (sonda)**: WAIT_PROBE 215.378 ciclos de ~436 k totales
+   — la sonda serializada domina; el resto: ST_EMIT/APPLY 31.400 c/u, ST_BODY
+   11.263, LV2/LV3 31.415 c/u, INVAL 65.537, SWAP 9.494, UADD 686, W0 4.002.
+5. **Efecto borde INVAL medido**: 2-3 primeros mensajes × 65.536 ciclos ≈
+   4-6 ciclos de media — eliminado con el protocolo de warm-up.
+
+### Verde (evidencia)
+
+```
+** TESTS=1 PASS=1 FAIL=0 **   (phase3 sim-lat: SEC-LAT-01 determinista 2 corridas + SEC-URAM-04 media 44,318 <= 45)
+** TESTS=5 PASS=5 FAIL=0 **   (phase3 sim: feed real 31.400 msgs -> 30.729 eventos bit a bit, anomaly=671, cross=0)
+** TESTS=8 PASS=8 FAIL=0 **   (phase3 sim-hash)
+** TESTS=3 PASS=3 FAIL=0 **   (phase3 sim-depth)
+** TESTS=2 PASS=2 FAIL=0 **   (phase3 sim-hard)
+** TESTS=4 PASS=4 FAIL=0 **   (phase3 sim-parser)
+** TESTS=2 PASS=2 FAIL=0 **   (phase3 sim-chain: CHAIN-01 bit a bit)
+** TESTS=4 PASS=4 FAIL=0 **   (uram sim-uram: SEC-URAM-01/02/03)
+** TESTS=2 PASS=2 FAIL=0 **   (uram sim-anx)
+** TESTS=14 PASS=14 FAIL=0 ** (fase 2)
+** TESTS=19 PASS=19 FAIL=0 ** (fase 1)
+** 32/32 OK **                (golden model)
+** lint 0 warnings **         (verilator -Wall: chain + parser + orderbook)
+```
+
+Latencia re-medida con QB=46 + warm-up (`latency_dw32.json` regenerado por
+SEC-LAT-01, 30.729 eventos, anomaly=671, cross=0, gaps=0):
+
+| Métrica | Iter 2 (URAM) | Iter 3 (pipeline) | **Iter 4 (QB=46+warm-up)** | Δ vs iter 3 |
+|---|---|---|---|---|
+| Media total | 54,943 | 64,586 | **44,318** (137,5 ns) | −20,3 |
+| p99 / p50 / min | 66 / 50 / 39 | 76 / 60 / 47 | **61 / 44 / 32** | −15 / −16 / −15 |
+| A media | 65,26 | 74,99 | **48,66** | −26,3 |
+| D media | 47,59 | 57,09 | **41,19** | −15,9 |
+| U media | 59,46 | 71,20 | **55,41** | −15,8 (2 ops, 2 runs de sonda) |
+| X media | 46,10 | 55,60 | **39,40** | −16,2 |
+| max | 65.579 | 65.583 | **74** | INVAL edge eliminado |
+
+**SEC-URAM-04 CERRADA** (44,318 ≤ 45). El bit a bit se mantiene (30.729/30.729,
+anomaly=671, cross=0).
+
+### Cambios
+
+- `rtl/itch_chain.sv`: `QB` 64 → **46** (comentario con el porqué: backlog de
+  cola dominante, piso funcional 46, QB=32 DEADLOCK).
+- `verification/testbenches/phase3/test_lat32.py`: drive por payload Mold
+  (`_packet_seq` + `_msg_word_starts`, los primeros bytes del mensaje viajan en
+  la word `offs//4`), warm-up post-reset `INVAL_CYCLES = 65.536+32` antes de
+  presentar la primera word, asserts ≤ 45 con mensaje de iteración, JSON con
+  `total`/`por_tipo` completos.
+- `rtl/orderbook/orderbook.sv`: 7 causas raíz de la iteración 4 (ver
+  `git log`/diff): WIDTHEXPAND `16'(cur_runs_needed)`, `ST_SWAP=4'd10` no
+  codificado, guardas `!nx_done` (+excepción ST_TS/ST_BODY) en `s_axis_tready`,
+  `nx_recv` solo acumulación, arming+anchor solo en swap, sin escrituras de
+  anchor en ST_TS/ST_BODY, fix `bi <= nx_bi`.
+- `verification/vectors/latency/latency_dw32.json`: regenerado (tabla de
+  latencia de arriba; por_tipo con histogramas completos).
+
+### Pendiente para iteraciones siguientes
+
+- Criterio 10: synth en Vivado (timing 322,265625 MHz + URAM) — con
+  SEC-URAM-03 + SEC-URAM-04 cerrados, el bloqueador B2 y la latencia ya no
+  son obstáculo; queda el cierre de timing y la utilización URAM.
+- Opcional (si se quiere margen de la media 44,3): walk de sonda a 2 slots/
+  ciclo recortaría el run de 10 a ~5-6 ciclos (media ~38-40); no es necesario
+  para el contrato.
+
 ## Iteración 3 — pipeline de niveles registrado (SEC-URAM-03)
 
 ### Meta del atacante/diseño
