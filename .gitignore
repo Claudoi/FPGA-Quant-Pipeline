@@ -36,6 +36,10 @@ data/itch_sample/**
 !data/itch_sample/.gitkeep
 *.NASDAQ_ITCH50.gz
 
+# ── Schemas SBE MDP3 (spec, pero se mantienen fuera del repo — regla G0) ──
+data/mdp3/**
+!data/mdp3/.gitkeep
+
 # ── Simulación (cocotb / Verilator) ──
 sim_build/
 **/sim_build/
