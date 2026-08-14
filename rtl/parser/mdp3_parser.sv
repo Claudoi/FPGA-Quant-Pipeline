@@ -300,8 +300,11 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
                                     mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
                         occ[cap_sel] <= 1;
                         if (s_axis_tlast) begin
-                            // paquete termina justo en el borde del mensaje:
-                            // el siguiente burst empieza con header de 12 B
+                            // paquete termina en el borde del mensaje: descartar
+                            // el padding residual (burst a alinear a palabra) y
+                            // el header de 12 B del siguiente paquete se lee
+                            // desde un burst nuevo (colas reset ad hoc)
+                            qh <= 0; qw <= 0;
                             hdr_pos <= 0;
                             if (occ[~cap_sel] == 0) begin
                                 cap_sel <= ~cap_sel;
@@ -311,15 +314,17 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
                                 wait_hdr <= 1;
                                 cst <= CS_WAIT;
                             end
-                        end else if (occ[~cap_sel] == 0) begin
-                            cap_sel <= ~cap_sel;
-                            wait_hdr <= 0;
-                            cst <= CS_SIZE;
                         end else begin
-                            wait_hdr <= 0;
-                            cst <= CS_WAIT;
+                            qh <= 8'((32'(qh) + 32'(cap_size) - 32'(cap_len)) % 32'(MAX_MSG));
+                            if (occ[~cap_sel] == 0) begin
+                                cap_sel <= ~cap_sel;
+                                wait_hdr <= 0;
+                                cst <= CS_SIZE;
+                            end else begin
+                                wait_hdr <= 0;
+                                cst <= CS_WAIT;
+                            end
                         end
-                        qh <= 8'((32'(qh) + 32'(cap_size) - 32'(cap_len)) % 32'(MAX_MSG));
                     end else if (qavail_eff != 16'd0) begin
                         for (integer k = 0; k < 2*BYTES; k = k + 1)
                             if (k < 32'(qavail_eff))
