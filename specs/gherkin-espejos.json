@@ -3,5 +3,6 @@
   "specs/fase1-parser-rtl/gherkin": "verification/testbenches/parser",
   "specs/fase2-orderbook/gherkin": "verification/testbenches/orderbook",
   "specs/fase3-optimizacion/gherkin": "verification/testbenches/phase3",
+  "specs/fase3-uram/gherkin": "verification/testbenches/uram",
   "specs/fase4-mdp3-parser/gherkin": "verification/testbenches/mdp3"
 }
