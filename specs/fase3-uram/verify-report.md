@@ -3,6 +3,92 @@
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
 
+## Iteración 5 — gate E 25/25 + criterio 7 (synth_check 10/10) + hallazgo del cache
+
+### Meta del atacante/diseño
+
+Cierre de la campaña: (a) el gate E de mutación HDL re-mapeado al RTL URAM
+(los 21 patrones de fase 3 apuntaban al RTL pre-URAM y el runner abortaba en
+`OV-BEST objetivo no encontrado`) y extendido con los 4 mutantes de la sonda/
+pipeline que la spec de la campaña exige; (b) el criterio 7 (síntesis):
+`synth_check.py` 10/10 con el tcl pinando `{DW=32 K=19 QB=46}`.
+
+### Rojo con evidencia (TDD)
+
+| Test | Rojo | Causa raíz |
+|---|---|---|
+| gate E (runner viejo) | `ERROR: OV-BEST objetivo no encontrado` | los 21 patrones eran del RTL pre-URAM (`o_valid[h+..]`, `level_add`, `lpr[slot]`) — re-mapeados a la sonda URAM (`rd_data`/`pr_target`), el pipeline (`lv_beat`/`lv2_*`) y el apply con `pr_*` |
+| gate E (patrón LV-NEGWRAP) | `0 coincidencias` | escribí `} else if` (estilo SV) donde el RTL usa `end else if` (Verilog) — indentación + `end` exactos |
+| synth_check | `top del tcl == módulo del RTL — rtl:None` | el regex del checker no toleraba comentarios con paréntesis en la lista de parámetros (el comentario QB de la iter 4 lo rompía) — el checker ahora descarta line-comments |
+| sim-hash post-mutación | `7/8 (INV-OV-01 FAIL)` | **hallazgo del cache**: `make clean` de cocotb solo borra `sim_build`; el `sim_build_hash` construido con el último mutante (LV-NEGWRAP) se reutilizaba en silencio tras restaurar el RTL → el runner limpia ahora con `clean-all` (phase3/uram) + `clean` |
+
+### Hallazgos del diseño (corregidos en verde, sin tocar el contrato)
+
+1. **La sonda URAM comparte el walk para lookup/empty/full**: a diferencia de
+   fase 3 (bucles separados), el probe único hace que el mutante de cota
+   (HASH-LOOKUP-BOUND, `PROBE-2` en el terminal) cubra también el caso del
+   insert — HASH-INSERT-BOUND se eliminó (cubierto) y el conteo queda en 25
+   mutantes: 21 re-mapeados + 4 nuevos.
+2. **Mutantes nuevos** (los 4 que la spec exigía): URAM-COMB-INDEX (indexa
+   `o_mem[pr_base+pr_i]` combinacionalmente en el FSM), URAM-NO-PREFETCH
+   (desactiva el armado en ST_BODY), PIPE-SKIP-STAGE (salta `decode_lv2`),
+   LV-STALE-STAGE (la etapa 3 escribe la qty pre-op). Todos muertos
+   (FAIL 999-1016: suites uram + hash + depth).
+3. **Lint del mutante**: el runner verifica que cada mutante siga compilando
+   (`verilator --lint-only`, trinquete +UNUSEDSIGNAL/UNUSEDPARAM — colateral
+   esperado del flip); un archivo roto NO cuenta como kill (evita falsos
+   positivos del gate).
+4. **Restauración byte-idéntica**: tras la pasada, `git status` del RTL limpio
+   y suites frescas verdes con `clean-all` previo.
+
+### Verde (evidencia)
+
+```
+=== RESUMEN MUTACION ORDERBOOK (gate E, fase3-uram iter 5) ===
+25/25 killed: OV-BEST, OV-EMPTY, U-NOTATOMIC, U-DELETE-HALF, U-SKIP-ROUTE,
+D-DOUBLE, RED-REF, EMIT-NOCHANGED, HASH-NOREF, HASH-LOOKUP-BOUND,
+HASH-FULLNOCHECK, HASH-UADD-FULL, HASH-DUPNOCHECK, HASH-INSERT-NOVALID,
+URAM-COMB-INDEX, URAM-NO-PREFETCH, PIPE-SKIP-STAGE, LV-STALE-STAGE,
+DP-BADORDER, DP-ASKSWAP, DP-NOVALID, DP-TOPNCOUNT, NSYM-GUARD, BP-NORET,
+LV-NEGWRAP  (FAIL 999-1016 por mutante; 0 survivors, 0 errores de mutación)
+TODOS LOS MUTANTES MUERTOS. Gate E PASS.
+```
+
+```
+** TESTS=1 PASS=1 FAIL=0 **   (phase3 sim-lat: SEC-LAT-01 determinista + SEC-URAM-04 44,318)
+** TESTS=5 PASS=5 FAIL=0 **   (phase3 sim: feed real bit a bit, anomaly=671, cross=0)
+** TESTS=8 PASS=8 FAIL=0 **   (phase3 sim-hash, build fresco tras clean-all)
+** TESTS=3 PASS=3 FAIL=0 **   (phase3 sim-depth)
+** TESTS=2 PASS=2 FAIL=0 **   (phase3 sim-hard)
+** TESTS=4 PASS=4 FAIL=0 **   (phase3 sim-parser)
+** TESTS=2 PASS=2 FAIL=0 **   (phase3 sim-chain: CHAIN-01 bit a bit)
+** TESTS=4 PASS=4 FAIL=0 **   (uram sim-uram, build fresco)
+** TESTS=2 PASS=2 FAIL=0 **   (uram sim-anx)
+** TESTS=14 PASS=14 FAIL=0 ** (fase 2, RTL idéntico al commit iter 4)
+** synth_check: OK 10/10 **   (part, top, 3 read_verilog, DW=32, periodo 3,103 ns, puertos)
+```
+
+### Cambios
+
+- `scripts/verify/mutate_orderbook.py`: 21 mutantes re-mapeados al RTL URAM
+  (patrones `rd_data`/`pr_*`/`lv_*`/`mem_wr`), +4 nuevos (URAM-COMB-INDEX,
+  URAM-NO-PREFETCH, PIPE-SKIP-STAGE, LV-STALE-STAGE), suite `sim-uram`
+  añadida a SUITES, lint de compilación por mutante (archivo roto ≠ kill) y
+  `clean-all` en la limpieza (cache stale, hallazgo de la iteración).
+- `scripts/verify/synth_check.py`: el regex del top ignora line-comments
+  (lista de parámetros con comentarios).
+- `synth/fase3_synth.tcl`: generic `{DW=32 K=19 QB=46}` (pinea la config de
+  latencia de la iter 4).
+
+### Pendiente
+
+- Criterio 7, parte externa: **WNS ≥ 0 + utilización (LUT/FF/BRAM/URAM)** del
+  run del owner en Vivado → `synth/reports/` (`fase3_synth.tcl` listo,
+  `synth_check.py` 10/10; el entorno local no tiene licencia xcvu9p —
+  `vivado.log` lo documenta).
+- Campaña completa salvo eso: criterios 1-6 y 8 cerrados (iters 1-4),
+  criterio 7 preparado (synth_check), gate E 25/25.
+
 ## Iteración 4 — SEC-URAM-04 CERRADA (media 44,3 ≤ 45) + 7 causas raíz RTL
 
 ### Meta del atacante/diseño
