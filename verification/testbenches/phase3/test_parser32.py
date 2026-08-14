@@ -2,13 +2,14 @@
 
 Espejos P32-01/P32-02: el parser parametrizado a DW=32 emite el Anexo A de
 32 bits bit a bit contra el oráculo, y sostiene el line-rate (0 stalls) en el
-peor caso probado. Layout 32 (Anexo A, fase 3):
+peor caso probado. Layout 32 (Anexo A recortado, campaña fase3-uram):
 
     w0 = {msg_type[7:0], locate[15:0], length[7:0]}
     w1 = msg_idx[31:0]
-    w2 = ts_ns[31:0]
-    w3 = {ts_ns[47:32], 16'b0}
-    w4.. = cuerpo (MSB-first, relleno 0)
+    w2.. = cuerpo (MSB-first, relleno 0)
+
+(sin words de timestamp: el book no las consume; contrato enmendado por
+specs/fase3-uram/spec.md, criterio 1).
 
 Adversariales INV-P32: backpressure de salida sin pérdida (espejo OUT-02 de la
 fase 1, ahora a 32 bits) y replay del pcap real del día local (espejo REP-02).
@@ -22,15 +23,14 @@ from golden_model.src import message_oracle
 
 
 def oracle_words32(packets):
-    """Palabras de 32 bits esperadas para los paquetes (layout Anexo A 32)."""
+    """Palabras de 32 bits esperadas para los paquetes (layout Anexo A 32
+    recortado: w0 context, w1 idx, w2.. cuerpo — sin words de ts)."""
     words = []
     for w0_64, ts, body in message_oracle.iter_message_records(packets):
         words.append(((w0_64 >> 56) & 0xFF) << 24 |
                      ((w0_64 >> 40) & 0xFFFF) << 8 |
                      ((w0_64 >> 32) & 0xFF))
         words.append(w0_64 & 0xFFFFFFFF)
-        words.append(ts & 0xFFFFFFFF)
-        words.append(((ts >> 32) & 0xFFFF) << 16)
         for i in range(0, len(body), 4):
             bite = body[i:i + 4]
             words.append(int.from_bytes(bite, "big") << (8 * (4 - len(bite))))

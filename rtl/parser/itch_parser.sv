@@ -8,6 +8,9 @@
 //   word0 = {msg_type[7:0], locate[15:0], length[7:0], msg_idx[31:0]}
 //   word1 = ts_ns (48 bits útiles, en bits [47:0]; resto 0)
 //   words 2..N = cuerpo (msg[11:len], MSB-first, relleno 0)
+// A DW=32 (fase3-uram, recorte del Anexo A): w0={type,locate,len},
+// w1=msg_idx, w2..=cuerpo — SIN words de timestamp (el book no las consume;
+// contrato enmendado por specs/fase3-uram/spec.md, criterio 1).
 //
 // ARQUITECTURA (captura a msg_reg): cuando el mensaje está COMPLETO en la
 // cola (2+len <= QB), se captura de una vez a msg_reg (emisor estable e
@@ -83,7 +86,6 @@ module itch_parser #(
     reg  [351:0]  msg_reg;
     reg  [6:0]    body_w;
     reg  [6:0]    bi;
-    reg  [1:0]    hw;         // índice de la word de cabecera restante (DW=32)
     reg           out_valid_reg;
     reg  [DW-1:0] out_data_reg;
     reg           out_last_reg;
@@ -178,7 +180,7 @@ module itch_parser #(
             pack_left <= 0; pack_count <= 0; msg_len <= 0;
             in_subset <= 1'b0; msg_type <= 0; locate <= 0; ts_ns <= 0; len_ok <= 1'b0;
             eop_seen <= 1'b0;
-            msg_reg <= 0; body_w <= 0; bi <= 0; hw <= 0;
+            msg_reg <= 0; body_w <= 0; bi <= 0;
             out_valid_reg <= 1'b0; out_data_reg <= 0; out_last_reg <= 1'b0;
             gap_detected <= 1'b0; error <= 1'b0;
         end else begin
@@ -288,7 +290,9 @@ ST_LEN: begin
                     if (out_free) begin
                         if (in_subset && msg_len >= 11) begin
                             // w0: {type, locate, len, idx} a 64 bits; a 32 bits
-                            // el idx se emite en su propia word (w1)
+                            // el idx se emite en su propia word (w1, recorte del
+                            // Anexo A: las words de ts se eliminaron — el book
+                            // no las consume; specs/fase3-uram criterio 1)
                             if (DW == 32)
                                 out_data_reg <= DW'({msg_type, locate, msg_len});
                             else
@@ -296,7 +300,6 @@ ST_LEN: begin
                             out_valid_reg <= 1'b1;
                             out_last_reg  <= 1'b0;
                         end
-                        hw <= 2'd1;
                         st <= ST_TS;
                     end
                 end
@@ -304,17 +307,12 @@ ST_LEN: begin
                 ST_TS: begin
                     if (out_free) begin
                         if (DW == 32) begin
-                            // cabecera de 32 bits: w1=idx, w2=ts[31:0],
-                            // w3={ts[47:32], 16'b0}
-                            case (hw)
-                                2'd1: out_data_reg <= DW'(msg_idx);
-                                2'd2: out_data_reg <= DW'(ts_ns[31:0]);
-                                default: out_data_reg <= DW'({ts_ns[47:32], 16'h0});
-                            endcase
+                            // cabecera de 32 bits recortada: una sola word
+                            // w1=msg_idx; el cuerpo arranca en w2
+                            out_data_reg <= DW'(msg_idx);
                             out_valid_reg <= 1'b1;
                             out_last_reg  <= 1'b0;
-                            if (hw == 2'd3) st <= ST_BODY;
-                            else hw <= hw + 1;
+                            st <= ST_BODY;
                         end else begin
                             out_data_reg <= DW'({16'h0, ts_ns});
                             out_valid_reg <= 1'b1;

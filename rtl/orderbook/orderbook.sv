@@ -258,16 +258,19 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         // words de cuerpo = ceil((len-11)/BYTES)
                         nbody_w <= 7'(((8'(s_axis_tdata[DW-25 -: 8]) - 8'd11) +
                                        8'(BYTES-1)) >> L2B);
-                        hrem <= (DW == 32) ? 2'd3 : 2'd1;
+                        // cabecera restante tras w0: DW=64 ninguna word extra;
+                        // DW=32 una sola (w1=msg_idx) — las words de ts del
+                        // Anexo A se recortaron (fase3-uram criterio 1)
+                        hrem <= 2'd1;
                         bi <= 0;
                         st <= ST_TS;
                     end
                 end
                 ST_TS: begin
-                    // consume y descarta las words restantes de la cabecera
-                    // (32 bits: w1=idx [se captura], w2=ts[31:0], w3=ts_hi)
+                    // consume la word restante de la cabecera (DW=32: w1=idx,
+                    // único resto tras el recorte del Anexo A — sin ts)
                     if (s_axis_tvalid) begin
-                        if (DW == 32 && hrem == 2'd3) m_idx <= s_axis_tdata[31:0];
+                        if (DW == 32) m_idx <= s_axis_tdata[31:0];
                         if (hrem == 2'd1) st <= ST_BODY;
                         else hrem <= hrem - 1;
                     end

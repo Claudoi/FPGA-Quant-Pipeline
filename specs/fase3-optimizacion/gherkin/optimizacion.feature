@@ -13,8 +13,8 @@ Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
   Escenario: P32-01 — el parser a DW=32 emite el Anexo A de 32 bits bit a bit
     Dado el corpus sintético de la fase 1
     Cuando el parser de 32 bits procesa cada mensaje
-    Entonces las words de salida (w0 context, w1 idx, w2-3 ts, w4.. cuerpo)
-      coinciden bit a bit con el oráculo message_oracle
+    Entonces las words de salida (w0 context, w1 idx, w2.. cuerpo, sin ts —
+      layout recortado de fase3-uram) coinciden bit a bit con el oráculo message_oracle
 
   Escenario: P32-02 — el parser a DW=32 acepta el peor caso a 1 palabra/ciclo
     Dado un flujo de mensajes mínimos back-to-back

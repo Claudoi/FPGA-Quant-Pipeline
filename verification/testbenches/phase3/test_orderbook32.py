@@ -1,7 +1,8 @@
 """Testbench cocotb del order book a DW=32 (fase 3, criterio 2) — área phase3.
 
-Espejos B32-01/B32-02: el book parametrizado a DW=32 (layout Anexo A 32:
-w0={type,locate,len}, w1=idx, w2-3=ts, w4..=cuerpo) emite el BBO bit a bit
+Espejos B32-01/B32-02: el book parametrizado a DW=32 (layout Anexo A 32
+recortado: w0={type,locate,len}, w1=idx, w2..=cuerpo — sin ts) emite el BBO
+bit a bit
 contra el golden book.py, sobre corpus sintético y sobre el feed real del día
 local. Adversariales INV-B32: replace atómico, RAW add->execute y multi-símbolo
 a 32 bits (pincan errores de indexado de bytes del cuerpo a 4 B/palabra).
@@ -14,13 +15,12 @@ from test_orderbook import (A, C, E, X, D, U, S, H, run_book, iter_records,
 
 
 def anexo_words32(messages):
-    """Convierte mensajes a words del Anexo A de 32 bits (layout fase 3) flat."""
+    """Convierte mensajes a words del Anexo A de 32 bits (layout recortado,
+    campaña fase3-uram: w0 context, w1 idx, w2.. cuerpo — sin ts) flat."""
     words = []
     for mtype, locate, body, idx in iter_records(messages):
         words.append((ord(mtype) << 24) | (locate << 8) | (11 + len(body)))
         words.append(idx)
-        words.append(0)          # ts[31:0]
-        words.append(0)          # {ts[47:32], 16'b0}
         for i in range(0, len(body), 4):
             bite = body[i:i + 4]
             words.append(int.from_bytes(bite, "big") << (8 * (4 - len(bite))))

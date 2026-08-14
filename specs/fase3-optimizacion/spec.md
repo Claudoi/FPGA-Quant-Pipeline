@@ -22,7 +22,8 @@ para el silicio con timing cerrado a 10G».
   backpressure, truncado) y la variante 64-bit queda en regresión verde.
 - **Parametrización DW=32 del book** (`rtl/orderbook/orderbook.sv` ya tiene
   `parameter DW=64`): Anexo A de 32 bits (w0={type,locate,len}, w1=msg_idx,
-  w2=ts[31:0], w3={ts[47:32],16'b0}, w4..=cuerpo MSB-first), decodificador con
+  w2..=cuerpo MSB-first — **layout recortado por la campaña fase3-uram,
+  criterio 1: las words de ts se eliminaron**), decodificador con
   los mismos offsets de `golden_model/itch/messages.py`, criterios de fase 2
   bit a bit. Variante 64-bit en regresión verde.
 - **Cadena parser→book a DW=32** verificada end-to-end (feed real + vectores).
