@@ -49,7 +49,8 @@ def main():
     check("part objetivo de la spec", part == PART, f"{part}")
 
     sv = open(TOP_SV).read()
-    m = re.search(r"module\s+(\w+)\s*(?:#\s*\([^)]*\))?\s*\(", sv)
+    sv_nocom = re.sub(r"//.*", "", sv)
+    m = re.search(r"module\s+(\w+)\s*(?:#\s*\([^)]*\))?\s*\(", sv_nocom)
     check("top del tcl == módulo del RTL", m and m.group(1) == top,
           f"tcl:{top} rtl:{m and m.group(1)}")
 

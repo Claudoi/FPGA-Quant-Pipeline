@@ -10,11 +10,13 @@ file mkdir $outdir
 create_project -in_memory -part $part
 
 # RTL del pipeline: cadena parser(32) -> book(32). La variante 32-bit se
-# selecciona con el generic DW=32 (mismo RTL parametrizado de las fases 1-3).
+# selecciona con el generic DW=32 (mismo RTL parametrizado de las fases 1-3);
+# QB=46 pincha la config de latencia medida en la iteración 4 (SEC-URAM-04:
+# media 44,3 ciclos; 46 es el piso funcional — QB=32 DEADLOCKEA el peor caso).
 read_verilog -sv ../rtl/orderbook/orderbook.sv
 read_verilog -sv ../rtl/parser/itch_parser.sv
 read_verilog -sv ../rtl/itch_chain.sv
-set_property generic {DW=32 K=19} [current_fileset]
+set_property generic {DW=32 K=19 QB=46} [current_fileset]
 
 read_xdc constraints/fase3_322mhz.xdc
 
