@@ -268,7 +268,7 @@ async def test_m3frm03_peor_caso_a_1_palabra_por_ciclo_sin_backpressure(dut):
 
 @cocotb.test()
 async def test_m3sub01_sub02_subset_y_multi_entry_bit_a_bit(dut):
-    """Espejos M3-SUB-01/02: 46/47/52/53, signed PRICE9 y multi-entry."""
+    """Espejos M3-SUB-01 y M3-SUB-02: subset, PRICE9 y multi-entry."""
     schema = load_schema(SCHEMA_PATH)
     packet = encode_packet(schema, 41, 0x1122334455667788,
                            literal_subset(schema))
@@ -317,7 +317,7 @@ async def test_m3gap01_salto_y_reset_de_canal(dut):
 
 @cocotb.test()
 async def test_m3inv01_inv02_tamanos_invalidos_y_truncado_recuperan(dut):
-    """Espejos M3-INV-01/02: tamaño corto/desbordado y tlast truncado."""
+    """Espejos M3-INV-01 y M3-INV-02: tamaño inválido y tlast truncado."""
     schema = load_schema(SCHEMA_PATH)
     valid_msg = literal_template47(schema)
     too_short = encode_packet(schema, 61, 1, [b"\x09\x00\x00\x00"])

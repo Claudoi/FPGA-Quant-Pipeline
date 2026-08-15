@@ -1,7 +1,7 @@
 # DESARROLLO.md — setup y gates del proyecto FPGA
 
-> Guía operativa de desarrollo. Complementa a `AGENTS.md`; las skills
-> `spec`/`build`/`verify`/`grade` referencian los comandos de aquí.
+> Guía de instalación y problemas del entorno. `AGENTS.md` define el proceso;
+> cada `spec.md` y Makefile fija los comandos de su campaña.
 
 ## Stack objetivo
 
@@ -28,7 +28,7 @@ verilator --version
 python -c "import cocotb, numpy; print('cocotb', cocotb.__version__)"
 ```
 
-## Comandos (los que usan las skills verify/grade)
+## Comandos de referencia
 
 > Rellena los flags exactos según la convención del área. Los umbrales de
 > cobertura viven en `scripts/verify/thresholds.json` (si la campaña lo define).
@@ -37,7 +37,7 @@ python -c "import cocotb, numpy; print('cocotb', cocotb.__version__)"
 |---|---|
 | A. Simulación | `make -C verification/<area> sim` (o `cocotb-config` + verilator makefile) |
 | A. Simulación (fase 0, Python) | `python3 -m unittest discover -s golden_model/tests -t .` |
-| B. Compilación/lint | `verilator --lint-only -Wall -Wno-<trinquete> --top-module <módulo> rtl/<area>/<file>.sv` |
+| B. Compilación/lint | `verilator --lint-only --Wall --top-module <módulo> rtl/<area>/<file>.sv` |
 | C. Estilo | `verible-verilog-lint rtl/<area>/<file>.sv` |
 | D. Cobertura funcional | informe de cobertura Verilator/Questa + tabla spec↔test (gate D nivel 1) |
 | E. Mutación HDL | runner de mutación sobre `rtl/<área>` (flip de guard/comparador → test debe matarlo) |
@@ -46,10 +46,9 @@ python -c "import cocotb, numpy; print('cocotb', cocotb.__version__)"
 
 ## Gotchas
 
-- **opencode**, no Claude Code: las skills viven en `.opencode/skills/`; tras
-  editarlas, **reinicia opencode** para recargarlas (no se hot-recargan).
 - Los feeds reales de mercado jamás se commitean; los testbenches leen vectores
-  de `verification/vectors/` (regla G0 de `verify`).
+  de `verification/vectors/` o artefactos locales ignorados. Un replay omitido
+  por pcap ausente no cuenta como PASS de datos reales.
 - La optimización 32-bit @ 322 MHz (fase 3) es capítulo final, no punto de
   partida (decisión del documento maestro).
 - Verilator es estricto con `--Wall`; el trinquete de warnings del proyecto se
@@ -63,10 +62,12 @@ python -c "import cocotb, numpy; print('cocotb', cocotb.__version__)"
   (traza de señales internas con cocotb o inspección de constantes del C++
   generado por Verilator).
 - `verible-verilog-lint` (gate C) no está instalado en el entorno; instalable
-  en la próxima sesión para cerrar el único gate pendiente del ciclo.
+  en una sesión futura. Se declara NO EJECUTADO, nunca PASS.
+- `scripts/verify/synth_check.py` comprueba coherencia estática entre
+  RTL/Tcl/XDC; no sustituye una ejecución Vivado. Sin `vivado`, WNS, TNS y
+  utilización permanecen NO EJECUTADOS y fase 3 no está timing-closed.
 
 ## Verificación
 
-Cada campaña cierra con los gates de `verify` (evidencia pegada en
-`specs/<campaña>/verify-report.md`) y el veredicto adversarial de `grade`. Sin
-verify-report, `grade` da FAIL directo.
+Cada campaña conserva outputs reales y gates no ejecutados en
+`specs/<campaña>/verify-report.md`. Un gate sin output no está pasado.

@@ -1,92 +1,126 @@
 # Agent Notes — FPGA Quant Pipeline
 
-> Proyecto para diferenciar candidatura en low-latency trading infrastructure
-> (perfil FPGA). Pipeline de market data: parser Nasdaq TotalView-ITCH 5.0 a
-> line-rate 10G + order book en URAM sobre AMD/Xilinx UltraScale+. Documento
-> maestro con el alcance, las fases y los riesgos:
-> `Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`.
-> Aquí corre el **ciclo de Atenea** (spec → build → verify → grade) pero
-> re-mapeado de la app clínica a flujo HDL, y ejecutado con **opencode** (no
-> Claude Code).
+> Proyecto de portfolio para infraestructura FPGA de baja latencia. El alcance
+> implementado empieza en el payload MoldUDP64 ya decapsulado; **MAC 10G y
+> Ethernet/IP/UDP no están implementados en este repositorio**.
 
-## Contexto del proyecto (en una frase)
+## Arquitectura y límites honestos
 
-`10G MAC → decap IP/UDP → framing MoldUDP64 → parser ITCH → order book engine (URAM) → BBO`.
-El proyecto ganador es el **pipeline completo por fases**, no un parser suelto.
+`MoldUDP64 → parser ITCH → order book → BBO/top-N`
 
-## Estado actual (actualizado 2026-08-13)
+- El objetivo de la variante de fase 3 es DW=32 a 322,265625 MHz sobre
+  UltraScale+. La corrección funcional está verificada en simulación; el cierre
+  de timing exige un informe Vivado con WNS/TNS y utilización.
+- El book está dimensionado para el subset configurado de 20 símbolos, no para
+  un libro completo de todo Nasdaq.
+- Los replays con datos reales requieren artefactos locales no versionados. Un
+  test que no encuentre su pcap informa la omisión; no sustituye esa evidencia
+  por una pasada sintética.
 
-**Fase 0 (golden model) CERRADA con PASS** — ciclo completo en 3 iteraciones
-(spec → build → verify → grade), contrato en `specs/fase0-golden-model/`.
+El documento maestro, el alcance por fase y los riesgos viven en
+`Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`.
 
-- Golden model Python stdlib: parser ITCH 5.0 (22 tipos validados), order
-  book multi-símbolo, vectores BBO de 40 B (Anexo A de la spec), stats,
-  `fetch_itch.py`, `binaryfile_to_pcap.py`. 29/29 tests, 5/5 mutantes.
-- Evidencia día real 2019-12-30 (en `data/itch_sample/`, no commiteado):
-  268.744.780 mensajes en 17 min, 0 anomalías, 14,4M vectores sobre el
-  subset de 20 símbolos (`verification/vectors/subset_symbols.json`).
+## Estado actual — 2026-08-15
 
-**Fase 1 (parser RTL) CERRADA** — contrato en `specs/fase1-parser-rtl/`.
-19/19 tests, 10/10 mutantes; criterio 7 (frame truncado) cerrado en iteración 3.
-
-**Fase 2 (order book RTL) CERRADA con PASS** — contrato en
-`specs/fase2-orderbook/`. Ciclo completo en 3 iteraciones: mapeo
-locate→índice (iter 2) y REPLAY-01 con el feed real (iter 3). 14/14 tests,
-8/8 mutantes. Evidencia final: 31.400 mensajes de 20 símbolos → **30.729
-eventos BBO bit a bit vs golden** (anomaly 671, cross 0). Hallazgos de la
-iteración 3 resueltos: BUG-U del replace (U en 2 ciclos), truncado de
-order_ref (K=19), overflow de niveles (P=32), trading state por símbolo de 8
-bits. Hardening documentado para fase 3 (grade, lente 9): guard de NSYM
-contra OOB y handshake bbo_tready en ST_EMIT.
-- **Siguiente paso: fase 3 (optimización 322 MHz / URAM) — `/spec` primero.**
-
-## Ciclo de trabajo (loop verificado, portado a FPGA + opencode)
-
-- `/spec` → `/build` → `/verify` → `/grade`. Son **skills de opencode** en
-  `.opencode/skills/{spec,build,verify,grade}/SKILL.md`; se invocan por su
-  nombre o con `/skill`.
-- El owner **no lee el código**: lee el contrato (`specs/<campaña>/spec.md`),
-  el informe (`verify-report.md`) y el veredicto de grade.
-- Los gates A-G del ciclo están re-mapeados del mundo JS/Node al flujo HDL:
-  ver `verify` para el régimen. En resumen: cocotb/Verilator, lint/estilo HDL,
-  cobertura funcional, mutación HDL, completitud del parser, timing+recursos.
-
-## Layout del subproyecto
-
-| Directorio | Contenido |
+| Fase | Estado verificable |
 |---|---|
-| `golden_model/` | Modelo dorado en Python (ITCH parser + order book) y vectores de referencia (fase 0). |
-| `rtl/` | Fuente HDL: `parser/`, `orderbook/`, `common/` (fases 1-3). |
-| `verification/` | Testbenches cocotb (`testbenches/`), vectores (`vectors/`), scripts de replay. |
-| `scripts/` | Tooling de datos (`binaryfile_to_pcap.py`, fetch de `emi.nasdaq.com`, etc.). |
-| `data/itch_sample/` | Datos de muestra ITCH (nunca se commitean feeds crudos; `.gitignore`). |
-| `synth/` | Proyecto Vivado: constraints (`constraints/`), informes de timing/utilización (`reports/`). |
-| `specs/<campaña>/` | Contratos del ciclo: `spec.md` + `gherkin/*.feature` + `verify-report.md`. |
-| `docs/` | `DESARROLLO.md` (setup/gates/gotchas), `decisiones/`, `writeup/`. |
+| 0 — golden ITCH | Cerrada. Golden Python, 22 tipos validados y evidencia de día real. |
+| 1 — parser RTL | Cerrada funcionalmente: framing MoldUDP64, gaps, backpressure y oráculo bit a bit. |
+| 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
+| 3 — DW=32/URAM | RTL y pruebas URAM terminados; **no cerrada** hasta adjuntar Vivado (WNS/TNS y recursos). |
+| 4 — CME MDP3 | Parser cerrado funcionalmente en DW=32/64: golden schema-driven, subset 46/47/52/53, passthrough, gaps, robustez y mutación. Sin Vivado no se acredita timing. |
+
+No presentar fase 3 como timing cerrado ni fase 4 como timing-closed sin la
+evidencia correspondiente en su `verify-report.md`.
+
+## Fuentes de verdad
+
+| Necesidad | Ubicación autoritativa |
+|---|---|
+| Reglas globales, proceso y estado | Este archivo |
+| Contrato y criterios de una campaña | `specs/<campaña>/spec.md` y `gherkin/` |
+| Evidencia de una campaña | `specs/<campaña>/verify-report.md` |
+| Checks reproducibles | `verification/`, `scripts/verify/`, Makefiles y `synth/` |
+| Instalación y problemas del entorno | `docs/DESARROLLO.md` |
+
+Los informes históricos pueden mencionar el antiguo nombre de una etapa del
+proceso; son evidencia fechada, no instrucciones operativas.
+
+## Proceso obligatorio por campaña
+
+1. **Especificar.** Crear o actualizar `specs/<campaña>/spec.md` y sus
+   escenarios Gherkin antes de cambiar RTL o Python. Toda decisión que altere
+   un contrato se documenta allí.
+2. **Construir con rojo→verde.** Añadir primero el test que falla por el
+   comportamiento buscado; ejecutar el rojo; implementar el cambio mínimo;
+   ejecutar el verde. No modificar la spec para ocultar un fallo.
+3. **Verificar.** Ejecutar los gates aplicables A–G, pegar outputs reales en
+   `verify-report.md` y declarar de forma explícita cualquier gate no
+   ejecutado. Un gate sin output no está pasado.
+4. **Juzgar adversarialmente.** Reejecutar evidencia desde un ángulo que pueda
+   refutarla: vector límite, mutante, consumidor del puerto o informe de
+   timing. Un criterio solo cierra si todos sus gates aplicables pasan.
+
+No hay comandos mágicos ni flujos ocultos: este archivo define el proceso.
+
+## Gates A–G
+
+| Gate | Exigencia |
+|---|---|
+| A — simulación | Cocotb/Verilator o unittest del área; cualquier fallo bloquea. |
+| B — compilación | `verilator --lint-only --Wall` sobre RTL tocado; Python compilable. |
+| C — estilo | `verible-verilog-lint` si está instalado; si no, declararlo NO EJECUTADO. |
+| D — cobertura | Mapa literal spec↔test y, si existe herramienta, cobertura funcional. |
+| E — mutación | Cada mutante compila y al menos un test lo mata; un mutante roto no cuenta. |
+| F — completitud | `specs/gherkin-espejos.json` y títulos de tests coherentes con Gherkin. |
+| G — rigor/timing | Sin datos crudos en Git, golden independiente, y Vivado WNS/TNS/recursos cuando aplique. |
+
+### Comandos de referencia
+
+```bash
+# Golden Python
+python3 -m unittest discover -s golden_model/tests -t .
+
+# Áreas RTL
+make -C verification/testbenches/parser sim
+make -C verification/testbenches/orderbook sim
+make -C verification/testbenches/phase3 sim
+make -C verification/testbenches/uram sim-uram
+make -C verification/testbenches/mdp3 sim
+
+# Lint y síntesis estática de fase 3
+verilator --lint-only --Wall --top-module itch_chain \
+  rtl/itch_chain.sv rtl/parser/itch_parser.sv rtl/orderbook/orderbook.sv
+python3 scripts/verify/synth_check.py
+```
+
+Cada campaña fija sus comandos completos, umbrales y top en su spec o Makefile.
+No rebajar `--Wall`, omitir un mutante, ni convertir una omisión de datos en
+PASS para cerrar una campaña.
 
 ## Reglas globales
 
-- **Idioma:** español en docs y mensajes de commit; Conventional Commits.
-- **Hardware:** datos de mercado reales jamás commiteados (solo pequeñas
-  muestras sintéticas o vectores en `verification/vectors/`).
-- Cada fase del maestro se trabaja como una **campaña** con su spec en
-  `specs/<campaña>/`. El master doc fija el orden: golden model (0) → parser
-  (1) → order book (2) → optimización 322 MHz (3) → stretch CME MDP3 (4).
-- **No comprar placa:** simulaciones con datos reales + timing closure en
-  Vivado apuntando a un part US+ ya es un proyecto demostrable (decisión del
-  documento maestro).
+- Español en documentación y commits; Conventional Commits.
+- Datos de mercado reales jamás se versionan. Solo muestras sintéticas y
+  vectores pequeños en `verification/vectors/`.
+- El golden model es independiente del RTL: los tests comparan bit a bit contra
+  él; nunca generar un oráculo desde el RTL probado.
+- Antes de cambiar un puerto, señal, parámetro o layout, buscar todos sus
+  consumidores. El `QB` efectivo de fase 3 se fija en `itch_chain.sv` y en el
+  Makefile, no solo en defaults de submódulos.
+- No introducir FIFO, dependencia o abstracción para esconder falta de
+  throughput. Documentar el régimen real de backpressure y latencia.
+- El owner necesita poder entender el estado leyendo la spec, el verify-report
+  y este archivo, sin inspeccionar HDL.
 
-## Gotchas de este entorno
+## Layout
 
-- **opencode** (no Claude Code): las skills viven en `.opencode/skills/` y se
-  invocan por nombre. Tras editar una skill, **reiniciar opencode** para que la
-  recargue (no se hot-recargan).
-- Verilator + cocotb es el camio de verificación por defecto; Vivado/Questa si
-  la simulación lo exige. Consulta `docs/DESARROLLO.md` para comandos exactos.
-
-## Verificación
-
-Cada campaña cierra con los gates de `verify` (evidencia pegada en
-`specs/<campaña>/verify-report.md`) y el veredicto adversarial de `grade`.
-Sin verify-report, `grade` da FAIL directo. Consulta `docs/SEGURIDAD-Y-RIGOR.md`
-si se añade.
+| Directorio | Contenido |
+|---|---|
+| `golden_model/` | Parser/modelo de referencia ITCH y CME, vectores y tests Python. |
+| `rtl/` | Parseres y order book SystemVerilog. |
+| `verification/` | Testbenches cocotb, vectores y Makefiles. |
+| `scripts/verify/` | Mutación y validaciones reproducibles. |
+| `specs/` | Contratos Gherkin e informes de evidencia por campaña. |
+| `synth/` | Tcl/XDC e informes Vivado. |
+| `docs/` | Setup, decisiones y write-ups; no define proceso operativo. |

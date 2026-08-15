@@ -334,7 +334,7 @@ PYTHONDONTWRITEBYTECODE=1 "$VENV_BIN/python" -m unittest discover -s golden_mode
 
 Reejecutar después los comandos autoritativos de parser, orderbook, phase3 y URAM.
 
-- [ ] **Step 7: Informe y commit**
+- [x] **Step 7: Informe y commit**
 
 ```bash
 git add specs/fase4-mdp3-parser rtl/parser/mdp3_parser.sv \
@@ -351,15 +351,15 @@ git commit -m "feat(fase4-mdp3): cerrar framing y Anexo M contra golden fiable"
 - Consumes: todos los commits y outputs de Tasks 1-6.
 - Produces: estado maestro coherente y rama lista para integración.
 
-- [ ] **Step 1: Reejecutar gates completos desde builds limpios**
+- [x] **Step 1: Reejecutar gates completos desde builds limpios**
 
 Limpiar únicamente `sim_build*` de cada área mediante sus Makefiles y ejecutar todos los comandos de `AGENTS.md` más shards de fase 3/MDP3.
 
-- [ ] **Step 2: Reconciliar spec↔Gherkin↔tests**
+- [x] **Step 2: Reconciliar spec↔Gherkin↔tests**
 
 Extraer todos los IDs de escenarios y comprobar que cada uno tiene test o estado pendiente explícito; ningún `return` por pcap ausente puede contar como evidencia real.
 
-- [ ] **Step 3: Revisar datos y diff**
+- [x] **Step 3: Revisar datos y diff**
 
 ```bash
 git status --short --ignored
@@ -367,7 +367,7 @@ git diff --check a765d9a..HEAD
 git ls-files | rg '\.(pcap|NASDAQ_ITCH50\.gz)$' && exit 1 || true
 ```
 
-- [ ] **Step 4: Commit documental final si es necesario**
+- [x] **Step 4: Commit documental final si es necesario**
 
 ```bash
 git add AGENTS.md README.md docs/DESARROLLO.md

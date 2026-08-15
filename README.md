@@ -6,19 +6,22 @@ en URAM con salida BBO. Proyecto por fases del documento maestro
 (`Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`),
 orientado a perfil FPGA / low-latency trading infrastructure.
 
+El repositorio empieza en el payload MoldUDP64 ya decapsulado. No implementa
+MAC 10G ni Ethernet/IP/UDP.
+
 ```
-10G MAC → decap IP/UDP → framing MoldUDP64 → parser ITCH → order book (URAM) → BBO
+MoldUDP64 → parser ITCH → order book (URAM) → BBO/top-N
 ```
 
 ## Estado del proyecto
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| **0** | Golden model Python (parser ITCH + order book + vectores de referencia + tooling de datos) | **Cerrada — PASS** (3 iteraciones del ciclo) |
-| 1 | Parser RTL a line rate (64-bit @ 156,25 MHz), verificación cocotb contra el golden | Siguiente |
-| 2 | Order book engine en URAM (hash por order ref, niveles, BBO) | Pendiente |
-| 3 | Optimización 32-bit @ 322,265625 MHz + cierre de timing | Pendiente |
-| 4 | Stretch: port CME MDP3/SBE, interfaz host, write-up | Pendiente |
+| **0** | Golden model Python (parser ITCH + order book + vectores y tooling) | **Cerrada**; 22 tipos y replay de día real |
+| **1** | Parser RTL MoldUDP64/ITCH contra golden | **Cerrada funcionalmente**; 20/20 tests, 12/12 mutantes |
+| **2** | Order book RTL del subset de 20 símbolos | **Cerrada funcionalmente**; 14/14 tests y replay real |
+| **3** | Variante DW=32, top-N y arquitectura URAM | **Abierta en timing**; RTL/simulación cerrados, falta Vivado WNS/TNS/recursos |
+| **4** | Parser CME MDP3/SBE | **Cerrada funcionalmente** en DW=32/64; timing no acreditado |
 
 ### Evidencia de la fase 0 (día Nasdaq 2019-12-30, 3,5 GB reales)
 
@@ -37,7 +40,7 @@ orientado a perfil FPGA / low-latency trading infrastructure.
 |---|---|
 | `golden_model/` | Parser ITCH (`itch/`), order book (`src/book.py`), vectores (`src/vectors.py`), stats, CLIs (`scripts/`), tests espejo (`tests/`) |
 | `scripts/` | `fetch_itch.py` (descarga + md5, fail closed), `binaryfile_to_pcap.py` (BinaryFILE → pcap MoldUDP64/UDP/IP/Eth) |
-| `rtl/` | (fases 1-3) `parser/`, `orderbook/`, `common/` |
+| `rtl/` | Parseres ITCH/MDP3, `orderbook/`, cadena y módulos comunes |
 | `verification/` | (fases 1+) testbenches cocotb; `vectors/` con muestras pequeñas y `subset_symbols.json` |
 | `specs/` | Contratos del ciclo por campaña: `spec.md` + `gherkin/` + `verify-report.md` |
 | `synth/` | (fase 3) constraints e informes Vivado |
@@ -47,7 +50,7 @@ orientado a perfil FPGA / low-latency trading infrastructure.
 ## Uso
 
 ```bash
-# tests del golden model (29 espejos del Gherkin)
+# regresión Python completa (ITCH + CME)
 python3 -m unittest discover -s golden_model/tests -t .
 
 # descargar un día de muestra de emi.nasdaq.com (verificación md5; fail closed)
@@ -66,11 +69,9 @@ Requisitos: Python 3.10+ stdlib pura (fase 0). Fases RTL: Verilator + cocotb
 
 ## Ciclo de trabajo
 
-Cada campaña sigue el loop **spec → build → verify → grade** (skills en
-`.opencode/skills/`): spec escribe el contrato testeable, build implementa
-con TDD estricto (rojo evidenciado), verify ejecuta los gates A-G re-mapeados
-a HDL, grade juzga adversarialmente. El criterio de cierre está en
-`AGENTS.md` y `docs/DESARROLLO.md`.
+Cada campaña sigue el loop **spec → rojo/verde → verify → juicio
+adversarial**. Los gates A-G, el estado y el criterio de cierre están en
+`AGENTS.md`; cada contrato y su evidencia viven en `specs/<campaña>/`.
 
 ## Reglas
 
