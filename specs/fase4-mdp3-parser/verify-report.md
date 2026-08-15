@@ -181,4 +181,26 @@ mdp3 a **DW=64** (nuevo `make sim-dw64`, `-GDW=64`) → framing 2/3 y robustez
 7/7. `M3-FRM-03` sigue en FAIL a ambos DW por la misma limitación inherente
 del Anexo M documentada en el iter 3.
 
+## Gate E — mutación `scripts/verify/mutate_mdp3.py` (criterio 9)
+
+Runner `mutate_mdp3.py` (mismo esquema que `mutate_parser.py`/`mutate_orderbook.py`):
+aplica un flip a `mdp3_parser.sv`, corre **framing + robustez**, y mata el
+mutante si alguna de las dos suites falla; restaura el RTL y limpia `sim_build`
+tras cada mutante (evita falsos verdes por timestamp). 6 mutantes (tipos de la
+lista de la spec): seq sin comparar, exponente sin gatear, ReferenceID
+off-by-one, numInGroup del 52, base del body del 46, y passthrough sin cuerpo.
+
+**Evidencia (gate E):**
+```
+[MATADO] SEQ-GAP: FAIL=1   (func != a ==)
+[MATADO] EXP-UNCOND: FAIL=3   (exponente MBOFD 46 sin gatear)
+[MATADO] REF-INDEX-OOB: FAIL=1 (ReferenceID off-by-one)
+[MATADO] NUMGROUP-52: FAIL=3   (numInGroup del 52)
+[MATADO] BODY-BASE-46: FAIL=3  (base del body del 46)
+[MATADO] PASS-NOBODY: FAIL=3   (passthrough sin cuerpo)
+=== RESUMEN MUTACION === 6/6 killed → Gate E PASS
+```
+RTL restaurado tras la campaña (`git diff rtl/` vacío) y suite verde de nuevo.
+
+
 
