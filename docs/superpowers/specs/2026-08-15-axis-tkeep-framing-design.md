@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-08-15
 
-**Estado:** revisión adversarial corregida; aprobación final pendiente
+**Estado:** aprobado por el owner; implementación planificada
 
 **Campañas afectadas:** fase 1 ITCH, integración de fase 3 y fase 4 MDP3
 
