@@ -44,6 +44,13 @@ def _encode_value(schema: Schema, type_name: str, value, raw: bytearray):
         _encode_primitive(schema, schema.types[type_name].primitive, value, raw)
 
 
+def _put_value(schema: Schema, type_name: str, value,
+               target: bytearray, offset: int):
+    encoded = bytearray()
+    _encode_value(schema, type_name, value, encoded)
+    target[offset:offset + len(encoded)] = encoded
+
+
 def _encode_primitive(schema: Schema, primitive: str, value, raw: bytearray):
     size = PRIMITIVE_SIZES[primitive]
     if primitive == "char":
@@ -103,7 +110,7 @@ def encode_message(schema: Schema, template_id: int, values: dict,
     def put_field(f: FieldDef, v):
         if v is None:
             return
-        _encode_value(schema, f.type, v, root[f.offset:])
+        _put_value(schema, f.type, v, root, f.offset)
 
     for f in msg.fields:
         if f.since_version <= act_version:
@@ -126,7 +133,7 @@ def encode_message(schema: Schema, template_id: int, values: dict,
                 if gf.since_version > act_version:
                     continue
                 key = gf.name if gf.name in entry else str(gf.id)
-                _encode_value(schema, gf.type, entry.get(key), e[gf.offset:])
+                _put_value(schema, gf.type, entry.get(key), e, gf.offset)
             body += bytes(e)
 
     msg_size = MESSAGE_PREFIX_SIZE + len(body)

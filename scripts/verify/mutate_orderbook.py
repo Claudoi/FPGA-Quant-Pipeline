@@ -48,6 +48,9 @@ MUTANTS = [
     ("RED-REF", "reduce sobre ref desconocida no cuenta anomalía",
      "if (!pr_found) begin\n                        anomaly_count <= anomaly_count + 1;\n                    end else begin",
      "if (1'b0) begin\n                        anomaly_count <= anomaly_count + 1;\n                    end else begin"),
+    ("QTY-NOERROR", "reduce por encima de la cantidad no señala error",
+     "if (rest[33]) error <= 1'b1;   // execute > restante",
+     "if (rest[33]) error <= 1'b0;   // execute > restante"),
     ("EMIT-NOCHANGED", "changed siempre 0 (rompe el flag de cambio)",
      "changed = (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||\n                      (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);",
      "changed = 1'b0;"),
@@ -129,16 +132,22 @@ def run_suites():
     env["PATH"] = os.path.join(REPO, ".venv", "bin") + os.pathsep + env.get("PATH", "")
     env["PYTHONPATH"] = os.pathsep.join([REPO, os.path.join(REPO, "golden_model")]) + \
         os.pathsep + env.get("PYTHONPATH", "")
-    fails = 0
+    structural = subprocess.run(
+        [sys.executable, "scripts/verify/synth_check.py"], cwd=REPO, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if structural.returncode != 0:
+        return 1
     for area, cmd in SUITES:
         r = subprocess.run(cmd, cwd=os.path.join(REPO, area), env=env,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         m = re.search(r"TESTS=\d+ PASS=\d+ FAIL=(\d+)", r.stdout)
         if m:
-            fails += int(m.group(1))
+            fails = int(m.group(1))
+            if fails:
+                return fails
         elif r.returncode != 0:
-            fails += 999
-    return fails
+            return 999
+    return 0
 
 
 def lints():
@@ -149,8 +158,6 @@ def lints():
     r = subprocess.run(
         ["verilator", "--lint-only", "-Wall",
          "-Wno-WIDTHEXPAND", "-Wno-CASEOVERLAP", "-Wno-CASEINCOMPLETE",
-         "-Wno-UNSIGNED",   # trinquete del área: nx_bi >= 4'd0 (818) — siempre
-                            # cierto a DW=32, rama DW=64 del armado (will_arm_old)
          "-Wno-UNUSEDSIGNAL", "-Wno-UNUSEDPARAM",  # el mutante suele dejar
                             # señales sin usar (colateral esperado del flip)
          "--top-module", "orderbook", "rtl/orderbook/orderbook.sv"],
@@ -186,13 +193,16 @@ def main():
                 continue
             with open(BACKUP, "w") as f:
                 f.write(raw)
-            apply_safe(mutant, raw)
-            if not lints():
-                fails = -1   # archivo roto: ni kill ni survive — error de mutación
-            else:
-                fails = run_suites()
-            shutil.move(BACKUP, RTL)
-            clean()
+            try:
+                apply_safe(mutant, raw)
+                if not lints():
+                    fails = -1   # archivo roto: ni kill ni survive — error de mutación
+                else:
+                    fails = run_suites()
+            finally:
+                if os.path.exists(BACKUP):
+                    shutil.move(BACKUP, RTL)
+                clean()
             killed = fails > 0
             if fails == -1:
                 print(f"[ERROR] {mid}: el mutante no compila (lint) — NO cuenta como kill")
@@ -202,7 +212,7 @@ def main():
     finally:
         clean()
     survivors = [r for r in results if not r[1]]
-    print("\n=== RESUMEN MUTACION ORDERBOOK (gate E, fase3-uram iter 5) ===")
+    print("\n=== RESUMEN MUTACION ORDERBOOK (gate E, fase3-uram iter 6) ===")
     for mid, killed, fails in results:
         print(f"  {mid}: {'killed' if killed else 'SOBREVIVE!'}")
     if survivors:

@@ -29,7 +29,7 @@ protocolo del mayor mercado de futuros del mundo»*.
   datos de mercado, pero se mantienen fuera del repo igualmente). Schema
   pinned: `templates_FixBinary_v12.xml` (2021-03-10, id=1 version=12,
   byteOrder=littleEndian), md5 en el propio script.
-- **RTL `rtl/parser/mdp3_parser.sv`** (nuevo, no toca `itch_parser.sv`):
+- **RTL `rtl/parser/mdp3_parser.sv`** (módulo propio):
   decodifica el paquete (MsgSeqNum u32 + SendingTime u64, 12 B), el framing
   por mensaje (MessageSize u16 + cabecera SBE 8 B: blockLength/templateId/
   schemaId/version) y el subset de templates; emite Anexo M por AXI-Stream.
@@ -53,10 +53,11 @@ protocolo del mayor mercado de futuros del mundo»*.
   (REPLAY-03 opcional, no bloqueante).
 - iLink 3 (SBE de órdenes de cliente): solo market data.
 
-**Radio medido (2026-08-14):** el RTL nuevo (`mdp3_parser.sv`) no consume
-nada existente: se añade junto a `itch_parser.sv` (que no se toca). Solo
-cambia `specs/gherkin-espejos.json` (área nueva). Los nombres de fichero y
-área siguen la convención de fases 1-3.
+**Radio histórico de la construcción original (2026-08-14):**
+`mdp3_parser.sv` se añadió sin conectar ni modificar la cadena ITCH. La campaña
+de framing reabierta en 2026-08-15 amplía el radio a `itch_parser`,
+`itch_chain`, sus testbenches de entrada, el XDC y `synth_check.py`; el
+`orderbook` y el enlace normalizado parser→book permanecen sin cambios.
 
 **Changelog 2026-08-14 (edit de build con evidencia):** el schema oficial
 `templates_FixBinary_v12.xml` (archivado de cmegroup.com vía Wayback, md5
@@ -66,29 +67,24 @@ pre-event 27/30/32), **msg_size incluye el prefijo de 10 B** (evidencia
 roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
 `groupSize8Byte` 8 B). El Anexo M gana el record MBOFD (18 words) con
 `record_type` en w7[23] y la tabla de derivación por template. Los criterios
-1-9 y el gherkin no cambian de contenido (M3-SUB-01/02 ya eran genéricos).
+1-9 y el Gherkin no cambiaron en aquella iteración. Las reaperturas posteriores
+se reflejan en el Definition of Done vigente de este documento.
 
 ## Constraints
 
 - **Familia/part objetivo:** UltraScale+ (misma familia que fases 1-3);
   frecuencia 322,265625 MHz (DW=32) y 156,25 MHz (DW=64) — mismo régimen.
-- **Line-rate:** el datapath acepta **1 palabra/ciclo en el peor caso**
-  (mensajes mínimos back-to-back) sin backpressure sostenida — igual régimen
-  que fase 1 (el framing por `msg_size` hace el peor caso dependiente del
-  tamaño mínimo de mensaje del subset, del schema). **Perímetro del
-  line-rate:** se mide sobre los templates cuyo **Anexo M no expande**
-  (salida ≤ entrada): **MBP** (46-MBP y 52) con pocas entries. Los templates
-  **MBOFD** (47, 53, MBOFD-46) **expanden el Anexo M** (un record MBOFD de 72 B
-  por ~54 B de entrada, ratio 1.3-1.4 aunque sea 1 entry): el datapath les
-  aplica **backpressure real y acotada** (la entrada se para mientras la FIFO
-  de salida absorbe la expansión). Esa backpressure es una **limitación
-  inherente del Anexo M** (no se oculta con FIFOs: regla global), se documenta
-  y **no se mide como fallo de line-rate**.
+- **Régimen de entrada:** el datapath presenta una palabra por ciclo y solo
+  cuenta backpressure cuando `s_axis_tvalid && !s_axis_tready`. El vector
+  pactado M3-FRM-03 son 24 mensajes literales del template 47, cada uno con
+  una entry (64 B derivados del XML); la racha máxima admitida es 16 ciclos.
+  No se promete un feed infinito sin stalls: un record Anexo M MBOFD expande
+  64 B de mensaje a 72 B de salida.
 - **Schema = fuente única:** los offsets, blockLength, tipos compuestos y
-  valores de enumeraciones del subset se derivan del schema XML
-  (`templates_FixBinary.xml`, ftp.cmegroup.com) en el golden. **Ningún
-  literal de offset/tag a mano en RTL ni en testbench** (regla de
-  `messages.py` de las fases 0-3; violación = FAIL de la lente 6).
+  valores de enumeraciones se derivan del schema XML en el golden. El RTL
+  especializado puede materializarlos como `localparam` solo si el checker los
+  contrasta automáticamente con el XML pinned; los tests no mantienen una
+  segunda tabla manual de offsets.
 - **SBE:** little-endian (byteOrder del XML oficial de CME; confirmado por la
   implementación de referencia roq-cme, `little_endian_to_host`); cabecera de
   mensaje 8 B; grupos con dimensión de dos formas — `groupSize` = blockLength
@@ -98,6 +94,13 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
   golden los respeta tal cual).
 - **Determinismo:** mismo stream → misma secuencia de Anexo M, bit a bit;
   sin pérdida ni doble cuenta, con y sin backpressure de salida.
+- **Bytes válidos AXI:** la entrada incluye `s_axis_tkeep[DW/8-1:0]` con la
+  asociación estándar bit↔lane y máscaras restringidas a palabra completa o
+  prefijo MSB contiguo. Los lanes con `tkeep=0` no cuentan para `msg_size`.
+  Máscaras con huecos, cero o parciales sin `tlast` pulsan `error` y descartan
+  el paquete, drenándolo hasta `tlast` si el beat inválido no era final.
+  Contrato completo:
+  `docs/superpowers/specs/2026-08-15-axis-tkeep-framing-design.md`.
 - **Framing confirmado:** paquete = MsgSeqNum(u32) + SendingTime(u64, ns
   desde epoch) = 12 B; cada mensaje = **MessageSize(u16) que INCLUYE los
   10 B de prefijo** (MessageSize + cabecera SBE de 8 B: blockLength/
@@ -112,8 +115,8 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
 | Señal | Ancho | Descripción |
 |---|---|---|
 | `clk`, `rst_n` | 1 | reloj del datapath |
-| `s_axis_tdata/tvalid/tready/tlast` | DW/1/1/1 | payload UDP decapado (entrada) |
-| `m_axis_tdata/tvalid/tready/tlast` | DW/1/1/1 | Anexo M (salida) |
+| `s_axis_tdata/tkeep/tvalid/tready/tlast` | DW/(DW/8)/1/1/1 | payload UDP decapado; `tkeep` marca bytes válidos del beat |
+| `m_axis_tdata/tvalid/tready/tlast` | 32/1/1/1 | words de 32 bits del Anexo M; DW solo parametriza la entrada |
 | `gap_detected` | 1 | pulso: MsgSeqNum != exp_seq (por canal) |
 | `error` | 1 | pulso: mensaje/paquete incoherente (msg_size < 10, desborde de paquete) |
 
@@ -203,11 +206,17 @@ golden y el RTL la aplican, y el bit a bit la verifica):
 
 **Casos de abuso del dominio** (cada uno con escenario `SEC-`/`INV-`):
 
-- **Mensaje mínimo back-to-back** (paquete lleno de mensajes mínimos **MBP**)
-  → peor caso line-rate a 1 palabra/ciclo. — M3-FRM-03.
-- **Mensaje que cruza límites de palabra y de paquete** (payload UDP
-  termina en medio de un mensaje SBE) → alineación y reanudación correctas,
-  sin pérdida. — M3-FRM-02, M3-INV-02.
+- **Mensaje mínimo back-to-back** (paquete lleno de mensajes mínimos) →
+  peor caso line-rate. — M3-FRM-03.
+- **Mensaje que cruza límites de palabra** → alineación correcta. Si cruza
+  `tlast`, el datagrama está truncado: se cancela el mensaje incompleto, nunca
+  se reanuda con bytes del paquete siguiente. — M3-FRM-02, M3-INV-02.
+- **Truncado sub-word**: faltan entre 1 y `DW/8-1` bytes antes de `tlast`; los
+  lanes inválidos no pueden completar `msg_size`. — M3-INV-02.
+- **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
+  `error`, descarte y recuperación. — M3-INV-04.
+- **Cierre exacto de paquete**: 12 bytes sin mensajes son válidos; un byte
+  residual que no complete `msg_size` es truncado y no bloquea. — M3-FRM-04.
 - **Gap de secuencia** (MsgSeqNum salta) → `gap_detected` sin abortar;
   canal nuevo (seq reiniciado) → reset del esperado. — M3-GAP-01.
 - **`msg_size` incoherente** (menor que la cabecera SBE o desborda el
@@ -224,60 +233,80 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 
 ## Reuso
 
-- `rtl/parser/itch_parser.sv` — **no se toca**; `mdp3_parser.sv` comparte la
-  convención AXI-Stream y de cola (QB) pero es módulo nuevo.
+- `rtl/parser/itch_parser.sv` e `rtl/itch_chain.sv` — reciben y propagan
+  `s_axis_tkeep` por la campaña de framing común; no cambia su salida
+  normalizada ni el enlace al order book.
 - `golden_model/itch/messages.py` — patrón de «fuente única de offsets»;
   el equivalente MDP3 es el schema XML (nada a mano).
 - Testbenches fases 1-3: helpers de driver AXI-Stream (`_reset`, conducción
-  de words, muestreo de pulsos) — **se importan**, no se copian (regla de
-  partición del README de testbenches).
+  de words, muestreo de pulsos). El constructor `payload→beats` se comparte
+  entre las áreas ITCH; MDP3 puede conservar un helper local, pero debe aplicar
+  y monitorizar literalmente el mismo contrato `data/keep/last`.
 - `scripts/fetch_itch.py` — patrón fail-closed con md5 para
   `fetch_mdp3_schema.py`.
-- Código nuevo que duplique la semántica del schema con literales (offsets,
-  tags, valores de enum a mano en RTL/Python) = FAIL de la lente 6 de
-  `/grade`.
+- Los `localparam` estructurales especializados del RTL deben coincidir con el
+  schema pinned mediante checker; una tabla manual adicional en tests o golden
+  es FAIL de la lente 6 de `/grade`.
 
 ## Criterios de aceptación (Definition of Done)
 
 1. [ ] **Golden MDP3**: loader del schema XML + decoder bit a bit + generator
      sintético con round-trip `decode(encode(m)) == m` para el subset y
-     passthrough; tests Python espejo.
-     — Gherkin: `mdp3.feature` §M3-GEN-01, §M3-GEN-02
+     passthrough; tests Python espejo. El round-trip debe partir de vectores
+     conocidos con valores no cero y demostrar campo a campo que se preservan
+     root, composites —incluido `PRICE9.mantissa`— y grupos multi-entry; la
+     igualdad de bytes tras re-encodear el propio decode no basta como oráculo.
+     El loader conserva también `schemaId=1` y `version=12`, y el encoder los
+     usa por defecto desde el XML pinned.
+     — Gherkin: `mdp3.feature` §M3-GEN-01, §M3-GEN-02, §M3-GEN-03
 2. [ ] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
      secuencia de Anexo M bit a bit vs golden; mensajes que cruzan límites
-     de palabra. — §M3-FRM-01, §M3-FRM-02
-3. [x] **Line-rate** (MBP): mensajes mínimos **MBP** back-to-back aceptados a
-     1 palabra/ciclo sin backpressure sostenida. — §M3-FRM-03.
-     MBOFD: expansión del Anexo M => backpressure inherente documentada (ver
-     constraint Line-rate), no se mide como fallo.
-4. [ ] **Subset decodificado**: records de libro (27/30/32) bit a bit vs
+     de palabra; un burst AXI independiente por payload con `tkeep` correcto.
+     Un paquete de solo header es vacío válido y cualquier residual incompleto
+     antes de `tlast` se rechaza sin bloqueo. — §M3-FRM-01/02/04
+3. [ ] **Régimen de entrada**: 24 mensajes literales template 47, de una
+     entry y 64 B cada uno, se presentan a 1 palabra/ciclo; stalls reales
+     (`tvalid && !tready`) con racha máxima <= 16. Durante cada stall,
+     `(s_axis_tdata,s_axis_tkeep,s_axis_tlast)` permanece estable hasta el
+     handshake. — §M3-FRM-03, §M3-BP-02
+4. [x] **Subset decodificado**: records de libro (46/47/52/53) bit a bit vs
      golden, incluido el precio compuesto (mantissa+exponente) y grupos
      multi-entry. — §M3-SUB-01, §M3-SUB-02
-5. [ ] **Passthrough**: templates no-subset → w0/w1 + cuerpo crudo bit a bit,
-     sin abortar en schemaId/version desconocidos. — §M3-PASS-01
-6. [ ] **Gaps de secuencia**: `gap_detected` en saltos; reset al cambiar de
+5. [ ] **Passthrough**: templates no-subset → w0/w1 + cuerpo crudo bit a bit;
+     un template 46/47/52/53 con schemaId/version no soportados también es
+     passthrough, no decode especializado. El máximo soportado en esta
+     implementación es `msg_size <= 256` bytes, inclusive; 257 o más pulsa
+     `error`, no emite record parcial, drena el paquete y permite recuperar en
+     el siguiente. — §M3-PASS-01, §M3-PASS-02
+6. [x] **Gaps de secuencia**: `gap_detected` en saltos; reset al cambiar de
      canal (secuencia reiniciada). — §M3-GAP-01
 7. [ ] **Robustez**: `msg_size` incoherente y grupos mal formados → `error`
      señalizado, sin cuelgue ni corrupción silenciosa; `tlast` de entrada
-     truncado (paquete cortado) manejado. — §M3-INV-01/02/03
-8. [ ] **Regresión**: fases 1-3 verdes sin tocar (el RTL nuevo no se conecta
-     a nada existente); DW=64 del mdp3_parser en regresión. — §M3-REG-01
+     truncado (incluidos 1..`DW/8-1` bytes ausentes) y máscaras `tkeep`
+     inválidas manejados. — §M3-INV-01/02/03/04
+8. [ ] **Regresión**: fases 1-3 verdes tras propagar `tkeep` por la entrada de
+     `itch_chain`; DW=64 del mdp3_parser en regresión. — §M3-REG-01
 9. [ ] Lint `--Wall` limpio sobre `mdp3_parser.sv` (+ verible si se
-     instala); espejos Gherkin 1:1. — Gates B/C/F.
+     instala); checker XML↔localparams para IDs, offsets y blockLength del
+     subset; espejos Gherkin 1:1. — §M3-SCH-01, gates B/C/F.
+10. [ ] **Backpressure de salida**: con `m_axis_tvalid && !m_axis_tready`,
+     `m_axis_tdata`, `m_axis_tvalid` y `m_axis_tlast` permanecen estables; al
+     liberar no hay pérdida ni duplicación. — §M3-BP-01
 
 ## Verificación
 
 | Criterio | Cómo se prueba |
 |---|---|
-| 1 | `python3 -m unittest` (área del golden MDP3, espejos) + round-trip |
-| 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido |
-| 3 | cocotb: paquete de mensajes mínimos **MBP** back-to-back (46 con 1 entry MBP); medir palabra/ciclo sin `tready=0` sostenido (umbral `max_stall` de la spec/campaña). MBOFD: se documenta su backpressure inherente, no se mide aquí |
-| 4 | cocotb: records de 27/30/32 vs golden; precio compuesto y multi-entry |
-| 5 | cocotb: corpus de templates no-subset (d/f/otras X) crudo bit a bit |
+| 1 | `python3 -m unittest` (área del golden MDP3, espejos) + round-trip + schemaId/version literales desde XML |
+| 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido, header-only/residual y un burst por paquete |
+| 3 | cocotb: 24 mensajes literales template 47 de 64 B; medir `tvalid && !tready`, racha <= 16 y tupla de entrada estable en DW=32/64 |
+| 4 | cocotb: records de 46/47/52/53 vs golden; precio compuesto y multi-entry |
+| 5 | cocotb: templates no-subset; 46/47/52/53 con schema/version incompatible; passthrough de 256 B y rechazo+recuperación de 257 B |
 | 6 | cocotb: secuencia con salto y reinicio de canal → pulsos de gap correctos |
-| 7 | cocotb: `msg_size` inválido (0, 1..9, > paquete), numInGroup 0, paquete truncado por `tlast` |
-| 8 | `make sim` en `testbenches/{parser,orderbook,phase3}` sin cambios |
-| 9 | `verilator --lint-only -Wall` + `specs/gherkin-espejos.json` |
+| 7 | cocotb: `msg_size` inválido, numInGroup 0, truncados por 1..`DW/8-1` bytes y `tkeep` inválido con recuperación |
+| 8 | `make sim` en `testbenches/{parser,orderbook,phase3}` con el contrato `tkeep` propagado |
+| 9 | `verilator --lint-only -Wall` + checker schema v12↔RTL + `specs/gherkin-espejos.json` |
+| 10 | cocotb: stall de salida adaptativo, tupla de salida estable y secuencia completa al liberar |
 
 Régimen completo: skill `verify` (gates A-G). Gate E: runner de mutación
 nuevo `scripts/verify/mutate_mdp3.py` (flips: template lookup off-by-one,
@@ -294,7 +323,7 @@ verde:
    cuerpo?): **resuelto por evidencia** — roq-cme `parser.cpp`:
    `length = message_size.length - (2 + MessageHeader::encodedLength())`
    ⇒ msg_size incluye los 10 B de prefijo. El M3-GEN-01 lo pincha con el
-   round-trip contra el corpus.
+   round-trip semántico de vectores conocidos y el tamaño literal esperado.
 2. **Alineación root a 8 B**: el RTL consume `msg_size` y no re-deriva la
    alineación (no le importa); el golden la aplica al generar (los blockLength
    de los templates de libro vienen del XML: 11/11/59/28). Si el golden la
@@ -314,8 +343,10 @@ verde:
 
 ## Loop
 
-Stop limit: **4 iteraciones**. Cadencia sugerida: iter 1 (golden MDP3:
+**Histórico:** la construcción inicial tuvo stop limit de 4 iteraciones:
+iter 1 (golden MDP3:
 loader+decoder+generator, espejos Python) → iter 2 (RTL framing + Anexo M
 bit a bit, line-rate) → iter 3 (subset + passthrough + gaps + robustez +
-regresión) → iter 4 (mutación, gates, grade). Al agotar el límite con
-criterios en FAIL, escala al owner.
+regresión) → iter 4 (mutación, gates, grade). Los criterios reabiertos se
+resuelven ahora en loops independientes de framing, schema/passthrough,
+backpressure y síntesis; ningún output histórico los cierra por arrastre.

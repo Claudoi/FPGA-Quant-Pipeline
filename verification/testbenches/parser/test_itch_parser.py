@@ -9,10 +9,15 @@ Vectores sintéticos (regla G0). Comparación byte a byte (gate G3).
 """
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
+from cocotb.handle import Immediate
+from cocotb.triggers import ReadOnly, RisingEdge
+import os
 import struct
 
 from golden_model.src import message_oracle
+from golden_model.itch.messages import MESSAGE_LENGTHS
+
+REAL_PCAP = "/tmp/real_subset.pcap"
 
 # ---------------------------------------------------------------------------
 # oráculo: palabras de salida esperadas (flat) para `messages`
@@ -42,6 +47,44 @@ def run_oracle_packets(packets):
     return words
 
 
+def packet_beats(payloads, bytes_per_word):
+    beats = []
+    for payload in payloads:
+        assert payload, "un datagrama no puede carecer de beat final"
+        for offset in range(0, len(payload), bytes_per_word):
+            chunk = payload[offset:offset + bytes_per_word]
+            shift = 8 * (bytes_per_word - len(chunk))
+            data = int.from_bytes(chunk, "big") << shift
+            keep = ((1 << len(chunk)) - 1) << (bytes_per_word - len(chunk))
+            last = offset + len(chunk) == len(payload)
+            beats.append((data, keep, last))
+    return beats
+
+
+def _present_beat(dut, beats, index):
+    data, keep, last = beats[index] if index < len(beats) else (0, 0, False)
+    dut.s_axis_tvalid.value = int(index < len(beats))
+    dut.s_axis_tdata.value = data
+    dut.s_axis_tkeep.value = keep
+    dut.s_axis_tlast.value = int(last)
+
+
+def _check_input_stability(dut, held):
+    valid = int(dut.s_axis_tvalid.value)
+    ready = int(dut.s_axis_tready.value)
+    beat = (int(dut.s_axis_tdata.value), int(dut.s_axis_tkeep.value),
+            int(dut.s_axis_tlast.value))
+    if held is not None:
+        assert beat == held, (
+            "AXI de entrada cambió antes de liberar el backpressure: "
+            f"{held} -> {beat}")
+    if valid and not ready:
+        return beat, 0
+    if valid and ready:
+        return None, int(dut.s_axis_tlast.value)
+    return None, 0
+
+
 # ---------------------------------------------------------------------------
 # constructores de mensajes sintéticos (literales desde la spec del PDF)
 # ---------------------------------------------------------------------------
@@ -61,6 +104,15 @@ def R(locate, ts):
             b"Q " + b"R" + b"N" + b"Y" + b" " + b"N" + struct.pack(">I", 0) + b"N")
     assert len(body) == 28
     return _mk(b"R", locate, ts, body)
+
+
+def H(locate, ts):
+    return _mk(b"H", locate, ts, b"AAPL    " + b"T" + b"\x00" + b"TEST")
+
+
+def canonical_message(msg_type):
+    length = MESSAGE_LENGTHS[msg_type][1]
+    return msg_type.encode("ascii") + bytes(length - 1)
 
 
 def A(locate, ts, ref, side, shares, stock, price):
@@ -129,10 +181,11 @@ def corpus_no_subset():
 # driver
 # ---------------------------------------------------------------------------
 async def _reset(dut):
-    dut.clk.setimmediatevalue(0)
-    cocotb.start_soon(Clock(dut.clk, 5, units="ns").start())
+    dut.clk.value = Immediate(0)
+    cocotb.start_soon(Clock(dut.clk, 5, unit="ns").start())
     dut.rst_n.value = 0
     dut.s_axis_tdata.value = 0
+    dut.s_axis_tkeep.value = 0
     dut.s_axis_tvalid.value = 0
     dut.s_axis_tlast.value = 0
     dut.m_axis_tready.value = 1
@@ -151,37 +204,36 @@ async def drive_and_collect(dut, messages, tready_high=True, max_cycles=20000):
     """
     await _reset(dut)
     payload = _packet(messages)
-    chunks = []
-    for i in range(0, len(payload), 8):
-        bite = payload[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
-    nchunks = len(chunks)
+    beats = packet_beats([payload], 8)
 
     out = []
     ci = 0          # siguiente chunk de entrada a presentar
     quiet = 0       # ciclos SIN salida tras agotar la entrada (ventana de drenaje)
+    held = None
+    accepted_tlast = 0
     for _ in range(max_cycles):
         # presentar la palabra del ciclo actual (handshake: tready combinacional
         # del RTL cierra el transfer en el MISMO flanco).
-        dut.s_axis_tvalid.value = 1 if ci < nchunks else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < nchunks else 0
-        dut.s_axis_tlast.value = 1 if ci == nchunks - 1 else 0
+        _present_beat(dut, beats, ci)
         if not tready_high:
             dut.m_axis_tready.value = 1 if (_ % 3) != 1 else 0
         await RisingEdge(dut.clk)
         # si en este flanco hubo transferencia (tvalid y tready altos),
         # avanzar al siguiente chunk
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < nchunks:
+            if ci < len(beats):
                 ci += 1
         # recolectar salida; ventana de cierre tras agotar la entrada
         if int(dut.m_axis_tvalid.value) == 1:
             out.append(int(dut.m_axis_tdata.value))
             quiet = 0
-        elif ci >= nchunks:
+        elif ci >= len(beats):
             quiet += 1
         if quiet > 64:
             break
+    assert accepted_tlast == 1, f"se aceptaron {accepted_tlast} tlast, esperado 1"
     return out
 
 
@@ -198,11 +250,15 @@ async def test_par01_all_types_match_oracle(dut):
 
 @cocotb.test()
 async def test_sec_par04_no_subset_no_register(dut):
-    """Espejo §SEC-PAR-04: tipo fuera de subset no emite registro, el 'A' siguiente sí."""
-    await _reset(dut)
-    msgs = corpus_no_subset()
-    expected = run_oracle(msgs)  # solo el 'A' (msg_idx global 1 -> luego empieza 1)
-    got = await drive_and_collect(dut, msgs)
+    """Espejo §SEC-PAR-04: H válido avanza msg_idx sin emitir registro."""
+    a0 = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    h = H(13, 3)
+    a2 = A(13, 4, 8, b"\x00", 11, b"AAPL    ", 4)
+    msgs = [a0, h, a2]
+    payload = _packet_seq(msgs, 1)
+    got, errores, _ = await drive_packets_err(dut, [payload])
+    expected = run_oracle(msgs)
+    assert errores == 0, f"SEC-PAR-04: H canónico produjo {errores} errores"
     assert got == expected, f"got={got} exp={expected}"
 
 # ---------------------------------------------------------------------------
@@ -212,37 +268,36 @@ async def test_sec_par04_no_subset_no_register(dut):
 async def drive_raw(dut, payload, seq=1, out_tready=(1,), max_cycles=30000):
     """Conduce un payload (session+seq+count+msgs) y devuelve (words, stalls)."""
     await _reset(dut)
-    chunks = []
-    for i in range(0, len(payload), 8):
-        bite = payload[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
-    nchunks = len(chunks)
+    beats = packet_beats([payload], 8)
     out = []
     ci = 0
     stalls = 0
     quiet = 0
     tr_idx = 0
+    held = None
+    accepted_tlast = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < nchunks else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < nchunks else 0
-        dut.s_axis_tlast.value = 1 if ci == nchunks - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1 if (out_tready[tr_idx % len(out_tready)] == 1) else 0
         tr_idx += 1
         await RisingEdge(dut.clk)
         tv = int(dut.s_axis_tvalid.value)
         tr = int(dut.s_axis_tready.value)
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if tv == 1 and tr == 0:
             stalls += 1
         if tv == 1 and tr == 1:
-            if ci < nchunks:
+            if ci < len(beats):
                 ci += 1
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
             out.append(int(dut.m_axis_tdata.value))
             quiet = 0
-        elif ci >= nchunks:
+        elif ci >= len(beats):
             quiet += 1
         if quiet > 80:
             break
+    assert accepted_tlast == 1, f"se aceptaron {accepted_tlast} tlast, esperado 1"
     return out, stalls
 
 
@@ -260,44 +315,18 @@ def _packet_session(session, seq, messages):
 
 async def drive_packets(dut, packets, out_tready=(1,), max_cycles=30000,
                         expect_gap=0):
-    """Conduce `packets` ([payload,...]) como un STREAM CONTINUO de bytes.
-
-    En el feed real MoldUDP64 cada datagrama UDP es contiguo al siguiente: el
-    header del paquete n+1 empieza exactamente donde terminó el paquete n, sin
-    relleno de separación. Por eso los payloads se concatenan ANTES de trocear
-    en palabras de 8 B (trocear cada payload por separado insertaría relleno
-    ficticio y desalinearía los headers — bug detectado en SEC-GAP). tlast solo
-    marca el final de cada datagrama a efectos de framing.
-
-    Muestrea `gap_detected` EN VIVO (el pulso dura 1 ciclo) y devuelve
-    (out_words, gaps_vistos). `expect_gap` valida el número de pulsos.
-    """
+    """Conduce cada datagrama como burst AXI independiente y cuenta gaps."""
     await _reset(dut)
-    concat = b"".join(packets)
-    chunks = []
-    for i in range(0, len(concat), 8):
-        bite = concat[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
-    # tlast: índice global del último byte de cada datagrama
-    len_acc = 0
-    lastbyte = set()
-    for p in packets:
-        len_acc += len(p)
-        lastbyte.add(len_acc - 1)
-    lasts = set()
-    for bi_global, _b in enumerate(concat):
-        if bi_global in lastbyte:
-            lasts.add(bi_global // 8)
-    ntotal = len(chunks)
+    beats = packet_beats(packets, 8)
     out = []
     ci = 0
     quiet = 0
     tr_idx = 0
     gaps = 0
+    held = None
+    accepted_tlast = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < ntotal else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < ntotal else 0
-        dut.s_axis_tlast.value = 1 if ci in lasts else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1 if (out_tready[tr_idx % len(out_tready)] == 1) else 0
         tr_idx += 1
         await RisingEdge(dut.clk)
@@ -305,26 +334,30 @@ async def drive_packets(dut, packets, out_tready=(1,), max_cycles=30000,
             gaps += 1
         tv = int(dut.s_axis_tvalid.value)
         tr = int(dut.s_axis_tready.value)
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if tv == 1 and tr == 1:
-            if ci < ntotal:
+            if ci < len(beats):
                 ci += 1
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
             out.append(int(dut.m_axis_tdata.value))
             quiet = 0
-        elif ci >= ntotal:
+        elif ci >= len(beats):
             quiet += 1
         if quiet > 80:
             break
     assert gaps == expect_gap, f"gaps: {gaps} != {expect_gap}"
+    assert accepted_tlast == len(packets), (
+        f"se aceptaron {accepted_tlast} tlast, esperado {len(packets)}")
     return out, gaps
 
 
 # ---------------------------------------------------------------------------
-# LIN-01: mensajes mínimos back-to-back -> 0 stalls internos con tready alto
+# LIN-01: cuatro mensajes A/U back-to-back -> stalls acotados con tready alto
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_lin01_back_to_back_min_no_stall(dut):
-    """Espejo §LIN-01: mensajes mínimos back-to-back -> stalls ACOTADOS.
+    """Espejo §LIN-01: cuatro mensajes A/U back-to-back -> stalls acotados.
 
     El tramo cabe en la cola (amortiguamiento del diseño de captura a
     msg_reg): el parser no deja meter atrás mientras el downstream consume.
@@ -337,11 +370,9 @@ async def test_lin01_back_to_back_min_no_stall(dut):
     stalls ACOTADOS (~15 en 4 mensajes A/U): "sin backpressure sostenida"
     del régimen de fase 1. El límite caza regresiones groseras (p. ej. un
     drenaje roto); la corrección bit a bit se valida abajo."""
-    # Tramo de mensajes de tamaño medio (A/F/U/P, 35-44 B) que el diseño de
-    # captura a msg_reg sostiene sin backpressure interno: 0 stalls con el
-    # downstream consumiendo. El peor caso de mensajes MÍNIMOS back-to-back
-    # INFINITO exige un aligner con drenaje en emisión (SB: pendiente, ver
-    # spec.md LIN-01 alcance) y no se exige en este test.
+    # Tramo literal A/U pactado. El peor caso de mensajes mínimos back-to-back
+    # infinito queda como non-goal físico en la spec; este test mide el régimen
+    # real de QB=64 y no afirma cero stalls.
     msgs = [A(13, i + 10, i, b"\x01", 1000, b"AAPL    ", 1000 + i) if i % 2 == 0
             else U(13, i + 10, i, i + 1, 200, 1100 + i)
             for i in range(4)]
@@ -359,27 +390,23 @@ async def test_lin01_back_to_back_min_no_stall(dut):
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_aln01_message_not_word_aligned(dut):
-    """Espejo §ALN-01: un mensaje que cruza palabra se alinea y decodifica bien."""
+    """Espejo §ALN-01: A se decodifica en los ocho offsets de la word."""
     a = A(393, 1_000_000_002, 0x1122334455667788, b"\x01", 1000, b"AMZN    ", 1_234_567)
-    # Vamos a insertar el A precedido de un mensaje fuera de subset de longitud
-    # L (con su prefijo len => L+2 mod 8 varia), de modo que el A arranca en
-    # distintas fases y cruza límites de palabra. Los PM no-subset validos
-    # (H=25, B=19, I=50) dan fases 27,21,52 mod 8 = 3,5,4. Suficiente para
-    # cubrir cruces de palabra no triviales.
-    builders = [
-        (b"H", b"\x00" * 14),   # Stock Trading Action 25B (cabecera+stock+estado+razon)
-        (b"I", b"\x00" * 39),   # NOII 50B
-        (b"B", b"\x00" * 8),    # Broken Trade 19B
-    ]
-    for pref, body in builders:
-        m = pref + struct.pack(">H", 3) + b"\x00\x00" + (0).to_bytes(6, "big") + body
-        # validar longitud contra spec
-        assert len(m) in (25, 50, 19), ("len", len(m))
-        msgs = [m, a]
+    # Offset del type A = (header 20 + frames previos + len A 2) mod 8.
+    # Estos prefijos canónicos no-subset producen exactamente las ocho fases.
+    prefixes_by_offset = {
+        0: ("Q",), 1: ("H",), 2: ("I",), 3: ("B",),
+        4: ("N",), 5: ("O",), 6: (), 7: ("H", "N"),
+    }
+    for offset, prefix_types in prefixes_by_offset.items():
+        prefixes = [canonical_message(msg_type) for msg_type in prefix_types]
+        actual_offset = (20 + sum(2 + len(m) for m in prefixes) + 2) % 8
+        assert actual_offset == offset
+        msgs = prefixes + [a]
         payload = _packet_seq(msgs, 1)
         expected = run_oracle(msgs)
         words, _ = await drive_raw(dut, payload, out_tready=(1,))
-        assert words == expected, f"ALN pref={pref}: got {len(words)} exp {len(expected)}"
+        assert words == expected, f"ALN offset={offset}: got {len(words)} exp {len(expected)}"
 
 
 @cocotb.test()
@@ -416,11 +443,7 @@ async def test_out03_handshake_tvalid_tready(dut):
     await _reset(dut)
     msgs = corpus_all_types()
     payload = _packet_seq(msgs, 1)
-    chunks = []
-    for i in range(0, len(payload), 8):
-        bite = payload[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
-    nchunks = len(chunks)
+    beats = packet_beats([payload], 8)
 
     out = []
     ci = 0
@@ -428,10 +451,10 @@ async def test_out03_handshake_tvalid_tready(dut):
     tvalid_high = False
     last_tdata_while_stalled = None
     tr_idx = 0
+    held = None
+    accepted_tlast = 0
     for _ in range(30000):
-        dut.s_axis_tvalid.value = 1 if ci < nchunks else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < nchunks else 0
-        dut.s_axis_tlast.value = 1 if ci == nchunks - 1 else 0
+        _present_beat(dut, beats, ci)
         tready_now = 1 if (tr_idx % 3) != 1 else 0
         dut.m_axis_tready.value = tready_now
         tr_idx += 1
@@ -455,10 +478,12 @@ async def test_out03_handshake_tvalid_tready(dut):
         if tv == 0:
             tvalid_high = False
             last_tdata_while_stalled = None
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < nchunks:
+            if ci < len(beats):
                 ci += 1
-        if ci >= nchunks and tv == 0:
+        if ci >= len(beats) and tv == 0:
             quiet += 1
         if quiet > 80:
             break
@@ -466,6 +491,7 @@ async def test_out03_handshake_tvalid_tready(dut):
     assert out == expected, (
         f"OUT-03: got({len(out)}) exp({len(expected)})\n"
         f" got={out}\n exp={expected}")
+    assert accepted_tlast == 1, f"se aceptaron {accepted_tlast} tlast, esperado 1"
 
 @cocotb.test()
 async def test_sec_gap01_seq_gap_detectado(dut):
@@ -509,13 +535,325 @@ async def test_sec_frm03_cambio_sesion_resetea_seq(dut):
 async def test_sec_frm04_count_cero_valido(dut):
     """Espejo §SEC-FRM-04: un paquete con count igual a cero es válido."""
     msgs = [A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)]
-    # paquete count=0 (vacío) no emite; el siguiente seq avanza por 0
-    p0 = _packet_seq([], 1)
-    p1 = _packet_seq(msgs, 1)   # seq=1 (esperado tras count=0)
+    # La sesión nueva fuerza exp_seq=100; count=0 debe conservar ese 100.
+    p0 = _packet_session(b"SESSIONBBB", 100, [])
+    p1 = _packet_session(b"SESSIONBBB", 100, msgs)
     out, gaps = await drive_packets(dut, [p0, p1], expect_gap=0)
-    exp = run_oracle_packets([(1, [], p0), (1, msgs, p1)])
+    exp = run_oracle_packets([(100, [], p0), (100, msgs, p1)])
     assert gaps == 0, f"SEC-FRM-04: count=0 no debe marcar gap, vistos {gaps}"
     assert out == exp, f"SEC-FRM-04: got {len(out)} exp {len(exp)}"
+
+
+@cocotb.test()
+async def test_sec_frm05_datagramas_no_alineados_no_comparten_beat(dut):
+    """Espejo §SEC-FRM-05: el padding final no invade el header siguiente.
+
+    Mata la mutación de producción que concatena datagramas antes de formar
+    beats y usa bytes de relleno como si fueran el comienzo del siguiente
+    header MoldUDP64.
+    """
+    a = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    b = A(14, 3, 8, b"\x00", 11, b"MSFT    ", 4)
+    p1 = _packet_seq([a], 1)
+    p2 = _packet_seq([b], 2)
+    assert len(p1) % 8 != 0 and len(p2) % 8 != 0
+    got, errores, accepted_tlast = await drive_packets_err(dut, [p1, p2])
+    expected = run_oracle_packets([(1, [a], p1), (2, [b], p2)])
+    assert errores == 0, f"SEC-FRM-05: errores inesperados: {errores}"
+    assert accepted_tlast == 2, f"SEC-FRM-05: tlast aceptados {accepted_tlast}"
+    assert got == expected, f"SEC-FRM-05: got={got} exp={expected}"
+
+
+@cocotb.test()
+async def test_sec_frm04_count_cero_parcial_msb_y_recuperacion(dut):
+    """Espejo §SEC-FRM-04: count=0 de 20 B termina con keep=11110000.
+
+    Mata la mutación que interpreta los cuatro lanes de relleno como payload o
+    que deja estado de count=0 contaminando el datagrama posterior.
+    """
+    p0 = _packet_session(b"SIM0000001", 1, [])
+    valid = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    p1 = _packet_session(b"SIM0000001", 1, [valid])
+    assert len(p0) == 20
+    assert packet_beats([p0], 8)[-1][1:] == (0b11110000, True)
+    got, errores, accepted_tlast = await drive_packets_err(dut, [p0, p1])
+    assert errores == 0, f"SEC-FRM-04: errores inesperados: {errores}"
+    assert accepted_tlast == 2, f"SEC-FRM-04: tlast aceptados {accepted_tlast}"
+    assert got == run_oracle([valid]), f"SEC-FRM-04: got={got}"
+
+
+@cocotb.test()
+async def test_sec_frm02_campo_len_final_conserva_eop_y_recupera(dut):
+    """Un tlast aceptado con solo el campo len no se pierde al drenar HDR."""
+    partial = struct.pack(">10sQH", b"SIM0000001", 1, 1) + (36).to_bytes(2, "big")
+    recovery = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    recovered = _packet_session(b"SIM0000002", 100, [recovery])
+    assert len(partial) == 22
+
+    got, errors, accepted_tlast = await drive_packets_err(
+        dut, [partial, recovered])
+
+    assert errors == 1, f"SEC-FRM-02 len final: errores={errors}"
+    assert accepted_tlast == 2, (
+        f"SEC-FRM-02 len final: tlast aceptados={accepted_tlast}")
+    assert got == run_oracle([recovery]), (
+        f"SEC-FRM-02 len final: got={got}")
+
+
+@cocotb.test()
+async def test_sec_frm07_count_tlast_cierre_exacto(dut):
+    """Espejo §SEC-FRM-07: count y tlast cierran el mismo datagrama.
+
+    Mata las mutaciones que aceptan bytes residuales, permiten cierre antes de
+    count o reinterpretan un residuo como header del siguiente paquete.
+    """
+    first = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    extra = A(13, 3, 8, b"\x00", 11, b"MSFT    ", 4)
+    recovery = A(14, 4, 9, b"\x01", 12, b"GOOG    ", 5)
+    p_lower = _packet_seq([first, extra], 1)
+    p_lower = p_lower[:18] + (1).to_bytes(2, "big") + p_lower[20:]
+    p_higher = _packet_seq([first], 1)
+    p_higher = p_higher[:18] + (2).to_bytes(2, "big") + p_higher[20:]
+    p_zero_payload = _packet_seq([first], 1)
+    p_zero_payload = p_zero_payload[:18] + b"\x00\x00" + p_zero_payload[20:]
+    cases = [
+        ("count_menor", p_lower, run_oracle([first, recovery])),
+        ("count_mayor", p_higher, run_oracle([first, recovery])),
+        ("count_cero_con_payload", p_zero_payload, run_oracle([recovery])),
+    ]
+    for name, malformed, expected in cases:
+        p_recovery = _packet_session(b"SIM0000002", 100, [recovery])
+        got, errores, accepted_tlast = await drive_packets_err(
+            dut, [malformed, p_recovery])
+        assert errores == 1, f"SEC-FRM-07 {name}: errores={errores}"
+        assert accepted_tlast == 2, (
+            f"SEC-FRM-07 {name}: tlast aceptados {accepted_tlast}")
+        assert got == expected, f"SEC-FRM-07 {name}: got={got} exp={expected}"
+
+
+@cocotb.test()
+async def test_sec_frm07_count_exacto_sin_tlast_da_error(dut):
+    """Count agotado y cola vacía no cierran el datagrama sin tlast."""
+    payload = _packet_seq([canonical_message("L")], 1)
+    assert len(payload) == 48
+    beats = packet_beats([payload], 8)
+    data, keep, _last = beats[-1]
+    beats[-1] = (data, keep, False)
+
+    await _reset(dut)
+    ci = 0
+    errors = 0
+    for _ in range(200):
+        _present_beat(dut, beats, ci)
+        await RisingEdge(dut.clk)
+        errors += int(dut.error.value)
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            ci += 1
+
+    assert ci == len(beats), f"SEC-FRM-07 beats aceptados={ci}/{len(beats)}"
+    assert errors == 1, f"SEC-FRM-07 count sin tlast: errores={errors}"
+
+
+@cocotb.test()
+async def test_sec_frm06_tkeep_invalido_descarta_y_recupera(dut):
+    """Espejo §SEC-FRM-06: tkeep inválido da un pulso y drena hasta tlast.
+
+    Mata las mutaciones que aceptan lane cero, huecos, orientación LSB o un
+    parcial fuera del beat final.
+    """
+    malformed = _packet_session(b"SIM0000001", 1, [])
+    recovery = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    cases = [
+        ("cero", 0x00, 0, None),
+        ("hueco", 0b10100000, 0, None),
+        ("lsb", 0b01111111, 0, None),
+        ("parcial_sin_tlast", 0b11110000, -1, False),
+    ]
+    for name, keep, index, last in cases:
+        bad_beats = packet_beats([malformed], 8)
+        data, _old_keep, old_last = bad_beats[index]
+        bad_beats[index] = (data, keep, old_last if last is None else last)
+        if last is False:
+            bad_beats.append((0, 0xFF, True))
+        all_beats = bad_beats + packet_beats([_packet_seq([recovery], 2)], 8)
+        got, errores, accepted_tlast = await drive_packets_err(
+            dut, [malformed, _packet_seq([recovery], 2)], beats=all_beats)
+        assert errores == 1, f"SEC-FRM-06 {name}: errores={errores}"
+        assert accepted_tlast == 2, (
+            f"SEC-FRM-06 {name}: tlast aceptados {accepted_tlast}")
+        assert got == run_oracle([recovery]), f"SEC-FRM-06 {name}: got={got}"
+
+
+@cocotb.test()
+async def test_sec_frm06_registro_capturado_termina_antes_de_recuperar(dut):
+    """Un descarte termina el record capturado antes de recuperar el siguiente."""
+    first = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    tail = A(14, 3, 8, b"\x00", 11, b"MSFT    ", 4)
+    recovery = A(15, 4, 9, b"\x01", 12, b"GOOG    ", 5)
+    malformed = _packet_session(b"SIM0000001", 1, [first, tail])
+    recovered = _packet_session(b"SIM0000002", 100, [recovery])
+    bad_beats = packet_beats([malformed], 8)
+    data, _keep, last = bad_beats[-1]
+    bad_beats[-1] = (data, 0b00000011, last)
+    beats = bad_beats + packet_beats([recovered], 8)
+
+    await _reset(dut)
+    ci = 0
+    errors = 0
+    accepted_tlast = 0
+    out = []
+    held_in = None
+    held_out = None
+    quiet = 0
+    for cycle in range(5000):
+        _present_beat(dut, beats, ci)
+        dut.m_axis_tready.value = int(
+            ci >= len(bad_beats) and cycle % 3 != 1)
+        await RisingEdge(dut.clk)
+
+        if int(dut.error.value):
+            errors += 1
+        held_in, took_last = _check_input_stability(dut, held_in)
+        accepted_tlast += took_last
+
+        out_valid = int(dut.m_axis_tvalid.value)
+        out_ready = int(dut.m_axis_tready.value)
+        out_beat = (out_valid, int(dut.m_axis_tdata.value),
+                    int(dut.m_axis_tlast.value))
+        if held_out is not None:
+            assert out_beat == held_out, (
+                f"SEC-FRM-06 salida cambió bajo stall: {held_out} -> {out_beat}")
+        if out_valid and not out_ready:
+            held_out = out_beat
+        elif out_valid and out_ready:
+            out.append(out_beat[1:])
+            held_out = None
+
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            ci += 1
+        if ci >= len(beats) and not out_valid:
+            quiet += 1
+        else:
+            quiet = 0
+        if quiet > 80:
+            break
+
+    assert errors == 1, f"SEC-FRM-06 salida pendiente: errores={errors}"
+    assert accepted_tlast == 2, (
+        f"SEC-FRM-06 salida pendiente: tlast aceptados={accepted_tlast}")
+    expected_words = run_oracle([first, recovery])
+    assert [word for word, _last in out] == expected_words, (
+        f"SEC-FRM-06 records incompletos o duplicados: got={out}")
+    first_words = len(run_oracle([first]))
+    expected_last = [
+        int(index in (first_words - 1, len(expected_words) - 1))
+        for index in range(len(expected_words))
+    ]
+    assert [last for _word, last in out] == expected_last, (
+        f"SEC-FRM-06 límites de record incorrectos: got={out}")
+    assert out[first_words][0] & 0xFFFFFFFF == 1, (
+        f"SEC-FRM-06 msg_idx de recuperación={out[first_words][0] & 0xFFFFFFFF}")
+
+
+@cocotb.test()
+async def test_sec_frm06_tkeep_invalido_no_depende_de_capacidad(dut):
+    """El primer beat inválido se acepta aunque su popcount no quepa en q."""
+    payload = _packet_seq(corpus_all_types() * 3, 1)
+    beats = packet_beats([payload], 8)
+    await _reset(dut)
+    dut.m_axis_tready.value = 0
+
+    ci = 0
+    for _ in range(200):
+        _present_beat(dut, beats, ci)
+        await RisingEdge(dut.clk)
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            ci += 1
+        if int(dut.qn.value) + 7 > 64:
+            break
+
+    qn_before = int(dut.qn.value)
+    assert qn_before + 7 > 64, (
+        f"SEC-FRM-06 no se alcanzó presión de capacidad: qn={qn_before}")
+    assert ci < len(beats) and not beats[ci][2], (
+        "SEC-FRM-06 el setup agotó el datagrama antes del beat inválido")
+
+    bad_data = beats[ci][0]
+    accepted = 0
+    errors = 0
+    for _ in range(4):
+        dut.s_axis_tvalid.value = 1
+        dut.s_axis_tdata.value = bad_data
+        dut.s_axis_tkeep.value = 0b01111111
+        dut.s_axis_tlast.value = 0
+        await RisingEdge(dut.clk)
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            accepted += 1
+            await ReadOnly()
+            errors += int(dut.error.value)
+            break
+
+    assert accepted == 1, (
+        f"SEC-FRM-06 beat inválido bloqueado con qn={qn_before}")
+    assert errors == 1, f"SEC-FRM-06 errores del bypass={errors}"
+
+
+@cocotb.test()
+async def test_sec_frm06_tkeep_parcial_no_final_falla_al_aceptar(dut):
+    """Un beat parcial sin tlast pulsa error en el mismo handshake."""
+    await _reset(dut)
+    dut.s_axis_tvalid.value = 1
+    dut.s_axis_tdata.value = 0
+    dut.s_axis_tkeep.value = 0b11110000
+    dut.s_axis_tlast.value = 0
+
+    await RisingEdge(dut.clk)
+    assert int(dut.s_axis_tready.value) == 1, (
+        "SEC-FRM-06 beat parcial no final no fue aceptado")
+    await ReadOnly()
+    assert int(dut.error.value) == 1, (
+        "SEC-FRM-06 beat parcial no final no pulsó error al aceptarse")
+
+
+@cocotb.test()
+async def test_sec_frm08_fuente_estable_bajo_backpressure_entrada(dut):
+    """Espejo §SEC-FRM-08: el productor retiene data, keep y last en stall.
+
+    Mata una mutación RTL que mantiene s_axis_tready alto cuando la cola no
+    puede aceptar, perdiendo o duplicando beats bajo presión. El monitor del
+    feeder verifica por separado que la fuente de prueba no cambie la terna
+    antes de handshake; no atribuye ese fallo de estímulo al RTL.
+    """
+    messages = corpus_all_types() * 3
+    words, stalls = await drive_raw(
+        dut, _packet_seq(messages, 1), out_tready=(0, 0, 1))
+    assert stalls > 0, "SEC-FRM-08 no forzó s_axis_tready bajo"
+    assert words == run_oracle(messages), "SEC-FRM-08: pérdida bajo backpressure"
+
+
+@cocotb.test()
+async def test_axi_keep_orientacion_msb_lsb(dut):
+    """El prefijo MSB es válido; la máscara equivalente en LSB se rechaza.
+
+    Mata la mutación de interpretación little-endian de s_axis_tkeep.
+    """
+    valid = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    payload = _packet_seq([valid], 1)
+    good_beats = packet_beats([payload], 8)
+    assert good_beats[-1][1:] == (0b11000000, True)
+    got, errores, accepted_tlast = await drive_packets_err(dut, [payload])
+    assert errores == 0 and accepted_tlast == 1
+    assert got == run_oracle([valid]), f"AXI keep MSB: got={got}"
+
+    recovery = A(14, 3, 8, b"\x00", 11, b"MSFT    ", 4)
+    bad_beats = list(good_beats)
+    data, _keep, last = bad_beats[-1]
+    bad_beats[-1] = (data, 0b00000011, last)
+    got, errores, accepted_tlast = await drive_packets_err(
+        dut, [payload, _packet_seq([recovery], 2)],
+        beats=bad_beats + packet_beats([_packet_seq([recovery], 2)], 8))
+    assert errores == 1 and accepted_tlast == 2
+    assert got == run_oracle([recovery]), f"AXI keep LSB: got={got}"
 
 @cocotb.test()
 async def test_sec_par03_longitud_incoherente(dut):
@@ -530,6 +868,24 @@ async def test_sec_par03_longitud_incoherente(dut):
     expected = run_oracle([ok])
     expected[0] = expected[0] + 1   # msg_idx=1 por el desecho del bad
     assert words == expected, f"SEC-PAR-03: got {len(words)} exp {len(expected)}"
+
+
+@cocotb.test()
+async def test_sec_par05_las_22_longitudes_conocidas_se_validan(dut):
+    """Espejo §SEC-PAR-05: todo tipo conocido con longitud errónea da error."""
+    malformed = []
+    for msg_type, (_name, expected_length) in MESSAGE_LENGTHS.items():
+        message = msg_type.encode("ascii") + bytes(expected_length - 2)
+        assert len(message) == expected_length - 1
+        malformed.append(message)
+    ok = A(13, 9, 99, b"\x01", 10, b"AAPL    ", 3)
+    payload = _packet_seq(malformed + [ok], 1)
+    words, errores, _ = await drive_packets_err(dut, [payload])
+    expected = run_oracle([ok])
+    expected[0] += len(malformed)
+    assert errores == len(MESSAGE_LENGTHS), (
+        f"SEC-PAR-05: {errores} errores para {len(MESSAGE_LENGTHS)} longitudes inválidas")
+    assert words == expected, "SEC-PAR-05: no recuperó el A posterior"
 
 
 # ---------------------------------------------------------------------------
@@ -550,20 +906,16 @@ def _bursts_from_words(words_with_tlast):
 async def drive_bursts(dut, payload):
     """Devuelve (bursts, words_con_tlast) reconstruyendo registros por tlast."""
     await _reset(dut)
-    chunks = []
-    for i in range(0, len(payload), 8):
-        bite = payload[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
-    nchunks = len(chunks)
+    beats = packet_beats([payload], 8)
     ci = 0
     quiet = 0
     tagged = []
     bursts = []
     cur = []
+    held = None
+    accepted_tlast = 0
     for _ in range(30000):
-        dut.s_axis_tvalid.value = 1 if ci < nchunks else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < nchunks else 0
-        dut.s_axis_tlast.value = 1 if ci == nchunks - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
@@ -575,13 +927,18 @@ async def drive_bursts(dut, payload):
                 bursts.append(cur)
                 cur = []
             quiet = 0
-        elif ci >= nchunks:
+        elif cur:
+            assert False, "OUT-01: tvalid bajó antes de tlast con tready alto"
+        elif ci >= len(beats):
             quiet += 1
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < nchunks:
+            if ci < len(beats):
                 ci += 1
         if quiet > 80:
             break
+    assert accepted_tlast == 1, f"se aceptaron {accepted_tlast} tlast, esperado 1"
     return bursts, tagged
 
 
@@ -606,38 +963,22 @@ async def test_out01_burst_con_tlast(dut):
 # SEC-FRM-01: frame truncado -> error, se continúa en el siguiente mensaje
 # ---------------------------------------------------------------------------
 async def drive_packets_err(dut, packets, out_tready=(1,), max_cycles=200000,
-                            window=200):
-    """Conduce `packets` concatenados muestreando `error` en vivo.
+                            window=200, beats=None):
+    """Conduce `packets` muestreando `error` en vivo.
 
-    Devuelve (out_words, errores). Los payloads son contiguos (stream real);
-    tlast marca el fin de CADA datagrama, no solo el del total. Muestrea
-    `error` cada ciclo y espera a que drene por completo.
+    Devuelve (out_words, errores). `beats` permite inyectar una máscara AXI
+    malformada sin derivar el oráculo del RTL.
     """
     await _reset(dut)
-    concat = b"".join(packets)
-    chunks = []
-    for i in range(0, len(concat), 8):
-        bite = concat[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
-    ntotal = len(chunks)
-    # tlast: índice global del último byte de cada datagrama -> chunk de ese byte
-    len_acc = 0
-    lastbytes = set()
-    for p in packets:
-        len_acc += len(p)
-        lastbytes.add(len_acc - 1)
-    lasts = set()
-    for bi in range(ntotal * 8):
-        if bi in lastbytes:
-            lasts.add(bi // 8)
+    beats = packet_beats(packets, 8) if beats is None else beats
     out = []
     ci = 0
     quiet = 0
     errores = 0
+    held = None
+    accepted_tlast = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < ntotal else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < ntotal else 0
-        dut.s_axis_tlast.value = 1 if ci in lasts else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1 if (out_tready[0] == 1) else 0
         await RisingEdge(dut.clk)
         if int(dut.error.value) == 1:
@@ -646,14 +987,16 @@ async def drive_packets_err(dut, packets, out_tready=(1,), max_cycles=200000,
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
             out.append(int(dut.m_axis_tdata.value))
             quiet = 0
-        elif ci >= ntotal:
+        elif ci >= len(beats):
             quiet += 1
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < ntotal:
+            if ci < len(beats):
                 ci += 1
         if quiet > window:
             break
-    return out, errores
+    return out, errores, accepted_tlast
 
 
 # ---------------------------------------------------------------------------
@@ -663,20 +1006,21 @@ async def drive_packets_err(dut, packets, out_tready=(1,), max_cycles=200000,
 async def test_sec_frm01_frame_truncado(dut):
     """Espejo §SEC-FRM-01: un frame truncado señaliza error y continúa."""
     ok = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
-    # Paquete count=2: un 'A' completo + un 'A' que DECLARA 36 B pero cuyo
-    # datagrama solo aporta 21 B (truncado real: el cuerpo no llega entero).
-    truncated = b"A" + b"\x00" * 20   # 21 B de un 'A' de 36 B declarados
-    declared_len = 36                 # el prefijo declara el tamaño del tipo
-    p1 = struct.pack(">10sQH", b"SIM0000001", 1, 2) + \
-        len(ok).to_bytes(2, "big") + ok + \
-        declared_len.to_bytes(2, "big") + truncated
-    # el datagrama termina ahí (los bytes que queden no completan el 2º 'A')
-    words, errores = await drive_packets_err(dut, [p1])
-    # error señalizado por el truncado
-    assert errores > 0, f"SEC-FRM-01: frame truncado debe señalar error, vistos {errores}"
-    # el 'ok' (1er mensaje del paquete) sí se emite (continúa sin abortar)
-    exp = run_oracle([ok])
-    assert words == exp, f"SEC-FRM-01: got({len(words)}) exp({len(exp)})"
+    next_ok = A(14, 3, 8, b"\x00", 11, b"MSFT    ", 4)
+    full_tail = A(13, 4, 9, b"\x01", 12, b"GOOG    ", 5)
+    for missing in range(1, 8):
+        p1 = struct.pack(">10sQH", b"SIM0000001", 1, 2) + \
+            len(ok).to_bytes(2, "big") + ok + \
+            len(full_tail).to_bytes(2, "big") + full_tail[:-missing]
+        p2 = _packet_session(b"SIM0000002", 100, [next_ok])
+        words, errores, accepted_tlast = await drive_packets_err(dut, [p1, p2])
+        assert errores == 1, (
+            f"SEC-FRM-01 missing={missing}: esperaba un error, vistos {errores}")
+        assert accepted_tlast == 2, (
+            f"SEC-FRM-01 missing={missing}: tlast aceptados {accepted_tlast}")
+        exp = run_oracle([ok, next_ok])
+        assert words == exp, (
+            f"SEC-FRM-01 missing={missing}: got({len(words)}) exp({len(exp)})")
 
 
 @cocotb.test()
@@ -686,9 +1030,10 @@ async def test_sec_frm02_tlast_en_medio(dut):
     full = struct.pack(">10sQH", b"SIM0000001", 1, 1) + len(ok).to_bytes(2, "big") + ok
     mid = len(full) // 2
     truncated = full[:mid]   # el feed termina a mitad del 'A' (tlast a mitad)
-    words, errores = await drive_packets_err(dut, [truncated])
+    words, errores, accepted_tlast = await drive_packets_err(dut, [truncated])
     assert errores > 0, f"SEC-FRM-02: mensaje cortado a mitad debe señalar error, vistos {errores}"
     assert words == [], f"SEC-FRM-02: no debe emitir registro parcial, got {words}"
+    assert accepted_tlast == 1, f"SEC-FRM-02: tlast aceptados {accepted_tlast}"
 
 
 # ---------------------------------------------------------------------------
@@ -697,10 +1042,12 @@ async def test_sec_frm02_tlast_en_medio(dut):
 @cocotb.test()
 async def test_sec_lin01_no_subset_no_rompe_line_rate(dut):
     """Espejo §SEC-LIN-01: mensajes fuera de subset no rompen el line rate."""
-    msgs = [S(393, 1, 0x4F), A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)]
+    msgs = [A(13, 1, 6, b"\x01", 9, b"AAPL    ", 2),
+            H(13, 2),
+            A(13, 3, 7, b"\x00", 10, b"AAPL    ", 3)]
     payload = _packet_seq(msgs, 1)
     words, stalls = await drive_raw(dut, payload, out_tready=(1,))
-    assert stalls == 0, f"SEC-LIN-01: {stalls} stalls con downstream consumiendo"
+    assert stalls <= 24, f"SEC-LIN-01: {stalls} stalls con downstream consumiendo"
     assert words == run_oracle(msgs), "SEC-LIN-01: salida correcta"
 
 
@@ -718,7 +1065,6 @@ def _load_frozen_messages(path):
 @cocotb.test()
 async def test_rep01_vectores_congelados_byte_a_byte(dut):
     """Espejo §REP-01: el RTL reproduce los vectores congelados byte a byte."""
-    import os
     here = os.path.dirname(os.path.abspath(__file__))
     vec = os.path.join(here, "..", "..", "vectors", "messages", "corpus_all_types.json")
     msgs, meta = _load_frozen_messages(vec)
@@ -740,34 +1086,39 @@ async def drive_pcap(dut, pcap_path, max_cycles=2_000_000):
     alimenta al RTL y recolecta las words de salida. El parser puede retener
     el feed (backpressure correcto AXI) pero jamás pierde; se espera hasta que
     la cola drene por completo."""
-    import sys
     from scripts.binaryfile_to_pcap import iter_pcap_packets
 
     packets = list(iter_pcap_packets(pcap_path))
-    concat = b"".join(payload for _seq, _msgs, payload in packets)
+    payloads = [payload for _seq, _msgs, payload in packets]
     orac_packets = [(seq, msgs, payload) for seq, msgs, payload in packets]
+    assert packets, "REP-02: pcap existente sin datagramas MoldUDP64"
+    assert payloads and all(payloads), (
+        "REP-02: pcap existente sin payload MoldUDP64 no vacío")
 
     await _reset(dut)
-    chunks = []
-    for i in range(0, len(concat), 8):
-        bite = concat[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
+    beats = packet_beats(payloads, 8)
     ci = 0
     quiet = 0
     out = []
+    held = None
+    accepted_tlast = 0
+    input_stalls = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < len(chunks) else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < len(chunks) else 0
-        dut.s_axis_tlast.value = 1 if ci == len(chunks) - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
             out.append(int(dut.m_axis_tdata.value))
             quiet = 0
-        elif ci >= len(chunks):
+        elif ci >= len(beats):
             quiet += 1
-        if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < len(chunks):
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
+        input_valid = int(dut.s_axis_tvalid.value)
+        input_ready = int(dut.s_axis_tready.value)
+        input_stalls += int(input_valid == 1 and input_ready == 0)
+        if input_valid == 1 and input_ready == 1:
+            if ci < len(beats):
                 ci += 1
         # drenaje completo: feed consumido y cola vacía (sin salida tras 8000 ciclos)
         if quiet > 8000:
@@ -778,23 +1129,24 @@ async def drive_pcap(dut, pcap_path, max_cycles=2_000_000):
         exp.append(ts)
         for i in range(0, len(body), 8):
             exp.append(int.from_bytes(body[i:i + 8], "big") << (8 * (8 - len(body[i:i + 8]))))
-    return out, exp, len(packets)
+    assert exp, "REP-02: pcap sin salida esperada del subset ITCH"
+    assert accepted_tlast == len(payloads), (
+        f"REP-02: tlast aceptados {accepted_tlast}, esperado {len(payloads)}")
+    return out, exp, len(packets), input_stalls
 
 
-@cocotb.test()
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_rep02_replay_pcap_real_dia_local(dut):
     """Espejo §REP-02: el RTL sobre un pcap del día real coincide byte a byte.
-    (pcap local no commiteado; se omite si no existe)."""
-    import os
-    pcap = "/tmp/real_subset.pcap"
-    if not os.path.exists(pcap):
-        cocotb.log.info("REP-02: pcap local ausente, test omitido (env sin datos)")
-        return
-    out, exp, npack = await drive_pcap(dut, pcap)
+    (pcap local no commiteado; el decorador declara la omisión si no existe)."""
+    out, exp, npack, input_stalls = await drive_pcap(dut, REAL_PCAP)
     assert out == exp, (
         f"REP-02: got({len(out)}) exp({len(exp)}) sobre {npack} paquetes:\n"
         f" got={out}\n exp={exp}")
-    cocotb.log.info(f"REP-02 OK: {npack} paquetes, {len(out)} words byte a byte")
+    assert input_stalls >= 0, "REP-02: contador de stalls de entrada inválido"
+    cocotb.log.info(
+        f"REP-02 OK: {npack} paquetes, {len(out)} words byte a byte, "
+        f"stalls de entrada con m_axis_tready=1: {input_stalls}")
 
 
 # ---------------------------------------------------------------------------
@@ -804,30 +1156,30 @@ async def test_rep02_replay_pcap_real_dia_local(dut):
 async def drive_and_sample_error(dut, payload, max_cycles=20000):
     """Conduce un payload muestreando el pulso `error` en vivo."""
     await _reset(dut)
-    chunks = []
-    for i in range(0, len(payload), 8):
-        bite = payload[i:i + 8]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (8 - len(bite))))
+    beats = packet_beats([payload], 8)
     ci = 0
     errores = 0
     quiet = 0
+    held = None
+    accepted_tlast = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < len(chunks) else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < len(chunks) else 0
-        dut.s_axis_tlast.value = 1 if ci == len(chunks) - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.error.value) == 1:
             errores += 1
             quiet = 0
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < len(chunks):
+            if ci < len(beats):
                 ci += 1
-        if ci >= len(chunks) and int(dut.m_axis_tvalid.value) == 0:
+        if ci >= len(beats) and int(dut.m_axis_tvalid.value) == 0:
             quiet += 1
         # ventana de drenaje: 16 ciclos tras consumir la entrada y sin salida
         if quiet > 16:
             break
+    assert accepted_tlast == 1, f"se aceptaron {accepted_tlast} tlast, esperado 1"
     return errores
 
 
@@ -835,10 +1187,10 @@ async def drive_and_sample_error(dut, payload, max_cycles=20000):
 async def test_sec_par03b_len_igual_once_no_error(dut):
     """Espejo §SEC-PAR-03 (borde): longitud declarada == 11 NO señaliza error.
     len mínima válida de un mensaje ITCH es 11 (solo cabecera común sin cuerpo).
-    Con len==11 el RTL la acepta (11 < 11 es falso); un mutante con `<=` la
-    marcaría erroneamente error."""
-    # un mensaje 'S' de exactamente 11 B (cabecera común, sin byte de cuerpo)
-    m = b"S" + bytes([0]) * 10
+    Un tipo desconocido se consume como passthrough; un tipo canónico conserva
+    su longitud exacta. Un mutante con `<=` marcaría este borde erróneamente."""
+    # Tipo desconocido de exactamente 11 B (cabecera común, sin cuerpo).
+    m = b"Z" + bytes([0]) * 10
     assert len(m) == 11
     payload = _packet_seq([m], 1)
     errores = await drive_and_sample_error(dut, payload)

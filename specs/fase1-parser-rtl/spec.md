@@ -5,7 +5,8 @@
 Construir el parser RTL **a line rate** Nasdaq TotalView-ITCH 5.0 en
 SystemVerilog (compatible Verilator): consume el **payload MoldUDP64**
 (decapado de IP/UDP en el testbench), valida el framing y la secuencia,
-alinea los mensajes que cruzan límites de palabra/paquete, decodifica los
+alinea los mensajes que cruzan límites de palabra —un cruce de `tlast` es
+truncado y nunca continuación—, decodifica los
 tipos del subset (`S, R, A, F, E, C, X, D, U, P`) y emite por AXI-Stream un
 **registro decodificado por mensaje**, byte a byte idéntico al de los
 vectores de mensajes del golden model. Es la etapa previa al order book
@@ -26,7 +27,9 @@ un datapath 64-bit @ 156,25 MHz.
     esperado). Decap IP/UDP queda en el testbench (ver no-goals). — decisión
     de la entrevista Q8: los gaps SÍ entran en fase 1.
   - **Alineador** (barrel shifter): mensajes que cruzan límites de palabra de
-    8 B y de paquete (tlast), manteniendo 1 palabra/ciclo.
+    8 B, manteniendo 1 palabra/ciclo. Un mensaje nunca cruza `tlast`: si el
+    datagrama termina antes de la longitud declarada, se cancela con `error` y
+    no se reanuda con bytes del paquete siguiente.
   - **FSM de parsing**: identifica `msg_type`, valida longitud declarada,
     extrae campos.
   - **Decoder `S,R,A,F,E,C,X,D,U,P`** → registro normalizado.
@@ -36,7 +39,8 @@ un datapath 64-bit @ 156,25 MHz.
 - `verification/testbenches/parser/` — testbenches cocotb + Verilator:
   - **Replay de pcaps** generados con `scripts/binaryfile_to_pcap.py`:
     decap de Ethernet/IPv4/UDP en el testbench (los paquetes reales que sí
-    cruzan palabras/paguetes), alimentando el payload MoldUDP64 al RTL.
+    cruzan palabras, pero no límites de datagrama), alimentando el payload
+    MoldUDP64 al RTL.
   - Oráculo byte a byte contra los **vectores de mensajes** del golden.
   - Vectores congelados commiteados en `verification/vectors/messages/`.
 - **Extensión pactada de fase 0** (`golden_model/`): nuevo modo de volcado
@@ -71,12 +75,12 @@ renombra ni mueve nada existente. `verification/testbenches/` y
 - **Familia/part objetivo:** AMD/Xilinx UltraScale+ (part del documento
   maestro; se fija en síntesis fase 3). Datapath **64-bit @ 156,25 MHz**
   (el que entrega el core 10GBASE-R).
-- **Line rate sin excepción (requisito duro):** el datapath acepta **1
-  palabra/ciclo** en el peor caso (mensajes mínimos back-to-back, ~19-26 B
-  tras decap). Resultado de la entrevista Q3: la salida AXI-Stream lleva
-  `tready/valid` completo (el parser PUEDE retenerse si el downstream no
-  consume), pero cuando el downstream consume, avanza 8 B/ciclo sin stall
-  interno — no se esconde lentitud con FIFOs elásticas.
+- **Line rate medido, sin promesa imposible:** el datapath usa AXI-Stream
+  completo y el test pactado mide cuatro A/U con QB=64, salida bit a bit y
+  stalls acumulados `<=24`. El peor caso infinito de mensajes mínimos es un
+  non-goal físico porque el Anexo A produce más bytes que el wire; se declara
+  en el criterio 2 y no se esconde con una FIFO ni con una afirmación de cero
+  stalls.
 - Endianness: ITCH y MoldUDP64 son **big-endian** en el cable; los registros
   decodificados (Anexo A) se emiten en el **orden de campos del wire**
   (big-endian), de modo que el RTL no hace byte-swaps y la comparación byte a
@@ -84,6 +88,13 @@ renombra ni mueve nada existente. `verification/testbenches/` y
 - Determinismo: mismo pcap de entrada → mismos registros de salida bit a bit;
   si aparece un gap de secuencia, el parsing continúa (no aborta), lo señaliza
   y lo cuenta.
+- **Bytes válidos AXI:** la entrada incluye `s_axis_tkeep[DW/8-1:0]` con
+  semántica AXI estándar. Todo beat no final tiene todos sus lanes válidos; el
+  último usa un prefijo MSB contiguo de unos. Los lanes con `tkeep=0` no entran
+  en la cola. Máscaras con huecos, `tkeep=0` o una palabra parcial sin `tlast`
+  pulsan `error` y descartan el datagrama, drenándolo hasta `tlast` si el beat
+  inválido no era final. Contrato completo:
+  `docs/superpowers/specs/2026-08-15-axis-tkeep-framing-design.md`.
 
 ## Superficie y amenazas
 
@@ -94,6 +105,7 @@ renombra ni mueve nada existente. `verification/testbenches/` y
 | `clk` | 1 | 156,25 MHz |
 | `rst_n` | 1 | reset activo bajo, síncrono |
 | `s_axis_tdata` | 64 | palabra del payload MoldUDP64 (ya decapado de IP/UDP) |
+| `s_axis_tkeep` | 8 | byte válido por lane AXI; prefijo MSB en el beat final |
 | `s_axis_tvalid` | 1 | hay palabra válida |
 | `s_axis_tready` | 1 | el parser acepta la palabra |
 | `s_axis_tlast` | 1 | última palabra del payload UDP (fin de paquete) |
@@ -116,23 +128,32 @@ es la lista literal que el barrido de `/verify` ataca.
 
 - **Gap de secuencia MoldUDP64** (`seq_actual > esperado`) — SEC-GAP-01.
 - **Mensaje que cruza límite de palabra de 8 B** — SEC-ALN-01.
+- **Dos datagramas no alineados consecutivos**: cada payload es un burst AXI
+  independiente y el padding nunca precede al header posterior. — SEC-FRM-05.
+- **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
+  `error`, descarte y recuperación en el paquete siguiente. — SEC-FRM-06.
+- **`count` no coincide con el cierre físico**: mensajes o bytes extra tras
+  consumir `count`, o `count=0` con payload, dan `error` y se drenan hasta
+  `tlast`; jamás se reinterpretan como header. — SEC-FRM-07.
+- **Backpressure de entrada**: `(tdata,tkeep,tlast)` permanece estable mientras
+  `tvalid && !tready`. — SEC-FRM-08.
 - **Mensaje que cruza límite de paquete** (tlast en medio de un mensaje:
   en MoldUDP64 un mensaje nunca se parte entre paquetes, pero el RTL debe
   gestionarlo con firmeza: count inconsistente con el último paquete) —
   SEC-FRM-02.
-- **Tipo no decodificable** (fuera del subset): validar longitud y contar, sin
-  emitir registro ni romper line rate — SEC-PAR-04.
+- **Tipo no decodificable** (fuera del subset): validar longitud, avanzar el
+  `msg_idx` global y no emitir registro — SEC-PAR-04/05.
 - **Longitud declarada incoherente / frame truncado** — SEC-FRM-01, SEC-PAR-03.
-- **Back-to-back de mensajes mínimos** (peor caso de throughput) — SEC-LIN-01.
+- **Tramo A/U back-to-back con QB=64** (régimen medido) — LIN-01/SEC-LIN-01.
 - **Backpressure del downstream** (tready bajo) sin pérdida de datos — SEC-OUT-02.
 - **Mensaje de sesión nueva** (session cambia) → reset de seq esperado — SEC-FRM-03.
 - **count = 0** en un paquete (válido en MoldUDP64) — SEC-FRM-04.
 - **Reemplazos/duplicados de seq** (seq == esperado, no gap): aceptar — SEC-GAP-02.
 
-**Qué se arriesga del maestro:** el requisito de **latencia determinista y
-line rate** (una palabra por ciclo sin excepción); un alineador mal diseñado o
-un decoder con lógica combinational larga rompe la cadena de 64-bit @ 156,25.
-El framing + gaps acercan el manejo real del feed (decisión Q8/Q9).
+**Qué se arriesga del maestro:** la **latencia determinista y el throughput
+medido**; un alineador mal diseñado o un decoder con lógica combinational larga
+rompe la cadena de 64-bit @ 156,25 MHz. El framing + gaps acercan el manejo
+real del feed (decisión Q8/Q9).
 
 ## Reuso
 
@@ -152,15 +173,15 @@ El framing + gaps acercan el manejo real del feed (decisión Q8/Q9).
 
 ## Criterios de aceptación (Definition of Done)
 
-1. [ ] El parser consume el payload MoldUDP64 y emite un **registro
+1. [x] El parser consume el payload MoldUDP64 y emite un **registro
    decodificado (Anexo A) por cada mensaje de los 10 tipos del subset**,
    byte a byte idéntico al `--emit-messages` del golden model (known-answer
    sintético, incl. un mensaje de cada tipo).
    — Gherkin: `parser.feature` §PAR-01, §SEC-PAR-04; `output.feature` §OUT-01
-2. [x] **Line rate (alcance acotado):** en un tramo de mensajes back-to-back
-   que cabe amortiguado en la cola (QB=128, mensajes de tamaño medio A/U/F/P),
-   con el downstream consumiendo, el RTL acepta la entrada sin stall interno
-   (contador de ciclos de stall == 0 en el test).
+2. [x] **Line rate (alcance acotado):** en un tramo literal de cuatro mensajes
+   A/U back-to-back que cabe amortiguado en la cola (QB=64), con el downstream
+   consumiendo, el RTL conserva la salida bit a bit y acumula como máximo 24
+   ciclos de stall de entrada; no se presenta ese tramo como cero stalls.
    — Gherkin: `datapath.feature` §LIN-01
    — **Decisión de spec (edit 2026-08-13, iteración 3):** el peor caso de
    mensajes MÍNIMOS (`D` 19 B, `X` 23 B, `S` 12 B) **back-to-back infinito** se
@@ -168,40 +189,50 @@ El framing + gaps acercan el manejo real del feed (decisión Q8/Q9).
    Anexo A añade 16 B de overhead por mensaje (word0 + word1), de modo que la
    salida AXI-Stream siempre excede la entrada (D: 24 B salida por 21 B feed;
    S: 24/14) y ningún aligner alcanza «1 palabra/ciclo infinito» con una cola
-   finita. Se verifica con el tramo acotado que cabe amortiguado (0 stalls),
+   finita. Se verifica con el tramo acotado que cabe amortiguado (stalls `<=24`),
    y el límite se documenta en `docs/research-parser-rtl-pendientes.md` §C.0
    como non-goal derivado del Anexo A (no como defecto de RTL). Si en el futuro
    se requiere el caso infinito, la decisión es rediseñar el Anexo A (salida
    comprimida / bus más ancho), no parchear el parser.
    — Gherkin: `datapath.feature` §LIN-01
-3. [ ] El alineador decodifica correctamente cualquiera de las 8 alineaciones
+3. [x] El alineador decodifica correctamente cualquiera de las 8 alineaciones
    de un mensaje dentro de la palabra de 64-bit, incluidos mensajes que
    cruzan el límite de palabra.
    — Gherkin: `datapath.feature` §ALN-01
 4. [ ] **Framing MoldUDP64:** sesión, seq y count parseados; seq esperado =
    prev_seq + prev_count; un **gap** se señaliza (`gap_detected`), se cuenta y
    el parsing continúa; seq == esperado (sin gap) no señaliza; cambio de
-   sesión resetea el seq esperado; count=0 es válido.
+   sesión resetea el seq esperado; count=0 es válido. Cada payload se presenta
+   como burst independiente con `tkeep`; dos paquetes no alineados no comparten
+   beat ni contaminan cabeceras. `count` debe terminar exactamente con `tlast`:
+   cualquier byte válido residual o cierre tardío se señaliza y drena.
    — Gherkin: `framing.feature` §FRM-01, §FRM-02, §SEC-GAP-01, §SEC-GAP-02,
-   §SEC-FRM-03, §SEC-FRM-04
+   §SEC-FRM-03, §SEC-FRM-04, §SEC-FRM-05, §SEC-FRM-06, §SEC-FRM-07
 5. [ ] **AXI-Stream con backpressure:** con `tready` bajo intermite el parser
    retiene el stream sin perder ni duplicar ningún registro (oráculo byte a
-   byte); la secuencia `tvalid/tready/tlast` respeta el handshake.
-   — Gherkin: `output.feature` §OUT-02, §OUT-03
-6. [ ] Los tipos fuera del subset se validan por longitud, se cuentan y **no**
-   emiten registro ni rompen el line rate (equivalente a fase 0).
+   byte); la secuencia `tvalid/tready/tlast` respeta el handshake y el productor
+   mantiene estable `(tdata,tkeep,tlast)` durante cada stall de entrada.
+   — Gherkin: `output.feature` §OUT-02, §OUT-03; `framing.feature` §SEC-FRM-08
+6. [x] Los 22 tipos canónicos de `MESSAGE_LENGTHS`, incluidos los que están
+   fuera del subset, se validan por longitud antes de continuar. Los tipos
+   fuera del subset se contabilizan en el `msg_idx` global y **no** emiten
+   registro ni rompen el line rate; un tipo conocido con longitud incorrecta
+   pulsa `error` y se descarta. No se añade un banco de contadores por tipo:
+   nunca formó parte de los puertos y ningún consumidor del pipeline lo usa.
    — Gherkin: `parser.feature` §SEC-PAR-04
-7. [ ] Longitud incoherente / frame truncado cancelan el mensaje con `error`
-   y continúan en el siguiente mensaje (sin abortar el stream, fail con
-   señal).
+7. [ ] Longitud incoherente / frame truncado cancelan el mensaje con `error`,
+   descartan el resto del datagrama inválido y continúan desde la cabecera del
+   siguiente paquete íntegro (sin abortar el stream, fail con señal). Los bytes
+   con `tkeep=0` nunca completan una longitud declarada.
    — Gherkin: `parser.feature` §SEC-PAR-03, §SEC-FRM-01, §SEC-FRM-02
 8. [ ] **Replay real de fase 1 (hybrid oracle):** el RTL procesa los registros
    de los mensajes del subset de un pcap local del día real/replay, y su
    salida es byte a byte idéntica al oráculo `--emit-messages` sobre ese mismo
-   pcap. Además, un par de **vectores congelados** pequeños se commitean en
+   pcap, emitiendo un burst y un `tlast` por payload UDP. Además, un par de
+   **vectores congelados** pequeños se commitean en
    `verification/vectors/messages/` y el RTL los reproduce.
    — Gherkin: `replay.feature` §REP-01, §REP-02
-9. [ ] **Cabos de fase 0** (decisión pendiente #2, cerrados ANTES del RTL):
+9. [x] **Cabos de fase 0** (decisión pendiente #2, cerrados ANTES del RTL):
    el día de regresión `01302019` se procesa sin anomalías de invariantes y
    los vectores sintéticos pequeños se commitean. Se documenta en el
    verify-report de fase 0 (edit de ese informe) o en este spec como
@@ -219,13 +250,13 @@ El framing + gaps acercan el manejo real del feed (decisión Q8/Q9).
 | Criterio | Cómo se prueba |
 |---|---|
 | 1 | cocotb `test_*` espejo de `parser.feature`/`output.feature` sobre vectores sintéticos (oráculo messages.py + `--emit-messages`) |
-| 2 | cocotb: feed de mensajes mínimos back-to-back, chequear 0 ciclos de stall con tready=1 |
+| 2 | cocotb: cuatro A/U back-to-back con QB=64, salida bit a bit y stalls `<=24` con tready=1 |
 | 3 | cocotb: barrido de las 8 alineaciones (escenario ALN-01 con Esquema) |
-| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0) |
-| 5 | cocotb: tready aleatorio/pérdida controlada, comparar salida vs oráculo sin pérdida/dup |
-| 6 | cocotb: feed con tipos fuera de subset, chequear conteo y no-registro |
-| 7 | cocotb: longitudes rotas / frames truncados → `error`, continuación |
-| 8 | cocotb: replay de pcap del día real (local, `data/itch_sample/`) + vectores congelados commiteados |
+| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0), dos datagramas no alineados, `count↔tlast` exacto y máscaras `tkeep` válidas/inválidas |
+| 5 | cocotb: tready aleatorio/pérdida controlada, comparar salida vs oráculo y monitorizar `(tdata,tkeep,tlast)` estable en stalls de entrada |
+| 6 | cocotb: H canónico/longitud H incorrecta entre mensajes A; chequear validación, avance de `msg_idx` y no-registro |
+| 7 | cocotb: longitudes rotas / frames truncados, incluidos bordes sub-word según `tkeep` → `error`, continuación |
+| 8 | cocotb: replay de pcap del día real como bursts independientes + conteo de `tlast` + vectores congelados commiteados |
 | 9 | `python3 -m golden_model.scripts.run_golden data/itch_sample/01302019.NASDAQ_ITCH50.gz …` (sin anomalías) + vectores sintéticos commiteados |
 | 10 | `verilator --lint-only -Wall --top-module itch_parser rtl/parser/<files>.sv` |
 | 11 | `verible-verilog-lint rtl/parser/<files>.sv` |

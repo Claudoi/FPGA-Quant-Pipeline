@@ -14,13 +14,15 @@ from test_orderbook import (A, E, X, D, S, run_book, _reset)
 from test_orderbook32 import anexo_words32
 
 
-async def drive_and_collect_hard32(dut, messages, stall=None, max_cycles=300000):
+async def drive_and_collect_hard32(dut, messages, stall=None, wait_w0_at=(),
+                                   max_cycles=300000):
     """Conduce Anexo A de 32 bits con backpressure opcional en bbo/depth.
 
     `stall` es una función ciclo->bool (True = tready en 0, backpressure);
     None = sin backpressure. Muestrea el pulso de `error` por ciclo.
 
-    Devuelve (bbo_events, cross_count, anomaly_count, error_cycles)."""
+    Devuelve (bbo_events, cross_count, anomaly_count, error_cycles,
+    oob_index_cycles)."""
     await _reset(dut)
     words = anexo_words32(messages)
     ci = 0
@@ -30,9 +32,15 @@ async def drive_and_collect_hard32(dut, messages, stall=None, max_cycles=300000)
     cross = 0
     anomaly = 0
     errors = 0
+    oob_index_cycles = 0
+    w0_released = set()
     for cycle in range(max_cycles):
         stall_now = bool(stall(cycle)) if stall else False
-        dut.s_axis_tvalid.value = 1 if ci < n else 0
+        wait_w0 = ci in wait_w0_at and ci not in w0_released
+        if wait_w0 and int(dut.st.value) == 0:  # ST_W0
+            w0_released.add(ci)
+            wait_w0 = False
+        dut.s_axis_tvalid.value = 1 if ci < n and not wait_w0 else 0
         dut.s_axis_tdata.value = words[ci] if ci < n else 0
         dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
         dut.bbo_tready.value = 0 if stall_now else 1
@@ -55,13 +63,15 @@ async def drive_and_collect_hard32(dut, messages, stall=None, max_cycles=300000)
                 ci += 1
         if int(dut.error.value) == 1:
             errors += 1
+        if int(dut.m_loc_idx.value) >= 20:
+            oob_index_cycles += 1
         if int(dut.cross_events.value) != 0:
             cross = int(dut.cross_events.value)
         if int(dut.anomaly_count.value) != 0:
             anomaly = int(dut.anomaly_count.value)
         if quiet > 200:
             break
-    return out, cross, anomaly, errors
+    return out, cross, anomaly, errors, oob_index_cycles
 
 
 @cocotb.test()
@@ -78,10 +88,14 @@ async def test_sec_nsym01_simbolo_21_error_sin_oob(dut):
     msgs.append(A(7777, 3_000_000_000, 100, b"B", 100, b"MSFT    ", 3_000_00))
     msgs.append(A(AMZN, 3_000_000_001, 101, b"B", 200, b"AMZN    ", 2_000_00))
     msgs.append(E(AMZN, 3_000_000_002, 101, 40, 2001))
+    boundary = len(anexo_words32(msgs[:20]))
     gold_msgs = [m for m in msgs if int.from_bytes(m[1:3], "big") != 7777]
     expected, golden = run_book(gold_msgs)
-    got, cross, anomaly, errors = await drive_and_collect_hard32(dut, msgs)
+    got, cross, anomaly, errors, oob_cycles = await drive_and_collect_hard32(
+        dut, msgs, wait_w0_at=(boundary,))
     assert errors > 0, "SEC-NSYM-01: el símbolo 21 no señalizó error"
+    assert oob_cycles == 0, (
+        f"SEC-NSYM-01: m_loc_idx quedó fuera de NSYM durante {oob_cycles} ciclos")
     assert got == expected, (
         f"SEC-NSYM-01: got={got} exp={expected} "
         f"(el símbolo 21 no debe emitir ni corromper el libro)")
@@ -100,8 +114,8 @@ async def test_sec_bp01_bbo_se_retiene_bajo_backpressure(dut):
     el par se retiene y se entrega exactamente una vez (sin pérdida ni
     duplicado), y la secuencia sigue siendo bit a bit la del golden.
 
-    Patrón de backpressure determinista: ventanas de 5 ciclos de tready=0
-    cada 17 ciclos (cae con probabilidad alta sobre emisiones reales)."""
+    Patrón de backpressure determinista: tready permanece a cero hasta ver
+    tvalid, comprueba dos ciclos de retención estable y entonces libera."""
     AMZN = 393
     msgs = [
         S(AMZN, 1_000_000_000, ord("Q")),
@@ -115,11 +129,33 @@ async def test_sec_bp01_bbo_se_retiene_bajo_backpressure(dut):
     ]
     expected, golden = run_book(msgs)
 
-    def stall(cycle):
-        return (cycle % 17) >= 12
+    hold = {"seen": False, "remaining": 2, "released": False, "payload": None}
 
-    got, cross, anomaly, errors = await drive_and_collect_hard32(
+    def stall(_cycle):
+        if not hold["seen"]:
+            if int(dut.bbo_tvalid.value) == 1:
+                hold["seen"] = True
+                hold["payload"] = (int(dut.bbo_tdata.value),
+                                   int(dut.depth_tdata.value))
+            return True
+        if hold["released"]:
+            return False
+        assert int(dut.bbo_tvalid.value) == 1, (
+            "SEC-BP-01: bbo_tvalid cayó mientras tready seguía a cero")
+        assert int(dut.depth_tvalid.value) == 1, (
+            "SEC-BP-01: depth_tvalid cayó mientras tready seguía a cero")
+        assert (int(dut.bbo_tdata.value), int(dut.depth_tdata.value)) == hold["payload"], (
+            "SEC-BP-01: el payload cambió durante la retención")
+        if hold["remaining"]:
+            hold["remaining"] -= 1
+            return True
+        hold["released"] = True
+        return False
+
+    got, cross, anomaly, errors, oob_cycles = await drive_and_collect_hard32(
         dut, msgs, stall=stall)
+    assert hold["seen"] and hold["released"], (
+        "SEC-BP-01: el test no observó y liberó un evento retenido")
     assert got == expected, (
         f"SEC-BP-01: got({len(got)}) exp({len(expected)}) "
         f"— evento perdido o duplicado bajo backpressure:\n"
@@ -129,6 +165,7 @@ async def test_sec_bp01_bbo_se_retiene_bajo_backpressure(dut):
     assert cross == golden.cross_events, (
         f"SEC-BP-01 cross: got={cross} exp={golden.cross_events}")
     assert errors == 0, f"SEC-BP-01: {errors} errores espurios bajo backpressure"
+    assert oob_cycles == 0, f"SEC-BP-01: {oob_cycles} ciclos con índice OOB"
     cocotb.log.info(
         f"SEC-BP-01 OK: {len(got)} eventos entregados exactamente una vez "
-        f"con {sum(1 for c in range(500) if stall(c))} ciclos de tready=0")
+        "tras dos ciclos de retención estable")

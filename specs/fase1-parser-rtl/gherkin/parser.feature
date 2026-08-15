@@ -17,12 +17,18 @@ Escenario: PAR-01 — cada tipo del subset se decodifica a un registro byte a by
   Y el registro emite tlast al final del burst y msg_type coincide
 
 #language: es
-Escenario: SEC-PAR-04 — un tipo fuera del subset se valida por longitud y se cuenta sin emitir registro
+Escenario: SEC-PAR-04 — un tipo fuera del subset se valida y avanza el índice sin emitir registro
   Dado un pcap sintético que contiene un mensaje de tipo H (fuera del subset) entre mensajes del subset
   Cuando el RTL procesa el stream
   Entonces no emite ningún registro para el mensaje H
-  Y cuenta el mensaje y continúa sin romper el line rate
-  Y el contador de mensajes por tipo incluye H
+  Y contabiliza H en el msg_idx global y continúa sin romper el line rate
+  Y el siguiente registro A refleja que H fue consumido
+
+Escenario: SEC-PAR-05 — un tipo conocido fuera del subset con longitud incorrecta da error
+  Dado un mensaje H que declara 24 bytes aunque su longitud canónica es 25
+  Cuando el RTL lo procesa entre dos mensajes A válidos
+  Entonces señaliza error y no emite ningún registro para H
+  Y continúa con el segundo mensaje A sin desalinearse
 
 #language: es
 Escenario: SEC-PAR-03 — una longitud declarada incoherente cancela el mensaje con error y continúa
@@ -36,7 +42,7 @@ Escenario: SEC-FRM-01 — un frame truncado señaliza error y el parser continú
   Dado un pcap sintético cuyo payload termina a mitad de un mensaje sin los bytes declarados
   Cuando el RTL procesa el stream
   Entonces señaliza error en el mensaje truncado
-  Y continúa con el siguiente paquete/mensaje íntegro sin abortar
+  Y descarta el resto del datagrama y continúa con el siguiente paquete íntegro
 
 #language: es
 Escenario: SEC-FRM-02 — un mensaje no puede partirse entre paquetes y se gestiona con firmeza

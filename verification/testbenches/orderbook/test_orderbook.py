@@ -16,6 +16,8 @@ import os
 from golden_model.src import book as book_golden
 from golden_model.src import message_oracle
 
+REAL_PCAP = "/tmp/real_trading.pcap"
+
 
 # ---------------------------------------------------------------------------
 # construcción de mensajes ITCH (literales desde el PDF / messages.py)
@@ -203,8 +205,8 @@ def anexo_words(messages):
 async def drive_and_collect_bbo(dut, messages, max_cycles=200000):
     """Conduce los Anexo A (words) y recolecta eventos BBO del top.
 
-    Devuelve (bbo_events, cross_count, anomaly_count). bbo_events es lista de
-    (locate, (bid_px,bid_qty,ask_px,ask_qty), changed).
+    Devuelve (bbo_events, cross_count, anomaly_count, error_cycles).
+    bbo_events es lista de (locate, (bid_px,bid_qty,ask_px,ask_qty), changed).
     """
     await _reset(dut)
     words = anexo_words(messages)
@@ -215,6 +217,7 @@ async def drive_and_collect_bbo(dut, messages, max_cycles=200000):
     quiet = 0
     cross = 0
     anomaly = 0
+    error_cycles = 0
     for _ in range(max_cycles):
         dut.s_axis_tvalid.value = 1 if ci < n else 0
         dut.s_axis_tdata.value = words[ci] if ci < n else 0
@@ -244,9 +247,10 @@ async def drive_and_collect_bbo(dut, messages, max_cycles=200000):
             cross = int(dut.cross_events.value)
         if int(dut.anomaly_count.value) != 0:
             anomaly = int(dut.anomaly_count.value)
+        error_cycles += int(dut.error.value)
         if quiet > 200:
             break
-    return out, cross, anomaly
+    return out, cross, anomaly, error_cycles
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +272,7 @@ async def test_bbo01_secuencia_bbo_igual_golden(dut):
         U(AMZN, 1_000_000_008, 2, 10, 30, 999_00),  # replace ref2 (ya borrada) -> anomaly
     ]
     expected, golden = run_book(msgs)
-    got, cross, anomaly = await drive_and_collect_bbo(dut, msgs)
+    got, cross, anomaly, _ = await drive_and_collect_bbo(dut, msgs)
     # normalizar: el golden emite (locate, (bbo), changed); got idéntico
     assert got == expected, (
         f"BBO-01:\n got={got}\n exp={expected}")
@@ -290,7 +294,7 @@ async def test_sec_u01_replace_atomico(dut):
         U(AMZN, 2, 1, 2, 50, 1_001_00),   # replace atómico: bid 100000->100100
     ]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     # el BBO del U es el final (100100, 50) — el bid anterior (100000) ya no existe
     assert got == expected, f"SEC-U-01: got={got} exp={expected}"
 
@@ -307,7 +311,7 @@ async def test_sec_hz01_add_execute_raw(dut):
         E(AMZN, 2, 1, 40, 1001),   # reduce 40/100 -> 60
     ]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, f"SEC-HZ-01: got={got} exp={expected}"
 
 
@@ -324,7 +328,7 @@ async def test_sec_hz02_replace_execute_raw(dut):
         E(AMZN, 3, 2, 30, 1002),          # reduce ref2 50->20
     ]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, f"SEC-HZ-02: got={got} exp={expected}"
 
 
@@ -341,7 +345,7 @@ async def test_sec_dc01_sin_doble_descuento(dut):
         X(AMZN, 3, 1, 60,),        # 60-60=0 -> delete
     ]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, f"SEC-DC-01: got={got} exp={expected}"
 
 
@@ -360,7 +364,7 @@ async def test_sec_dc02_delete_descuenta_exacto(dut):
     # el golden NO aborta (delete de ref existente es válido) -> BBO (0,0)
     expected, golden = run_book(msgs)
     assert golden.anomalies == 0, "SEC-DC-02: delete de ref existente no es anomalía"
-    got, _, anomaly = await drive_and_collect_bbo(dut, msgs)
+    got, _, anomaly, _ = await drive_and_collect_bbo(dut, msgs)
     # el BBO final debe ser (0,0,0,0) y sin error ni anomalía
     assert got == expected, f"SEC-DC-02: got={got} exp={expected}"
     assert anomaly == 0, f"SEC-DC-02: anomaly={anomaly} (delete válido no cuenta)"
@@ -378,7 +382,7 @@ async def test_sec_an01_ref_desconocida(dut):
         A(AMZN, 2, 1, b"B", 100, b"AMZN    ", 1_000_00),
     ]
     expected, golden = run_book(msgs)
-    got, _, anomaly = await drive_and_collect_bbo(dut, msgs)
+    got, _, anomaly, _ = await drive_and_collect_bbo(dut, msgs)
     assert anomaly == golden.anomalies, f"SEC-AN-01: anomaly={anomaly} exp={golden.anomalies}"
     assert got == expected, f"SEC-AN-01: got={got} exp={expected}"
 
@@ -388,11 +392,12 @@ async def test_sec_an01_ref_desconocida(dut):
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_sec_ov01_overflow_cantidad(dut):
-    """Espejo §SEC-OV-01: reduce por encima de la qty viva señala error."""
+    """Espejo §SEC-OV-01: error observable, descarte y recuperación."""
     AMZN = 393
     msgs = [
         A(AMZN, 1, 1, b"B", 100, b"AMZN    ", 1_000_00),
         X(AMZN, 2, 1, 200,),        # cancel 200 > 100 -> error (golden aborta)
+        A(AMZN, 3, 2, b"S", 50, b"AMZN    ", 1_005_00),
     ]
     # el golden lanza InvariantError; el RTL debe señalar `error` sin abortar
     try:
@@ -400,8 +405,11 @@ async def test_sec_ov01_overflow_cantidad(dut):
         raise AssertionError("SEC-OV-01: el golden debería abortar ante qty negativa")
     except book_golden.InvariantError:
         pass  # esperado
-    # RTL: el error se señala y el parser continúa (no cuelga)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    # La operación inválida no emite; el add posterior sí se conserva.
+    expected, _ = run_book([msgs[0], msgs[2]])
+    got, _, _, error_cycles = await drive_and_collect_bbo(dut, msgs)
+    assert error_cycles >= 1, "SEC-OV-01: no se observó el pulso error"
+    assert got == expected, f"SEC-OV-01: got={got} exp={expected}"
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +426,7 @@ async def test_sec_cr01_libro_cruzado(dut):
         A(AMZN, 4, 2, b"B", 100, b"AMZN    ", 1_000_00),  # bid == ask -> cross
     ]
     expected, golden = run_book(msgs)
-    got, cross, _ = await drive_and_collect_bbo(dut, msgs)
+    got, cross, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert cross == golden.cross_events, f"SEC-CR-01: cross={cross} exp={golden.cross_events}"
     assert got == expected, f"SEC-CR-01: got={got} exp={expected}"
 
@@ -428,12 +436,15 @@ async def test_sec_cr01_libro_cruzado(dut):
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_sec_em01_simbolo_vacio(dut):
-    """Espejo §SEC-EM-01: un símbolo sin órdenes no emite BBO."""
+    """Espejo §BBO-02: locate vacío aislado y lado ask a cero."""
     AMZN = 393
+    AAPL = 13
     msgs = [A(AMZN, 1, 1, b"B", 100, b"AMZN    ", 1_000_00)]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, f"SEC-EM-01: got={got} exp={expected}"
+    assert all(loc != AAPL for loc, _, _ in got), "BBO-02: evento espurio para AAPL vacío"
+    assert got[-1][1][2:] == (0, 0), f"BBO-02: ask vacío no está a cero: {got[-1]}"
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +463,7 @@ async def test_multi01_dos_simbolos_independientes(dut):
         X(AAPL, 5, 10, 20),        # cancel AAPL, no afecta AMZN
     ]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, f"MULTI-01: got={got} exp={expected}"
 
 
@@ -471,7 +482,7 @@ async def test_inv_u01_replace_best_bid_estado_final(dut):
         U(AMZN, 3, 247097, 247657, 500, 425_700),  # baja el mejor bid 425800->425700
     ]
     expected, golden = run_book(msgs)
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, (
         f"INV-U-01: got={got} exp={expected} "
         f"(el U debe dejar visible el nivel 425700, no el 425800 stale)")
@@ -491,7 +502,7 @@ async def test_rep02_vectores_congelados_bbo(dut):
     msgs = [bytes.fromhex(h) for h in data["messages_hex"]]
     expected = [(e["locate"], (e["bid_px"], e["bid_qty"], e["ask_px"], e["ask_qty"]), e["changed"])
                 for e in data["events"]]
-    got, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, (
         f"REPLAY-02 ({data['name']}): got={got} exp={expected}")
 
@@ -533,23 +544,19 @@ def _pcap_msgs_subset(pcap_path, max_symbols=20):
     return msgs, keep
 
 
-@cocotb.test()
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_replay01_feed_real_bbo(dut):
     """Espejo §REPLAY-01: el BBO del feed real (subset 20 símbolos) es idéntico
     al golden book.py — bit a bit, evento a evento, incluido changed.
 
     El pcap local no se commitea (regla G0); el test se omite si no existe."""
-    import os
-    pcap = "/tmp/real_trading.pcap"
-    if not os.path.exists(pcap):
-        cocotb.log.info("REPLAY-01: pcap local ausente, test omitido (env sin datos)")
-        return
-    msgs, keep = _pcap_msgs_subset(pcap, max_symbols=20)
+    assert os.path.exists(REAL_PCAP), "REPLAY-01 OMITIDO: pcap local ausente"
+    msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
     cocotb.log.info(
         f"REPLAY-01: {len(msgs)} mensajes de {len(keep)} símbolos "
         f"({sorted(keep)[:3]}...) contra golden")
     expected, golden = run_book(msgs)
-    got, cross, anomaly = await drive_and_collect_bbo(dut, msgs, max_cycles=2_000_000)
+    got, cross, anomaly, _ = await drive_and_collect_bbo(dut, msgs, max_cycles=2_000_000)
     if got != expected:
         first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
         raise AssertionError(
@@ -563,4 +570,3 @@ async def test_replay01_feed_real_bbo(dut):
     cocotb.log.info(
         f"REPLAY-01 OK: {len(got)} eventos bit a bit, "
         f"cross={cross}, anomaly={anomaly}")
-

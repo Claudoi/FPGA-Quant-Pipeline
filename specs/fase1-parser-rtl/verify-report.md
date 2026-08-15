@@ -1,120 +1,209 @@
-# verify-report — fase1-parser-rtl (iteración 3)
+# verify-report — fase1-parser-rtl — cierre de framing `tkeep`
 
-> Régimen de gates de Atenea re-mapeado al flujo HDL. El owner no lee HDL/Python:
-> esta evidencia (outputs reales) es lo que `/grade` re-ejecutará.
-> Fecha: 2026-08-13. Área: `rtl/parser/` + `verification/testbenches/parser/`.
-> Iteración 3: cierra el criterio 7 (frame truncado) que grade marcó FAIL en la
-> iteración 2 (tests placeholder `or True` + RTL sin detección de truncado).
+> Evidencia vigente ejecutada el 2026-08-15 desde el commit base
+> `22130e3fae758edaf674a3ceb9c45b38711a2f5b`, con builds limpios y
+> `PATH=/Volumes/WD_Black/FPGA/.venv/bin:$PATH`. Sustituye la evidencia de la
+> iteración cuyo driver concatenaba datagramas y no representaba los bytes
+> válidos del último beat.
 
-## Meta del atacante/diseño (1-2 frases)
-
-¿Cómo podría este módulo dar un registro incorrecto, perder un mensaje, romper el
-handshake AXI o atascarse con un feed real? Ataques cubiertos: mensaje que cruza
-palabra/paquete, longitud incoherente por tipo, gap de secuencia, cambio de
-sesión, count=0, backpressure intermitente de salida, tready bajo con datos
-retenidos, feed real back-to-back que llena la cola (desbordamiento del contador),
-tipo fuera de subset, **tlast en medio de un mensaje, frame truncado con el
-datagrama terminado antes de completar el mensaje**.
-
-## Cambios de iteración 3 (criterio 7)
-
-- RTL: flag `eop_seen` latchea `tlast`; en `ST_LEN` un mensaje incompleto con
-  `eop_seen` → `error` + salto a `ST_HDR` (descarta el truncado, sigue con el
-  siguiente datagrama). Se limpia al capturar un mensaje completo o al leer un
-  header nuevo (salvo que el tlast coincida, para no enmascarar el propio
-  truncado).
-- Tests `test_sec_frm01` / `test_sec_frm02` reescritos con asserts reales
-  (antes `or True`): verificar `errores > 0` y que el parser continúa / no
-  emite registro parcial.
-
-## Tabla de gates
-
-| Gate | Comando / evidencia | Resultado |
-|---|---|---|
-| **A. Simulación** | `make sim` (cocotb+Verilator) tras `make clean` (la mutación deja sim_build sucio) | 19/19 PASS, 0 FAIL — **PASS** |
-| **B. Compilación/lint sintaxis** | `verilator --lint-only -Wall -Wno-EOFNEWLINE --top-module itch_parser` | 0 warnings — **PASS** |
-| **C. Estilo** | `verible-verilog-lint` **NO EJECUTADO** (herramienta no instalada; sustituto `--Wall` + revisión manual) | **NO EJECUTADO** |
-| **D. Cobertura + mapeo** | Tabla spec↔tests abajo; cobertura funcional runner **NO EJECUTADO** (no configurado) | Nivel 1 **PASS** |
-| **E. Mutación HDL** | `python3 scripts/verify/mutate_parser.py` | **10/10 muertos, 0 sobreviven** — **PASS** |
-| **F. Completitud Gherkin** | 19 escenarios ↔ 19 tests espejo (tabla abajo) | **PASS** |
-| **G. Rigor + timing** | G0/G1/G3 checklist; G timing NO APLICA (fase 1) | **PASS** |
-
-## Gate D nivel 1 — cruce spec ↔ tests
-
-| Criterio spec | Test(s) espejo | Estado |
-|---|---|---|
-| 1 (registro Anexo A byte a byte) | `test_par01`, `test_out01`, `test_rep01`, `test_rep02` | PASS |
-| 2 (line-rate, alcance acotado) | `test_lin01`, `test_sec_lin01` | PASS (acotado) |
-| 3 (alineador, 8 desplazamientos) | `test_aln01` | PASS |
-| 4 (framing/gaps/sesión/count=0) | `test_frm01`, `test_sec_gap01/02`, `test_sec_frm03/04` | PASS |
-| 5 (AXI-Stream con backpressure) | `test_out02`, `test_out03` | PASS |
-| 6 (no-subset: validar y contar, sin registro) | `test_sec_par04` | PASS |
-| 7 (longitud incoherente/truncado → error) | `test_sec_par03`, `test_sec_par03b`, `test_sec_frm01`, `test_sec_frm02` | **PASS (iteración 3)** |
-| 8 (replay real + vectores congelados) | `test_rep01`, `test_rep02` (pcap 12302019) | PASS |
-| 10/11 (lint y estilo) | gates B/C | B PASS, C NO EJECUTADO |
-| 9 (cabos fase 0: día 01302019) | — | NO EJECUTADO |
-
-## Gate F — espejos Gherkin (título literal → test)
-
-Todos los escenarios de los 5 `.feature` tienen test espejo (19/19). Ver tabla
-de la iteración 2 — sin cambios estructurales, solo se reforzaron
-`test_sec_frm01` y `test_sec_frm02`.
-
-## Gate E — mutación HDL (evidencia resumida)
-
-Runner: `scripts/verify/mutate_parser.py` (aplica cada flip, corre la suite,
-restaura, y limpia sim_build al final).
-
-```
-[MATADO] ALN-OFFBYONE: FAIL=16   # off-by-one del offset de cuerpo
-[MATADO] ALN-PAD-FILL: FAIL=16   # relleno del cuerpo en lugar de cero
-[MATADO] SEQ-GAP-NOGAP: FAIL=3   # flip != a == en detección de gap
-[MATADO] SEQ-GAP-SESSION: FAIL=1 # flip != a == en cambio de sesión
-[MATADO] NEXT-OFFBYONE: FAIL=4   # off-by-one pack_left >1 → >0
-[MATADO] LEN-BODY_W: FAIL=16     # ceil incorrecto de words de cuerpo
-[MATADO] CAP-SUBSET: FAIL=1      # emite aunque no sea subset
-[MATADO] OUT-FREE: FAIL=16       # heap sin out_take (duplica/pierde)
-[MATADO] LEN-CAPT-ERR: FAIL=1    # umbral len<11 → <=11 (borde, test par03b)
-[MATADO] TRUNC-EOP: FAIL=1       # ignora el latch de truncado (FRM-01/02)
-TODOS LOS MUTANTES MUERTOS. Gate E PASS.
-```
-
-## Gate G — checklist por superficie
-
-**G0:** feeds reales fuera del repo (`/tmp/real_subset.pcap` para REP-02);
-vectores commiteados sintéticos; `.gz` del feed gitignored. Sin secretos.
-
-**G1:** line-rate acotado (`test_lin01`, `test_sec_lin01`), alineador
-(`test_aln01`), gaps/sesión/count=0 (`test_sec_gap*`, `test_sec_frm03/04`),
-**secuencia robusta**: frame truncado y tlast en medio señalan `error` sin
-cuelgue ni registro parcial (`test_sec_frm01/02`), big-endian cubierto por la
-comparación byte a byte.
-
-**G3:** comparación bit a bit contra `message_oracle` (independiente del RTL);
-REP-02 17937 words byte a byte.
-
-## D.2 / hallazgos abiertos
-
-1. Gate C (verible) y D nivel 2 (cobertura runner): NO EJECUTADOS (herramientas
-   no disponibles/configuradas en el entorno; verible no está en brew ni pip
-   como binario). Declarados, no ocultados.
-2. Criterio 9 (cabo fase 0): **pendiente de descarga de datos**, no de código.
-   El día de regresión `01302019` no está en el entorno (solo `12302019`);
-   descargarlo de emi.nasdaq.com ≈ 4,8 GB a ~350 KB/s (~4 h). El pipeline ya se
-   validó contra el día local `12302019` (fase 0 + REP-02). El cabo se cierra
-   descargando el día y ejecutando `run_golden.py` (pre-trabajo de fase 0).
-3. Line-rate mínimo infinito (criterio 2): **DECISIÓN DE SPEC TOMADA (edit
-   2026-08-13)**: non-goal físico derivado del Anexo A (16 B overhead/mensaje →
-   salida > entrada). Ver spec.md criterio 2.
-4. La mutación deja `sim_build` sucio (los objetos no se recompilan al restaurar
-   el RTL); el runner ahora hace `make clean` al final. `make sim` en verde exige
-   ese clean o compilación fresca.
+Fix Round 1 reejecutado el `2026-08-15T15:37:59+01:00` sobre
+`785675bfcaf35937cf060fe0d0c4fc3bc0d6c52b`; las secciones de REP-02 y Gate F
+inferiores contienen sus outputs nuevos.
 
 ## Veredicto
 
-**Listo para /grade (iteración 3).** Criterio 7 cerrado con test reales que
-pinchan y un mutante TRUNC-EOP muerto. Criterio 2 cerrado por decisión de spec
-(non-goal físico). Gates A/B/E/F PASS; C/D-nivel2 declarados NO EJECUTADOS
-(entorno); G0/G1/G3 PASS; G timing NO APLICA (fase 1). Restan únicamente
-decisiones de datos/entorno de owner: descarga del día 01302019 (criterio 9,
-cabo de fase 0) e instalación de verible. **Campaña fase 1 cerrada para el RTL.**
+**PASS funcional del delta de framing `s_axis_tkeep`; fase 1 NO CERRADA.** El driver vigente
+presenta cada payload MoldUDP64 como un burst AXI independiente, conserva
+`(tdata,tkeep,tlast)` durante stalls y exige un handshake `tlast` por payload.
+La reapertura técnica de framing queda cubierta por la evidencia fresca
+inferior. Sin embargo, REP-02 aún no mide el umbral `<=24` sobre un tramo real
+de cuatro mensajes A/U back-to-back: el contador nuevo caracteriza el replay
+completo, pero ese agregado no es la ventana acotada del contrato. El gate de
+timing físico no aplica a esta campaña.
+
+No se usó una pasada sintética como sustituto del replay: el artefacto local
+`/tmp/real_subset.pcap` existía, contenía 91 datagramas no vacíos y REP-02 se
+ejecutó con `SKIP=0`.
+
+## Entorno reproducido
+
+```text
+fecha: 2026-08-15T14:58:46+01:00
+Python 3.11.14 (ejecutable: /Volumes/WD_Black/FPGA/.venv/bin/python3)
+cocotb 2.0.1
+Verilator 5.050 2026-07-01
+GNU Make 3.81
+verible-verilog-lint: no instalado
+/tmp/real_subset.pcap: 129930 bytes, 91 paquetes, 91 payloads no vacíos,
+                       3000 mensajes
+```
+
+La cabecera de cocotb informa Python 3.11.9 para el intérprete embebido de la
+misma `.venv`; el comando de orquestación y los unittest se ejecutaron con
+Python 3.11.14. Se registran ambos valores para no ocultar esa diferencia del
+entorno.
+
+## Gates A–G
+
+| Gate | Evidencia fresca | Resultado |
+|---|---|---|
+| A — simulación | parser desde `make clean`: `TESTS=31 PASS=31 FAIL=0 SKIP=0`; REP-02 real: 91 paquetes, 17.937 words y 15.023 stalls agregados con downstream listo | **PARCIAL: line-rate real abierto** |
+| B — compilación | elaboración limpia de cocotb/Verilator y `verilator --lint-only --Wall --top-module itch_parser rtl/parser/itch_parser.sv`, exit 0, cero warnings | **PASS** |
+| C — estilo | `verible-verilog-lint` no está instalado | **NO EJECUTADO** |
+| D — cobertura | `SEC-FRM-04..08` cubiertos; REP-02 cubre oráculo/`tlast` y caracteriza stalls, pero no selecciona ni juzga el tramo A/U real; cobertura instrumental no configurada | **PARCIAL** |
+| E — mutación | `mutate_parser.py`: 19/19 mutantes compilables y muertos; 0 supervivientes, 0 mutantes rotos | **PASS** |
+| F — completitud | checker versionado: 12 IDs/3 campañas, unicidad de declaraciones Gherkin por campaña, presencia en spec/test AST/report y rutas del manifiesto; 14 negativos controlados | **PASS** |
+| G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; el total de stalls no se presenta como el tramo contractual | **PASS de rigor; no cierra REP-02** |
+
+## Gate A — salida fresca
+
+```text
+$ python3 -m unittest discover -s golden_model/tests -t .
+Ran 37 tests in 0.016s
+OK
+exit 0
+
+$ make -C verification/testbenches/parser clean
+exit 0
+
+$ make -C verification/testbenches/parser sim
+REP-02 OK: 91 paquetes, 17937 words byte a byte,
+stalls de entrada con m_axis_tready=1: 15023
+TESTS=31 PASS=31 FAIL=0 SKIP=0
+exit 0
+```
+
+El assert del driver es literal:
+`accepted_tlast == len(payloads)`. En REP-02 `len(payloads) == 91`; por tanto
+la pasada verde observó **91 handshakes de entrada con `tlast`**, uno por cada
+datagrama decapsulado. Los últimos beats se forman con un prefijo MSB contiguo
+en `tkeep`; los lanes no válidos no se incorporan al parser. El mismo driver
+contó **15.023 ciclos** con `s_axis_tvalid=1 && s_axis_tready=0` mientras
+`m_axis_tready=1` durante el replay completo.
+
+Ese valor no se compara con `<=24`: suma 91 datagramas y 3.000 mensajes,
+mientras LIN-01 fija una ventana de cuatro A/U. El cierre pendiente de REP-02
+debe localizar en orden de captura, mediante el propio pcap y sin un índice
+manual, un tramo de cuatro A/U consecutivos dentro de un payload; debe contar
+solo los stalls de los beats que cubren esa ventana y conservar el
+oráculo/`tlast`.
+
+Una caracterización por `iter_pcap_packets` encontró **0** ventanas naturales
+de cuatro A/U consecutivos en `/tmp/real_subset.pcap` (`tramos_AU4=0`, exit 0).
+Por ello este artefacto no puede cerrar ese requisito: hace falta un artefacto
+real local que contenga el tramo o una regla de extracción aprobada en el
+contrato y automatizada; un pcap presente sin la precondición no se convierte
+en SKIP ni en PASS.
+
+```text
+$ python3 - <<'PY'
+from scripts.binaryfile_to_pcap import iter_pcap_packets
+hits = []
+for packet_index, (_, messages, _) in enumerate(
+        iter_pcap_packets('/tmp/real_subset.pcap')):
+    for start in range(len(messages) - 3):
+        kinds = bytes(message[0] for message in messages[start:start + 4])
+        if all(kind in b'AU' for kind in kinds):
+            hits.append((packet_index, start, kinds.decode()))
+print(f'tramos_AU4={len(hits)} primero={hits[0] if hits else None}')
+PY
+tramos_AU4=0 primero=None
+exit 0
+```
+
+Además del replay, la suite cubre:
+
+- `SEC-FRM-04`: `count=0` y último beat parcial `tkeep=11110000`;
+- `SEC-FRM-05`: dos datagramas no alineados, dos `tlast` aceptados;
+- `SEC-FRM-06`: máscaras cero, con huecos, LSB y parcial sin `tlast`, con
+  descarte y recuperación;
+- `SEC-FRM-07`: cierre exacto `count↔tlast`, residuo y cierre tardío;
+- `SEC-FRM-08`: estabilidad de `tdata`, `tkeep` y `tlast` bajo backpressure;
+- `REP-02`: límites reales conservados y comparación byte a byte.
+
+## Gates B y C — salida fresca
+
+```text
+$ verilator --lint-only --Wall --top-module itch_parser \
+    rtl/parser/itch_parser.sv
+Verilator 5.050; exit 0; cero warnings
+
+$ if command -v verible-verilog-lint ...
+Gate C NO EJECUTADO: verible-verilog-lint no instalado
+exit 0
+```
+
+Gate C no se convierte en PASS por haber pasado `--Wall`.
+
+## Gate D/F — mapa del contrato vigente
+
+| ID | Test que lo pincha |
+|---|---|
+| SEC-FRM-04 | `test_sec_frm04_count_cero_valido`, `test_sec_frm04_count_cero_parcial_msb_y_recuperacion` |
+| SEC-FRM-05 | `test_sec_frm05_datagramas_no_alineados_no_comparten_beat` |
+| SEC-FRM-06 | `test_sec_frm06_*`, `test_axi_keep_orientacion_msb_lsb` |
+| SEC-FRM-07 | `test_sec_frm07_count_tlast_cierre_exacto`, `test_sec_frm07_count_exacto_sin_tlast_da_error` |
+| SEC-FRM-08 | `test_sec_frm08_fuente_estable_bajo_backpressure_entrada` |
+| REP-02 | `test_rep02_replay_pcap_real_dia_local` |
+
+El checker versionado verificó cada ID exactamente una vez en una declaración
+real `Escenario:`/`Scenario:` de su propia campaña, presencia en `spec.md`,
+función `test_*` ejecutable obtenida del AST y `verify-report.md`, además de
+que el manifiesto no esté vacío y que todas sus rutas existan. Comentarios,
+strings y nombres con el ID embebido no cuentan. `CHAIN-01` se comparte
+intencionalmente entre las dos campañas de fase 3; la excepción URAM apunta
+de forma explícita a `verification/testbenches/phase3/test_chain32.py`.
+
+```text
+$ python3 -m unittest -v scripts.verify.test_check_itch_gherkin
+test_comprueba_el_espejo_externo_de_chain01_uram ... ok
+test_detecta_ausencia_de_test_ordinario ... ok
+test_detecta_cero_escenarios_para_un_id ... ok
+test_detecta_id_ausente_de_spec ... ok
+test_detecta_id_ausente_de_verify_report ... ok
+test_detecta_id_gherkin_duplicado_en_su_campana ... ok
+test_detecta_manifiesto_vacio ... ok
+test_detecta_mapping_de_campana_incoherente ... ok
+test_detecta_ruta_espejo_inexistente ... ok
+test_detecta_ruta_gherkin_inexistente ... ok
+test_ignora_async_test_comentado ... ok
+test_ignora_id_solo_en_comentario_gherkin ... ok
+test_ignora_string_que_parece_def_test ... ok
+test_no_acepta_id_embebido_en_nombre_de_test ... ok
+test_snapshot_sano_pasa ... ok
+Ran 15 tests in 0.052s
+OK
+
+$ python3 scripts/verify/check_itch_gherkin.py
+Gate F PASS: 12 IDs en 3 campañas; Gherkin único por campaña,
+spec/test/verify-report presentes y rutas del manifiesto existentes
+Espejo externo verificado: fase3-uram/CHAIN-01 ->
+verification/testbenches/phase3/test_chain32.py
+exit 0
+```
+
+## Gate E — salida fresca de Tarea 6, no repetida en el fix
+
+```text
+$ python3 scripts/verify/mutate_parser.py
+ALN-OFFBYONE ... COUNT-RESIDUAL: compiló=sí, MATADO
+19/19 killed; 0 survivors; 0 errores de compilación del mutante
+19/19 mutantes compilables y muertos. Gate E PASS.
+exit 0
+```
+
+Los siete mutantes nuevos del contrato de bytes válidos/cierre de datagrama
+(`KEEP-ALL-BYTES`, `KEEP-LSB-FIRST`, `KEEP-HOLES`,
+`KEEP-PARTIAL-NONLAST`, `KEEP-NODRAIN`, `COUNT-NO-EOP` y
+`COUNT-RESIDUAL`) compilaron y murieron. El runner restauró el RTL y eliminó
+su build; `git diff -- rtl/parser/itch_parser.sv` quedó vacío.
+
+## Límites
+
+- La evidencia de replay depende de un pcap local no versionado; si falta en
+  otra máquina, el test será `SKIP`, no PASS.
+- REP-02 conserva oráculo y límites reales, pero su requisito de line-rate
+  real sigue **ABIERTO** hasta medir la ventana A/U derivada del pcap.
+- No se ejecutó cobertura instrumental ni Verible.
+- Esta campaña no mide WNS/TNS ni utilización y no pretende acreditar la
+  frecuencia física de fase 3.

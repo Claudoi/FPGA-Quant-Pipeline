@@ -41,6 +41,7 @@ module itch_parser #(
     input  wire              clk,
     input  wire              rst_n,
     input  wire [DW-1:0]     s_axis_tdata,
+    input  wire [DW/8-1:0]   s_axis_tkeep,
     input  wire              s_axis_tvalid,
     output reg               s_axis_tready,
     input  wire              s_axis_tlast,
@@ -68,7 +69,7 @@ module itch_parser #(
     reg [2:0] st;
 
     reg  [QQ-1:0] q;
-    reg  [7:0]    qn;      // 8 bits: QB=128 requiere qn+8 <= 128 (qn llega a 128)
+    reg  [7:0]    qn;      // 8 bits cubren el QB máximo soportado de 128 bytes
 
     reg  [31:0]   msg_idx;
     reg  [63:0]   exp_seq;
@@ -83,6 +84,7 @@ module itch_parser #(
     reg  [47:0]   ts_ns;
     reg           len_ok;
     reg           eop_seen;   // latch: terminado el datagrama (tlast visto)
+    reg           drop_packet;
     reg  [351:0]  msg_reg;
     reg  [6:0]    body_w;
     reg  [6:0]    bi;
@@ -110,18 +112,44 @@ module itch_parser #(
         pbyte = w[(QB-1-i)*8 +: 8];
     endfunction
 
+    function automatic [7:0] keep_nbytes(input logic [BYTES-1:0] keep);
+        keep_nbytes = 0;
+        for (int k = 0; k < BYTES; k++)
+            keep_nbytes = keep_nbytes + keep[k];
+    endfunction
+
+    function automatic logic keep_is_msb_prefix(input logic [BYTES-1:0] keep);
+        logic seen_zero;
+        begin
+            seen_zero = 1'b0;
+            keep_is_msb_prefix = (keep != '0);
+            for (int k = BYTES-1; k >= 0; k--) begin
+                if (!keep[k]) seen_zero = 1'b1;
+                else if (seen_zero) keep_is_msb_prefix = 1'b0;
+            end
+        end
+    endfunction
+
     function automatic logic issubset(input [7:0] t);
         issubset = (t == 8'h53) || (t == 8'h52) || (t == 8'h41) || (t == 8'h46) ||
                    (t == 8'h45) || (t == 8'h43) || (t == 8'h58) || (t == 8'h44) ||
                    (t == 8'h55) || (t == 8'h50);   // S R A F E C X D U P
     endfunction
 
-    // longitud total esperada del mensaje por tipo (subset; fuente: messages.py).
-    // 0 => tipo fuera del subset (no se valida longitud contra tabla).
+    // Longitud total esperada de los 22 tipos canónicos (fuente: messages.py).
+    // 0 => tipo desconocido; se consume sin decodificar ni validar por tabla.
     function automatic logic [7:0] explen(input [7:0] t);
         case (t)
             8'h53: explen = 8'd12;   // S
             8'h52: explen = 8'd39;   // R
+            8'h48: explen = 8'd25;   // H
+            8'h59: explen = 8'd20;   // Y
+            8'h4c: explen = 8'd26;   // L
+            8'h56: explen = 8'd35;   // V
+            8'h57: explen = 8'd12;   // W
+            8'h4b: explen = 8'd28;   // K
+            8'h4a: explen = 8'd35;   // J
+            8'h4f: explen = 8'd21;   // O
             8'h41: explen = 8'd36;   // A
             8'h46: explen = 8'd40;   // F
             8'h45: explen = 8'd31;   // E
@@ -130,6 +158,10 @@ module itch_parser #(
             8'h44: explen = 8'd19;   // D
             8'h55: explen = 8'd35;   // U
             8'h50: explen = 8'd44;   // P
+            8'h51: explen = 8'd40;   // Q
+            8'h42: explen = 8'd19;   // B
+            8'h49: explen = 8'd50;   // I
+            8'h4e: explen = 8'd20;   // N
             default: explen = 8'd0;
         endcase
     endfunction
@@ -166,12 +198,33 @@ module itch_parser #(
 
     wire [7:0] drain_int = (8'(drain_need) <= avail) ? {1'b0, drain_need} : 8'd0;
 
-    // tready combinacional: hay sitio y no drenamos este ciclo (el drain se
-    // consume en el flanco con la palabra que ya estaba en la cola).
+    wire [7:0] in_nbytes = keep_nbytes(s_axis_tkeep);
+    wire keep_shape_ok = keep_is_msb_prefix(s_axis_tkeep);
+    wire in_keep_ok = keep_shape_ok &&
+                      (s_axis_tlast || s_axis_tkeep == {BYTES{1'b1}});
+    wire [DW-1:0] in_compact = in_keep_ok ?
+        (s_axis_tdata >> (8 * (32'(BYTES) - 32'(in_nbytes)))) : '0;
+
+    // tready combinacional: hay sitio después del posible drenaje de este
+    // ciclo. Durante un descarte se acepta todo hasta el tlast físico.
     wire drain_active = (drain_int > 0) && (qn >= drain_int);
-    wire can_aug = s_axis_tvalid && !drain_active && (qn + 8'(BYTES) <= QB);
-    wire can_da  = s_axis_tvalid && drain_active && (8'(qn) - 8'(drain_int) + 8'(BYTES) <= QB);
-    assign s_axis_tready = can_aug || can_da;
+    wire [7:0] base_n = drain_active ? qn - drain_int : qn;
+    // Tras aceptar tlast no se prefetchea el datagrama siguiente hasta cerrar
+    // o descartar el actual: la cola no guarda marcadores de frontera internos.
+    wire can_aug = s_axis_tvalid && !eop_seen && !drain_active &&
+                   (qn + in_nbytes <= QB);
+    wire can_da  = s_axis_tvalid && !eop_seen && drain_active &&
+                   (base_n + in_nbytes <= QB);
+    wire invalid_offer = s_axis_tvalid && !eop_seen && !in_keep_ok;
+    assign s_axis_tready = drop_packet || invalid_offer || can_aug || can_da;
+    wire in_take = s_axis_tvalid && s_axis_tready;
+    wire [QQ-1:0] append_bits = QQ'(in_compact) <<
+        (8 * (32'(QB) - 32'(base_n) - 32'(in_nbytes)));
+    wire [7:0] qn_post = base_n +
+        ((in_take && in_keep_ok) ? in_nbytes : 8'd0);
+    wire eop_eff = eop_seen ||
+                   (in_take && in_keep_ok && s_axis_tlast);
+    wire record_active = (st >= ST_CAP) && (st <= ST_NEXT);
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
@@ -179,40 +232,60 @@ module itch_parser #(
             msg_idx <= 0; exp_seq <= 64'd1; this_seq <= 0; session_id <= 0;
             pack_left <= 0; pack_count <= 0; msg_len <= 0;
             in_subset <= 1'b0; msg_type <= 0; locate <= 0; ts_ns <= 0; len_ok <= 1'b0;
-            eop_seen <= 1'b0;
+            eop_seen <= 1'b0; drop_packet <= 1'b0;
             msg_reg <= 0; body_w <= 0; bi <= 0;
             out_valid_reg <= 1'b0; out_data_reg <= 0; out_last_reg <= 1'b0;
             gap_detected <= 1'b0; error <= 1'b0;
         end else begin
             gap_detected <= 1'b0;
             error <= 1'b0;
-            // latch de fin de datagrama: se fija cuando el stream marca tlast
-            // (SEC-FRM-01/02) y se limpia al capturar un mensaje o un header.
-            if (s_axis_tlast) eop_seen <= 1'b1;
+            if (out_take) out_valid_reg <= 1'b0;
+            if (drop_packet) begin
+                if (in_take && s_axis_tlast) begin
+                    drop_packet <= 1'b0;
+                    if (record_active) begin
+                        eop_seen <= 1'b1;
+                        pack_left <= 1;
+                    end else begin
+                        eop_seen <= 1'b0;
+                        st <= ST_HDR;
+                    end
+                end
+            end else if (in_take && !in_keep_ok) begin
+                error <= 1'b1;
+                q <= '0;
+                qn <= '0;
+                drop_packet <= !s_axis_tlast;
+                if (record_active) begin
+                    eop_seen <= s_axis_tlast;
+                    pack_left <= 1;
+                end else begin
+                    eop_seen <= 1'b0;
+                    st <= ST_HDR;
+                end
+            end else begin
+                // latch de fin de datagrama: se fija cuando el stream marca tlast
+                // (SEC-FRM-01/02) y se limpia al cerrar o descartar el datagrama.
+                if (in_take && s_axis_tlast) eop_seen <= 1'b1;
 
-            // ------------------------------------------------------------
-            // cola: drena drain_int y acepta entrada en paralelo si cabe
-            // ------------------------------------------------------------
-            if (can_da) begin
-                q <= ((q << (8*drain_int)) |
-                      (QQ'(s_axis_tdata) << ((32'(QB-1) - 32'(qn) + 32'(drain_int))*8 - (DW-8))));
-                qn <= qn - drain_int + 8'(BYTES);
-            end else if (drain_active) begin
-                q <= q << (8*drain_int);
-                qn <= qn - drain_int;
-            end else if (can_aug) begin
-                q <= q | (QQ'(s_axis_tdata) << ((32'(QB-1) - 32'(qn))*8 - (DW-8)));
-                qn <= qn + 8'(BYTES);
-            end
+                // ------------------------------------------------------------
+                // cola: drena drain_int y acepta entrada válida en paralelo
+                // ------------------------------------------------------------
+                if (can_da) begin
+                    q <= (q << (8*drain_int)) | append_bits;
+                    qn <= qn_post;
+                end else if (drain_active) begin
+                    q <= q << (8*drain_int);
+                    qn <= base_n;
+                end else if (can_aug) begin
+                    q <= q | append_bits;
+                    qn <= qn_post;
+                end
 
 
-            case (st)
+                case (st)
                 ST_HDR: begin
                     if (drain_int == 20) begin
-                        // header de un datagrama nuevo: reinicia el latch de tlast.
-                        // Solo si el tlast NO está alto en este mismo ciclo (un tlast
-                        // coincidente marca el truncado de ESTE datagrama, SEC-FRM-02).
-                        if (!s_axis_tlast) eop_seen <= 1'b0;
                         this_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
                                      pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
                         pack_left <= {pbyte(q,18), pbyte(q,19)};
@@ -233,12 +306,32 @@ module itch_parser #(
                         // count=0 (SEC-FRM-04): paquete sin mensajes, avanza y
                         // sigue esperando el siguiente header sin emitir nada.
                         // exp_seq avanza por 0 => queda = seq del header actual.
+                        // Se usa el header, no el valor previo de exp_seq: en una
+                        // sesión nueva ambas asignaciones ocurren en este flanco.
                         if ({pbyte(q,18), pbyte(q,19)} == 16'h0) begin
-                            exp_seq <= exp_seq + 64'({pbyte(q,18), pbyte(q,19)});
-                            st <= ST_HDR;
+                            if (eop_eff && qn_post == 0) begin
+                                exp_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
+                                            pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
+                                eop_seen <= 1'b0;
+                                st <= ST_HDR;
+                            end else begin
+                                error <= 1'b1;
+                                q <= '0;
+                                qn <= '0;
+                                eop_seen <= 1'b0;
+                                drop_packet <= !eop_eff;
+                                st <= ST_HDR;
+                            end
                         end else begin
                             st <= ST_LEN;
                         end
+                    end else if (eop_seen) begin
+                        // tlast antes de completar los 20 bytes de cabecera.
+                        error <= 1'b1;
+                        q <= '0;
+                        qn <= '0;
+                        eop_seen <= 1'b0;
+                        st <= ST_HDR;
                     end
                 end
 
@@ -258,32 +351,45 @@ ST_LEN: begin
                                     8'(BYTES-1)) >> L2B) : 7'd0;
                             bi <= 0;
                             msg_reg <= q[(QB-2)*8 - 1 -: 352];
-                            // longitud incoherente (SEC-PAR-03): para un tipo del
-                            // subset la longitud declarada debe ser la de messages.py
-                            len_ok <= !issubset(pbyte(q,2)) ||
-                                      (explen(pbyte(q,2)) == 8'({pbyte(q,0), pbyte(q,1)})) ||
-                                      (8'({pbyte(q,0), pbyte(q,1)}) < 11);
-                            if (8'({pbyte(q,0), pbyte(q,1)}) < 11) error <= 1'b1;
-                            eop_seen <= 1'b0;
+                            // Todo tipo canónico se valida, aunque no emita registro.
+                            // Un tipo desconocido (explen=0) sigue como passthrough.
+                            len_ok <= (explen(pbyte(q,2)) == 0) ||
+                                      (explen(pbyte(q,2)) ==
+                                       8'({pbyte(q,0), pbyte(q,1)}));
+                            if ((8'({pbyte(q,0), pbyte(q,1)}) < 11) ||
+                                ((explen(pbyte(q,2)) != 0) &&
+                                 (explen(pbyte(q,2)) !=
+                                  8'({pbyte(q,0), pbyte(q,1)}))))
+                                error <= 1'b1;
                             st <= ST_CAP;
                         end else if (eop_seen) begin
                             // frame truncado (SEC-FRM-01): el datagrama ya terminó
                             // (tlast) y el mensaje declarado no está completo.
                             error <= 1'b1;
+                            q <= 0;
+                            qn <= 0;
+                            eop_seen <= 1'b0;
+                            pack_left <= 0;
                             st <= ST_HDR;
                         end
                     end else if (eop_seen) begin
                         // ni siquiera el campo len completo (SEC-FRM-02)
                         error <= 1'b1;
+                        q <= 0;
+                        qn <= 0;
+                        eop_seen <= 1'b0;
+                        pack_left <= 0;
                         st <= ST_HDR;
                     end
                 end
 
                 // ------------------------------------------------
                 ST_CAP: begin
-                    out_valid_reg <= 1'b0;
-                    // len_ok = 0: longitud incoherente o truncado -> sin registro
-                    st <= ((in_subset && msg_len >= 11 && len_ok) ? ST_W0 : ST_NEXT);
+                    if (out_free) begin
+                        out_valid_reg <= 1'b0;
+                        // len_ok = 0: longitud incoherente o truncado -> sin registro
+                        st <= ((in_subset && msg_len >= 11 && len_ok) ? ST_W0 : ST_NEXT);
+                    end
                 end
 
                 ST_W0: begin
@@ -351,15 +457,25 @@ ST_LEN: begin
                         if (pack_left > 1) begin
                             pack_left <= pack_left - 1;
                             st <= ST_LEN;
-                        end else begin
+                        end else if (eop_eff && qn_post == 0) begin
                             exp_seq <= this_seq + 64'(pack_count);
+                            eop_seen <= 1'b0;
+                            st <= ST_HDR;
+                        end else begin
+                            error <= 1'b1;
+                            q <= '0;
+                            qn <= '0;
+                            eop_seen <= 1'b0;
+                            pack_left <= 0;
+                            drop_packet <= !eop_eff;
                             st <= ST_HDR;
                         end
                     end
                 end
 
-                default: st <= ST_HDR;
-            endcase
+                    default: st <= ST_HDR;
+                endcase
+            end
         end
     end
 

@@ -19,7 +19,8 @@ para el silicio con timing cerrado a 10G».
 - **Parametrización DW=32 del parser** (`rtl/parser/itch_parser.sv` ya tiene
   `parameter DW=64`): la variante 32-bit debe cumplir los criterios de fase 1
   (registro Anexo A bit a bit, line-rate 1 palabra/ciclo, framing/gaps/sesión,
-  backpressure, truncado) y la variante 64-bit queda en regresión verde.
+  backpressure, truncado y bytes válidos por `tkeep`) y la variante 64-bit queda
+  en regresión verde.
 - **Parametrización DW=32 del book** (`rtl/orderbook/orderbook.sv` ya tiene
   `parameter DW=64`): Anexo A de 32 bits (w0={type,locate,len}, w1=msg_idx,
   w2..=cuerpo MSB-first — **layout recortado por la campaña fase3-uram,
@@ -86,10 +87,14 @@ renombra: solo se añaden parámetros/puertos nuevos y se parametriza lo existen
   de salida.
 - **Endianness:** cuerpo big-endian del wire; offsets exactos de
   `golden_model/itch/messages.py` (fuente única, regla fases 0/1).
+- **Framing de entrada:** `itch_chain` expone `s_axis_tkeep[DW/8-1:0]` y hereda
+  literalmente el contrato de bytes válidos de fase 1. La interfaz interna
+  parser→book no cambia.
 
 ## Superficie y amenazas
 
-**Puertos nuevos del book (top `orderbook`):**
+**Puerto nuevo del top de cadena:** `s_axis_tkeep[DW/8-1:0]`, conectado solo a
+`itch_parser`. Puertos nuevos del book (top `orderbook`):
 
 | Señal | Ancho | Descripción |
 |---|---|---|
@@ -154,7 +159,7 @@ hash = nuevo vector de error).
      sintético (criterios 1-7 de fase 2 re-ejecutados a 32 bits) y sobre el
      replay real de 20 símbolos.
      — Gherkin: §B32-01, §B32-02
-3. [ ] **Regresión 64-bit**: suites fase 1 (19/19) y fase 2 (14/14) verdes con
+3. [ ] **Regresión 64-bit**: suites completas vigentes de fases 1 y 2 verdes con
      el RTL extendido (parametrización no rompe el default).
      — Gherkin: §REG-01
 4. [ ] **Cadena parser→book DW=32**: feed real decapado → BBO bit a bit vs
@@ -164,11 +169,14 @@ hash = nuevo vector de error).
      la indexación directa (mismos eventos, mismas anomalías, mismas refs);
      probe agotado = anomalía, tabla llena = `error`.
      — Gherkin: §SEC-HASH-01/02/03
-6. [ ] **Top-N (ND=5)**: `depth_tdata` bit a bit contra los niveles ordenados
-     del golden para el símbolo del evento; símbolo sin niveles → 0.
+6. [ ] **Top-N parametrizado**: con ND=5 y una elaboración adversarial ND=3,
+     `depth_tdata` es bit a bit contra los niveles ordenados del golden para el
+     símbolo del evento; símbolo sin niveles → 0. `itch_chain` propaga ND al
+     book, no sólo al ancho del puerto top.
      — Gherkin: §SEC-DP-01, §DP-01
-7. [ ] **Hardening**: símbolo 21 → `error` sin OOB; evento BBO retenido bajo
-     `bbo_tready=0` y entregado exacto al liberar.
+7. [ ] **Hardening**: símbolo 21 → `error` y `m_loc_idx < NSYM` en todo
+     ciclo; evento BBO retenido con `bbo_tready=0` después de observar
+     `bbo_tvalid=1`, estable al menos dos ciclos y entregado exacto al liberar.
      — Gherkin: §SEC-NSYM-01, §SEC-BP-01
 8. [ ] **Latencia**: histograma por tipo (ciclos wire→BBO en la cadena DW=32)
      commiteado en `verification/vectors/latency/` y determinista
@@ -191,11 +199,11 @@ hash = nuevo vector de error).
 |---|---|
 | 1 | cocotb: corpus sintético + replay REP-02 a DW=32 (words 32-bit vs `message_oracle`); peor caso mínimo back-to-back sin backpressure |
 | 2 | cocotb: corpus BBO-01..SEC-* a DW=32 contra `book.py`; REPLAY-01 a 32 bits |
-| 3 | cocotb: `make sim` en `testbenches/parser` (19) y `testbenches/orderbook` (14) tras el cambio |
+| 3 | cocotb: `make sim` completo en `testbenches/parser` y `testbenches/orderbook` tras el cambio |
 | 4 | cocotb: top `chain32` (parser→book a DW=32) sobre el pcap real del subset |
 | 5 | cocotb: misma secuencia con tabla hashada vs directa; casos probe-limit y tabla-llena; mutante de hash (slot sin comparar ref) lo mata |
-| 6 | cocotb: depth vs `book.py` niveles ordenados; mutante de orden/truncado lo mata |
-| 7 | cocotb: `SEC-NSYM-01` (21 símbolos), `SEC-BP-01` (tready=0 intermitente) |
+| 6 | cocotb: depth vs `book.py` a ND=5 y `itch_chain -GND=3`; mutante de orden/truncado lo mata |
+| 7 | cocotb: `SEC-NSYM-01` (21 símbolos + muestreo del índice interno), `SEC-BP-01` (stall adaptativo que espera `tvalid`, retiene dos ciclos y libera) |
 | 8 | cocotb: recolector de ciclos por tipo → JSON; re-ejecución idéntica |
 | 9 | revisión + `verilator --lint-only`; documentación en writeup; la lectura registrada se audita por código |
 | 10 | tcl/constraints commiteados + informe del owner pegado en `synth/reports/` |
@@ -222,8 +230,9 @@ verde:
    mal transcrito al bus de salida). Guardarraíl: el oráculo ordena los
    niveles del golden, nunca el RTL.
 4. **Lecturas de tabla no registradas** (patrón de URAM roto sin que la
-   simulación lo note). Guardarraíl: revisión de código + documentación; el
-   synth del owner lo confirmaría con inferencia URAM.
+   simulación lo note). Guardarraíl: `synth_check.py` exige que la sonda lea
+   exclusivamente `rd_data` y prohíbe indexar `o_mem[pr_*]` de forma directa;
+   el informe Vivado del owner confirma además la inferencia física.
 5. **Latencia que «se ajusta» al peor caso** (medir solo el promedio).
    Guardarraíl: histograma completo por tipo con re-ejecución idéntica.
 
@@ -264,7 +273,7 @@ del backlog estacionario de la cola del parser:
    actualizado; `docs/writeup/revision-exhaustiva-2026-08-14.md` con el
    análisis completo (incl. los bloqueadores de síntesis B1/B2/B3 para el
    criterio 10).
-6. **Pendiente para el criterio 10 (externo)**: el book actual (registros
-   planos NSLOT=65.536 con sonda combinacional paralela) no es sintetizable;
-   la iteración URAM (lectura registrada serializada, `docs/writeup/uram.md`)
-   sigue pendiente de implementar en RTL.
+6. **Pendiente para el criterio 10 (externo)**: la iteración URAM ya está
+   implementada en RTL con lectura registrada, sonda serializada y pipeline de
+   niveles (`docs/writeup/uram.md`). Falta ejecutar Vivado y adjuntar WNS/TNS,
+   endpoints sin constraint y utilización para confirmar el cierre físico.

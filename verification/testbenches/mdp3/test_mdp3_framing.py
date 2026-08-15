@@ -17,11 +17,14 @@ from golden_model.mdp3 import (
     iter_packet_messages,
     anexo_m_records,
     decode_message,
+    encode_message,
+    encode_packet,
     passthrough_record,
     record_bytes,
     load_schema,
 )
 from golden_model.mdp3.schema import SUBSET_TEMPLATES
+from golden_model.mdp3.codec import MESSAGE_PREFIX_SIZE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = REPO_ROOT / "data" / "mdp3" / "templates_FixBinary_v12.xml"
@@ -44,9 +47,22 @@ def oracle_bytes(corpus: Corpus):
     return out
 
 
+def assert_bytes_equal(got: bytes, expected: bytes, label: str):
+    for i, (g, e) in enumerate(zip(got, expected)):
+        if g != e:
+            lo, hi = max(0, i - 8), min(len(expected), i + 12)
+            raise AssertionError(
+                f"{label}: byte {i}: got {g:#04x} exp {e:#04x}; "
+                f"got[{lo}:{hi}]={got[lo:hi].hex()} "
+                f"exp[{lo}:{hi}]={expected[lo:hi].hex()}")
+    assert len(got) == len(expected), (
+        f"{label}: prefijo común de {min(len(got), len(expected))} B, "
+        f"longitud {len(got)} != {len(expected)}")
+
+
 async def _reset(dut):
-    dut.clk.setimmediatevalue(0)
-    cocotb.start_soon(Clock(dut.clk, 5, units="ns").start())
+    dut.clk.value = 0
+    cocotb.start_soon(Clock(dut.clk, 5, unit="ns").start())
     dut.rst_n.value = 0
     dut.s_axis_tdata.value = 0
     dut.s_axis_tvalid.value = 0
@@ -64,15 +80,15 @@ async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000):
     como en fase 1: tras el tlast de un paquete llega el header de 12 B del
     siguiente. Devuelve (bytes de salida, run máximo de entrada parada).
     """
-    dw = int(dut.DW.value)
-    bytes_per_word = dw // 8
+    bytes_per_input_word = len(dut.s_axis_tdata) // 8
+    bytes_per_output_word = len(dut.m_axis_tdata) // 8
     words = []
     for pkt in packets:
-        n = (len(pkt) + bytes_per_word - 1) // bytes_per_word
+        n = (len(pkt) + bytes_per_input_word - 1) // bytes_per_input_word
         for i in range(n):
-            bite = pkt[i * bytes_per_word:(i + 1) * bytes_per_word]
+            bite = pkt[i * bytes_per_input_word:(i + 1) * bytes_per_input_word]
             words.append((int.from_bytes(bite, "big")
-                          << (8 * (bytes_per_word - len(bite))),
+                          << (8 * (bytes_per_input_word - len(bite))),
                           i == n - 1))
     nwords = len(words)
 
@@ -81,6 +97,8 @@ async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000):
     quiet = 0
     max_stall_run = 0
     stall_run = 0
+    error_count = 0
+    gap_count = 0
     for _ in range(max_cycles):
         dut.s_axis_tvalid.value = 1 if wi < nwords else 0
         dut.s_axis_tdata.value = words[wi][0] if wi < nwords else 0
@@ -88,30 +106,118 @@ async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000):
         if not tready_high:
             dut.m_axis_tready.value = 1 if (_ % 3) != 1 else 0
         await RisingEdge(dut.clk)
-        if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if wi < nwords:
-                wi += 1
+        in_valid = int(dut.s_axis_tvalid.value) == 1
+        in_ready = int(dut.s_axis_tready.value) == 1
+        if in_valid and in_ready:
+            wi += 1
             stall_run = 0
-        elif wi < nwords:
-            # solo cuenta la parada de entrada mientras queda entrada pendiente
+        elif in_valid:
             stall_run += 1
             max_stall_run = max(max_stall_run, stall_run)
         else:
             stall_run = 0
-        if int(dut.m_axis_tvalid.value) == 1:
+        if (int(dut.m_axis_tvalid.value) == 1 and
+                int(dut.m_axis_tready.value) == 1):
             data = int(dut.m_axis_tdata.value)
-            out += data.to_bytes(bytes_per_word, "big")
+            out += data.to_bytes(bytes_per_output_word, "big")
             quiet = 0
         elif wi >= nwords:
             quiet += 1
+        error_count += int(dut.error.value)
+        gap_count += int(dut.gap_detected.value)
         if quiet > 64:
             break
-    return bytes(out), max_stall_run
+    return bytes(out), max_stall_run, error_count, gap_count
 
 
 def build_corpus(seed: int, n_packets: int):
     schema = load_schema(SCHEMA_PATH)
     return Corpus(schema, seed=seed).build(n_packets)
+
+
+def literal_template47(schema):
+    """Vector pactado M3-FRM-03: una entry, 64 B derivados del XML."""
+    raw = encode_message(schema, 47, {
+        "TransactTime": 0x0102030405060708,
+        "MatchEventIndicator": 0x81,
+        "NoMDEntries": [{
+            "OrderID": 0x1112131415161718,
+            "MDOrderPriority": 0x2122232425262728,
+            "MDEntryPx": {"mantissa": 101_250_000_000},
+            "MDDisplayQty": 7,
+            "SecurityID": 101,
+            "MDUpdateAction": 1,
+            "MDEntryType": 0,
+        }],
+    })
+    assert len(raw) == 64
+    return raw
+
+
+def literal_subset(schema):
+    """Un mensaje por template, con multi-entry y valores observables."""
+    m46 = encode_message(schema, 46, {
+        "TransactTime": 0x0102030405060708,
+        "MatchEventIndicator": 0x81,
+        "NoMDEntries": [
+            {"MDEntryPx": {"mantissa": 101_250_000_000},
+             "MDEntrySize": 7, "SecurityID": 101, "RptSeq": 11,
+             "NumberOfOrders": 2, "MDPriceLevel": 1,
+             "MDUpdateAction": 0, "MDEntryType": 0,
+             "TradeableSize": 5},
+            {"MDEntryPx": {"mantissa": -101_125_000_000},
+             "MDEntrySize": 9, "SecurityID": 202, "RptSeq": 12,
+             "NumberOfOrders": 3, "MDPriceLevel": 2,
+             "MDUpdateAction": 1, "MDEntryType": 1,
+             "TradeableSize": 6},
+        ],
+        "NoOrderIDEntries": [
+            {"OrderID": 0x1112131415161718,
+             "MDOrderPriority": 0x2122232425262728,
+             "MDDisplayQty": 13, "ReferenceID": 0,
+             "OrderUpdateAction": 1},
+            {"OrderID": 0x3132333435363738,
+             "MDOrderPriority": 0x4142434445464748,
+             "MDDisplayQty": 14, "ReferenceID": 1,
+             "OrderUpdateAction": 2},
+        ],
+    })
+    m52 = encode_message(schema, 52, {
+        "SecurityID": 404, "RptSeq": 33,
+        "TransactTime": 0x8182838485868788,
+        "NoMDEntries": [
+            {"MDEntryPx": {"mantissa": 100_500_000_000},
+             "MDEntrySize": 41, "NumberOfOrders": 4,
+             "MDPriceLevel": 2, "TradingReferenceDate": 19_001,
+             "OpenCloseSettlFlag": 1, "SettlPriceType": 5,
+             "MDEntryType": 1},
+            {"MDEntryPx": {"mantissa": -99_500_000_000},
+             "MDEntrySize": 42, "NumberOfOrders": 5,
+             "MDPriceLevel": 3, "TradingReferenceDate": 19_002,
+             "OpenCloseSettlFlag": 0, "SettlPriceType": 6,
+             "MDEntryType": 0},
+        ],
+    })
+    m53 = encode_message(schema, 53, {
+        "SecurityID": 505, "TransactTime": 0xA1A2A3A4A5A6A7A8,
+        "NoMDEntries": [
+            {"OrderID": 0xB1B2B3B4B5B6B7B8,
+             "MDOrderPriority": 0xC1C2C3C4C5C6C7C8,
+             "MDEntryPx": {"mantissa": 102_000_000_000},
+             "MDDisplayQty": 61, "MDEntryType": 1},
+            {"OrderID": 0xD1D2D3D4D5D6D7D8,
+             "MDOrderPriority": 0xE1E2E3E4E5E6E7E8,
+             "MDEntryPx": {"mantissa": -98_000_000_000},
+             "MDDisplayQty": 62, "MDEntryType": 0},
+        ],
+    })
+    return [m46, literal_template47(schema), m52, m53]
+
+
+def expected_for(schema, packets):
+    corpus = Corpus(schema, seed=1)
+    corpus.packets = list(packets)
+    return oracle_bytes(corpus)
 
 
 @cocotb.test()
@@ -122,11 +228,9 @@ async def test_m3frm01_el_parser_emite_el_anexo_m_bit_a_bit_vs_el_golden(dut):
     expected = oracle_bytes(corpus)
     dut._log.info("oracle bytes: %d", len(expected))
     await _reset(dut)
-    got, _ = await drive_and_collect(dut, corpus.packets)
-    assert len(got) == len(expected), (
-        f"longitud {len(got)} != {len(expected)}")
-    for i, (g, e) in enumerate(zip(got, expected)):
-        assert g == e, f"byte {i}: got {g:#04x} exp {e:#04x}"
+    got, _, errors, _ = await drive_and_collect(dut, corpus.packets)
+    assert_bytes_equal(got, expected, "M3-FRM-01")
+    assert errors == 0
 
 
 @cocotb.test()
@@ -135,46 +239,128 @@ async def test_m3frm02_mensajes_que_cruzan_limites_de_palabra(dut):
     corpus = build_corpus(seed=23, n_packets=40)
     sizes = {pm.msg_size for p in corpus.packets
              for pm in iter_packet_messages(p)}
-    non_aligned = [s for s in sizes if s % (int(dut.DW.value) // 8)]
+    non_aligned = [s for s in sizes if s % (len(dut.s_axis_tdata) // 8)]
     assert non_aligned, "el corpus debe tener mensajes no alineados a palabra"
     expected = oracle_bytes(corpus)
     await _reset(dut)
-    got, _ = await drive_and_collect(dut, corpus.packets)
-    assert got == expected, "bytes distintos (cruces de límite mal alineados)"
+    got, _, errors, _ = await drive_and_collect(dut, corpus.packets)
+    assert_bytes_equal(got, expected, "M3-FRM-02")
+    assert errors == 0
 
 
 @cocotb.test()
 async def test_m3frm03_peor_caso_a_1_palabra_por_ciclo_sin_backpressure(dut):
-    """Espejo M3-FRM-03: mensajes mínimos MBP back-to-back a 1 palabra/ciclo.
-
-    El line-rate a 1 palabra/ciclo sin backpressure se mide sobre el subset con
-    expansión del Anexo M contenida (MBP, output <= input): el template 46 con
-    una sola entry MBP y 0 order entries emite un record MBP de 13 words por
-    un mensaje de 64 B — la salida no supera a la entrada y el datapath
-    aguanta 1 palabra/ciclo. Los MBOFD (47/53/MBOFD-46) expanden (72 B de
-    salida por ~54 B de entrada, ratio >1) y NO se usan aquí por ser
-    inherentemente backpressure; se documentan en la spec.
-    """
+    """Espejo M3-FRM-03: paquete de mensajes mínimos back-to-back a 1 palabra/ciclo."""
     schema = load_schema(SCHEMA_PATH)
-    from golden_model.mdp3.codec import encode_packet, encode_message
     corpus = Corpus(schema, seed=5)
-    minimal = []
-    for _ in range(24):
-        minimal.append(encode_message(schema, 46, {
-            "TransactTime": corpus.rng.getrandbits(64),
-            "MatchEventIndicator": 1,
-            "NoMDEntries": [{
-                "MDEntryPx": {"mantissa": 12345}, "MDEntrySize": 5,
-                "SecurityID": 101, "RptSeq": 1, "NumberOfOrders": 1,
-                "MDPriceLevel": 1, "MDUpdateAction": 1, "MDEntryType": 1,
-                "TradeableSize": 5}],
-            "NoOrderIDEntries": [],
-        }))
+    minimal = [literal_template47(schema) for _ in range(24)]
     packet = encode_packet(schema, 99, 1, minimal)
     corpus.packets = [packet]
     expected = oracle_bytes(corpus)
     await _reset(dut)
-    got, max_stall = await drive_and_collect(dut, [packet])
-    assert got == expected, "la salida del peor caso no es bit a bit"
+    got, max_stall, errors, _ = await drive_and_collect(dut, [packet])
+    assert_bytes_equal(got, expected, "M3-FRM-03")
+    assert errors == 0
+    dut._log.info("M3-FRM-03: racha máxima de stall real = %d", max_stall)
     assert max_stall <= MAX_STALL_RUN, (
         f"backpressure sostenida: {max_stall} ciclos seguidos de entrada parada")
+
+
+@cocotb.test()
+async def test_m3sub01_sub02_subset_y_multi_entry_bit_a_bit(dut):
+    """Espejos M3-SUB-01 y M3-SUB-02: subset, PRICE9 y multi-entry."""
+    schema = load_schema(SCHEMA_PATH)
+    packet = encode_packet(schema, 41, 0x1122334455667788,
+                           literal_subset(schema))
+    expected = expected_for(schema, [packet])
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(dut, [packet])
+    assert_bytes_equal(got, expected, "M3-SUB-01/02")
+    assert errors == 0
+
+
+@cocotb.test()
+async def test_m3pass01_passthrough_crudo_y_schema_desconocido(dut):
+    """Espejo M3-PASS-01: template normal y schema/template desconocidos."""
+    schema = load_schema(SCHEMA_PATH)
+    corpus = Corpus(schema, seed=73)
+    packet = encode_packet(schema, 51, 2, [
+        corpus.passthrough_message(unknown=False),
+        corpus.passthrough_message(unknown=True),
+    ])
+    expected = expected_for(schema, [packet])
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(dut, [packet])
+    assert_bytes_equal(got, expected, "M3-PASS-01")
+    assert errors == 0
+
+
+@cocotb.test()
+async def test_m3gap01_salto_y_reset_de_canal(dut):
+    """Espejo M3-GAP-01: un salto pulsa gap; reset inicia otro canal."""
+    schema = load_schema(SCHEMA_PATH)
+    msg = literal_template47(schema)
+    packets = [encode_packet(schema, seq, seq, [msg]) for seq in (100, 102)]
+    await _reset(dut)
+    got, _, errors, gaps = await drive_and_collect(dut, packets)
+    assert_bytes_equal(got, expected_for(schema, packets), "M3-GAP-01 salto")
+    assert errors == 0
+    assert gaps == 1
+
+    await _reset(dut)
+    packet = encode_packet(schema, 1, 1, [msg])
+    got, _, errors, gaps = await drive_and_collect(dut, [packet])
+    assert_bytes_equal(got, expected_for(schema, [packet]), "M3-GAP-01 reset")
+    assert errors == 0
+    assert gaps == 0
+
+
+@cocotb.test()
+async def test_m3inv01_inv02_tamanos_invalidos_y_truncado_recuperan(dut):
+    """Espejos M3-INV-01 y M3-INV-02: tamaño inválido y tlast truncado."""
+    schema = load_schema(SCHEMA_PATH)
+    valid_msg = literal_template47(schema)
+    too_short = encode_packet(schema, 61, 1, [b"\x09\x00\x00\x00"])
+    declared_too_long = encode_packet(
+        schema, 62, 2, [(64).to_bytes(2, "little") + valid_msg[2:40]])
+    truncated = encode_packet(schema, 63, 3, [valid_msg[:52]])
+    recovery = encode_packet(schema, 64, 4, [valid_msg])
+
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(
+        dut, [too_short, declared_too_long, truncated, recovery])
+    assert errors >= 3
+    assert_bytes_equal(got, expected_for(schema, [recovery]), "M3-INV-01/02")
+
+
+@cocotb.test()
+async def test_m3inv03_grupo_vacio_o_entry_fuera_del_mensaje(dut):
+    """Espejo M3-INV-03: grupo vacío válido; entry declarada sin bytes, error."""
+    schema = load_schema(SCHEMA_PATH)
+    empty = encode_message(schema, 47, {
+        "TransactTime": 7, "MatchEventIndicator": 1, "NoMDEntries": []})
+    malformed = bytearray(empty)
+    group = schema.messages[47].groups[0]
+    count_offset = (MESSAGE_PREFIX_SIZE + schema.messages[47].block_length
+                    + (7 if group.dimension_type == "groupSize8Byte" else 2))
+    malformed[count_offset] = 1
+    bad_reference = encode_message(schema, 46, {
+        "TransactTime": 8, "MatchEventIndicator": 2,
+        "NoMDEntries": [{
+            "MDEntryPx": {"mantissa": 100_000_000_000},
+            "MDEntrySize": 3, "SecurityID": 606, "RptSeq": 9,
+            "NumberOfOrders": 1, "MDPriceLevel": 1,
+            "MDUpdateAction": 0, "MDEntryType": 0, "TradeableSize": 3,
+        }],
+        "NoOrderIDEntries": [{
+            "OrderID": 10, "MDOrderPriority": 11, "MDDisplayQty": 12,
+            "ReferenceID": 1, "OrderUpdateAction": 1,
+        }],
+    })
+    packets = [encode_packet(schema, 71, 1, [empty]),
+               encode_packet(schema, 72, 2, [bytes(malformed)]),
+               encode_packet(schema, 73, 3, [bad_reference])]
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(dut, packets)
+    assert_bytes_equal(got, expected_for(schema, [packets[2]]), "M3-INV-03")
+    assert errors >= 2

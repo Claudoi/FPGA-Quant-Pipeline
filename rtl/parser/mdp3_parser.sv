@@ -37,7 +37,8 @@
 // emiten 72 B por ~43 B de entrada: limitación inherente al Anexo M, igual
 // que LIN-01 de fase 1). Sin RAM: el 46 resuelve el ReferenceID releyendo la
 // entry MBP del mismo buffer. DW=32 en esta iteración (Anexo M definido en
-// words de 32 bits); DW=64 en regresión (iter 3+, con byte-enables).
+// words de 32 bits). DW parametriza solo la entrada; la salida Anexo M queda
+// fija a 32 bits para representar records MBP de 13 words sin tkeep.
 module mdp3_parser #(
     parameter int DW = 32
 ) (
@@ -47,7 +48,7 @@ module mdp3_parser #(
     input  wire              s_axis_tvalid,
     output reg               s_axis_tready,
     input  wire              s_axis_tlast,
-    output reg  [DW-1:0]     m_axis_tdata,
+    output reg  [31:0]       m_axis_tdata,
     output reg               m_axis_tvalid,
     input  wire              m_axis_tready,
     output reg               m_axis_tlast,
@@ -55,7 +56,7 @@ module mdp3_parser #(
     output reg               error
 );
 
-localparam logic [3:0]  BYTES     = 4'(DW / 8);
+localparam logic [3:0]  BYTES      = 4'(DW / 8);
     localparam logic [8:0]  MAX_MSG    = 256;   // bytes por buffer (corpus <= ~250 B)
     localparam logic [8:0]  FIFO_DEPTH = 256;   // words de salida (32 bits c/u)
     localparam logic [7:0]  PKT_HDR    = 12;
@@ -67,10 +68,10 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
     // offsets dentro del cuerpo (desde byte 10 del mensaje), LE
     localparam logic [31:0] O46_TS=0, O46_MEI=8, O46_DIM=11, O46_ENT=14, O46_BL1=32, O46_BL2=24;
     localparam logic [31:0] O46_PX=0, O46_SZ=8, O46_SEC=12, O46_RPT=16, O46_NO=20, O46_LVL=24,
-                           O46_ACT=25, O46_TYP=26;
+                      O46_ACT=25, O46_TYP=26;
     localparam logic [31:0] O46_OID=0, O46_PRI=8, O46_DQ=16, O46_REF=20, O46_OA=21;
     localparam logic [31:0] O47_OID=0, O47_PRI=8, O47_PX=16, O47_DQ=24, O47_SEC=28,
-                           O47_ACT=32, O47_TYP=33, O47_BL=40;
+                      O47_ACT=32, O47_TYP=33, O47_BL=40;
     localparam logic [31:0] O52_SEC=8, O52_RPT=12, O52_TS=16, O52_DIM=59, O52_ENT=62, O52_BL=22;
     localparam logic [31:0] O52_PX=0, O52_SZ=8, O52_NO=12, O52_LVL=16, O52_TYP=21;
     localparam logic [31:0] O53_SEC=8, O53_TS=20, O53_DIM=28, O53_ENT=31, O53_BL=29;
@@ -136,6 +137,7 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
     reg [7:0]  hdr_pos;
     reg        gap_check;
     reg        first_pkt;
+    reg        pkt_end;    // tlast aceptado; se conserva hasta drenar la cola
     reg        wait_hdr;   // CS_WAIT entrado por tlast → reanudar en CS_HDR
     reg [31:0] seq, exp_seq;
     reg        cap_sel;
@@ -172,6 +174,8 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
     // estado) y el emisor muestra/popa. f_cnt se actualiza en el núcleo con el
     // balance neto; f_head solo en el emisor (single-driver).
     wire pop = m_axis_tvalid && m_axis_tready;
+    wire in_hs = s_axis_tvalid && s_axis_tready;
+    wire pkt_end_eff = pkt_end || (in_hs && s_axis_tlast);
     wire push_commit =
         (dst == DS_PUSH  && f_cnt < FIFO_DEPTH && r_idx < rlen) ||
         (dst == DS_PASS  && f_cnt < FIFO_DEPTH &&
@@ -203,7 +207,7 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
             s_axis_tready <= 0;
             qw <= 0; qh <= 0;
             cst <= CS_HDR; hdr_pos <= 0;
-            gap_check <= 0; first_pkt <= 0; wait_hdr <= 0;
+            gap_check <= 0; first_pkt <= 0; pkt_end <= 0; wait_hdr <= 0;
             seq <= 0; exp_seq <= 0;
             cap_sel <= 0; cap_len <= 0; cap_size <= 0; skip_left <= 0;
             occ[0] <= 0; occ[1] <= 0;
@@ -225,6 +229,8 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                     qbytes[(32'(qw) + 32'(k)) % 32'(MAX_MSG)] <=
                         s_axis_tdata[8*(32'(BYTES) - 1 - k) +: 8];
                 qw <= 8'((32'(qw) + 32'(BYTES)) % 32'(MAX_MSG));
+                if (s_axis_tlast)
+                    pkt_end <= 1;
             end
 
             // ── captura ────────────────────────────────────────────────────
@@ -243,8 +249,10 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                             end
                         end
                     end
-                    if (s_axis_tlast) begin
+                    if (pkt_end_eff &&
+                        qavail_eff < 16'(PKT_HDR) - 16'(hdr_pos)) begin
                         error <= 1;
+                        qh <= 0; qw <= 0; pkt_end <= 0;
                         hdr_pos <= 0;
                         cst <= CS_HDR;
                     end
@@ -262,9 +270,21 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                         if ({qbyte(1), qbyte(0)} < 16'(MSG_PREFIX) ||
                             {qbyte(1), qbyte(0)} > 16'(MAX_MSG)) begin
                             error <= 1;
-                            skip_left <= {qbyte(1), qbyte(0)} - 16'd2;
-                            qh <= 8'((16'(qh) + 16'd2) % 16'(MAX_MSG));
-                            cst <= CS_SKIP;
+                            if (pkt_end_eff) begin
+                                qh <= 0; qw <= 0; pkt_end <= 0;
+                                hdr_pos <= 0;
+                                cst <= CS_HDR;
+                            end else begin
+                                skip_left <= {qbyte(1), qbyte(0)} - 16'd2;
+                                qh <= 8'((16'(qh) + 16'd2) % 16'(MAX_MSG));
+                                cst <= CS_SKIP;
+                            end
+                        end else if (pkt_end_eff &&
+                                     qavail_eff < {qbyte(1), qbyte(0)}) begin
+                            error <= 1;  // mensaje declarado cruza el tlast
+                            qh <= 0; qw <= 0; pkt_end <= 0;
+                            hdr_pos <= 0;
+                            cst <= CS_HDR;
                         end else begin
                             // msg_size (2 B) forma parte del mensaje: se
                             // almacena en mbuf[0..1] antes del cuerpo
@@ -282,63 +302,57 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                             cst <= CS_BODY;
                         end
                     end
-                    if (s_axis_tlast) begin
-                        error <= 1;
-                        hdr_pos <= 0;
-                        cst <= CS_HDR;
-                    end
                 end
 
                 CS_BODY: begin
-                    // Consume en este ciclo la cantidad de bytes que realmente
-                    // escribe: la menor entre lo que queda del mensaje
-                    // (cap_size-cap_len), lo disponible (qavail_eff) y el ancho
-                    // de captura por ciclo (2*BYTES). Hacerlo distinto (p. ej.
-                    // avanzar cap_len/qh por qavail_eff escribiendo solo
-                    // 2*BYTES) deja bytes del mensaje huérfanos en el buffer.
-                    if (32'(qavail_eff) != 32'd0) begin
-                        integer cnt;
-                        cnt = (32'(cap_size) - 32'(cap_len) < 32'(qavail_eff)) ?
-                              (32'(cap_size) - 32'(cap_len)) : 32'(qavail_eff);
-                        if (cnt > 32'(2*BYTES)) cnt = 32'(2*BYTES);
-                        for (integer k = 0; k < 2*BYTES; k = k + 1)
-                            if (k < cnt)
+                    if (32'(qavail_eff) >= 32'(cap_size) - 32'(cap_len)) begin
+                        // mensaje completo
+                        for (integer k = 0; k < 3*BYTES; k = k + 1)
+                            if (k < 32'(cap_size) - 32'(cap_len))
                                 if (cap_sel)
                                     mbuf1[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
                                 else
                                     mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
-                        cap_len <= cap_len + cnt[15:0];
-                        qh <= 8'((32'(qh) + cnt) % 32'(MAX_MSG));
-                        if (32'(cap_len) + cnt >= 32'(cap_size)) begin
-                            // mensaje completo
-                            occ[cap_sel] <= 1;
-                            if (s_axis_tlast) begin
-                                // paquete termina en el borde del mensaje: descartar
-                                // el padding residual (burst a alinear a palabra) y
-                                // el header de 12 B del siguiente paquete se lee
-                                // desde un burst nuevo (colas reset ad hoc)
-                                qh <= 0; qw <= 0;
-                                hdr_pos <= 0;
-                                if (occ[~cap_sel] == 0) begin
-                                    cap_sel <= ~cap_sel;
-                                    wait_hdr <= 0;
-                                    cst <= CS_HDR;
-                                end else begin
-                                    wait_hdr <= 1;
-                                    cst <= CS_WAIT;
-                                end
+                        occ[cap_sel] <= 1;
+                        if (pkt_end_eff) begin
+                            // paquete termina en el borde del mensaje: descartar
+                            // el padding residual (burst a alinear a palabra) y
+                            // el header de 12 B del siguiente paquete se lee
+                            // desde un burst nuevo (colas reset ad hoc)
+                            qh <= 0; qw <= 0; pkt_end <= 0;
+                            hdr_pos <= 0;
+                            if (occ[~cap_sel] == 0) begin
+                                cap_sel <= ~cap_sel;
+                                wait_hdr <= 0;
+                                cst <= CS_HDR;
                             end else begin
-                                if (occ[~cap_sel] == 0) begin
-                                    cap_sel <= ~cap_sel;
-                                    wait_hdr <= 0;
-                                    cst <= CS_SIZE;
-                                end else begin
-                                    wait_hdr <= 0;
-                                    cst <= CS_WAIT;
-                                end
+                                wait_hdr <= 1;
+                                cst <= CS_WAIT;
                             end
-                        end else if (s_axis_tlast) begin
+                        end else begin
+                            qh <= 8'((32'(qh) + 32'(cap_size) - 32'(cap_len)) % 32'(MAX_MSG));
+                            if (occ[~cap_sel] == 0) begin
+                                cap_sel <= ~cap_sel;
+                                wait_hdr <= 0;
+                                cst <= CS_SIZE;
+                            end else begin
+                                wait_hdr <= 0;
+                                cst <= CS_WAIT;
+                            end
+                        end
+                    end else if (qavail_eff != 16'd0) begin
+                        for (integer k = 0; k < 3*BYTES; k = k + 1)
+                            if (k < 32'(qavail_eff))
+                                if (cap_sel)
+                                    mbuf1[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
+                                else
+                                    mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
+                        cap_len <= cap_len + qavail_eff;
+                        qh <= 8'((32'(qh) + 32'(qavail_eff)) % 32'(MAX_MSG));
+                        if (pkt_end_eff) begin
                             error <= 1;   // mensaje truncado por tlast
+                            qh <= 0; qw <= 0; pkt_end <= 0;
+                            cap_len <= 0;
                             hdr_pos <= 0;
                             cst <= CS_HDR;
                         end
@@ -353,8 +367,9 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                         qh <= 8'((16'(qh) + 16'(qavail_eff)) % 16'(MAX_MSG));
                         skip_left <= skip_left - qavail_eff;
                     end
-                    if (s_axis_tlast) begin
+                    if (pkt_end_eff) begin
                         error <= 1;
+                        qh <= 0; qw <= 0; pkt_end <= 0;
                         hdr_pos <= 0;
                         cst <= CS_HDR;
                     end
@@ -376,7 +391,8 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                 end
             endcase
 
-            s_axis_tready <= (16'(qavail_eff) <= 16'(MAX_MSG) - 16'(BYTES)) && (cst != CS_WAIT);
+            s_axis_tready <= (16'(qavail_eff) <= 16'(MAX_MSG) - 16'(BYTES)) &&
+                             (cst != CS_WAIT) && !pkt_end_eff;
 
             // ── decodificación ─────────────────────────────────────────────
             case (dst)
@@ -428,7 +444,17 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                 end
                 DS_G1: begin
                     g_idx <= 0;
-                    if (g1_n == 0) begin
+                    if ((d_tpl == TPL_46 &&
+                         32'(g1_base) + 32'(g1_n) * 32'(O46_BL1) + 32'd8 > 32'(d_size)) ||
+                        (d_tpl == TPL_47 &&
+                         32'(g1_base) + 32'(g1_n) * 32'(O47_BL) > 32'(d_size)) ||
+                        (d_tpl == TPL_52 &&
+                         32'(g1_base) + 32'(g1_n) * 32'(O52_BL) > 32'(d_size)) ||
+                        (d_tpl == TPL_53 &&
+                         32'(g1_base) + 32'(g1_n) * 32'(O53_BL) > 32'(d_size))) begin
+                        error <= 1;
+                        dst <= DS_DONE;
+                    end else if (g1_n == 0) begin
                         if (d_tpl == TPL_46) dst <= DS_G2_DIM;
                         else dst <= DS_DONE;
                     end else
@@ -451,7 +477,10 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                     dst <= DS_G2_ENT;
                 end
                 DS_G2_ENT: begin
-                    if (g_idx < g2_n) dst <= DS_PUSH;
+                    if (32'(g2_base) + 32'(g2_n) * 32'(O46_BL2) > 32'(d_size)) begin
+                        error <= 1;
+                        dst <= DS_DONE;
+                    end else if (g_idx < g2_n) dst <= DS_PUSH;
                     else dst <= DS_DONE;
                 end
                 DS_PUSH: begin
@@ -460,7 +489,16 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                             f_mem[f_tail] <= rrec[r_idx];
                             f_tl[f_tail]  <= (r_idx == rlen - 1);
                             f_tail <= f_tail + 1;
-                            r_idx  <= r_idx + 1;
+                            if (r_idx == rlen - 1 &&
+                                ((g1_mode && d_tpl != TPL_46 && g_idx + 1 >= g1_n) ||
+                                 (!g1_mode && g_idx + 1 >= g2_n))) begin
+                                r_idx <= 0;
+                                g_idx <= g_idx + 1;
+                                occ[dec_sel] <= 0;
+                                dst <= DS_IDLE;
+                            end else begin
+                                r_idx <= r_idx + 1;
+                            end
                         end else begin
                             r_idx <= 0;
                             g_idx <= g_idx + 1;
@@ -492,11 +530,9 @@ localparam logic [3:0]  BYTES     = 4'(DW / 8);
                                     p_off  <= p_off + 1;
                                     p_cnt  <= p_cnt + 1;
                                     if (p_cnt == 5'd3 || p_off + 16'd1 == d_size) begin
-                                        // alinear a la izquierda la palabra final
-                                        // parcial (data al tope, ceros al final)
                                         f_mem[f_tail] <= ((p_word << 8) |
-                                                          32'(mrb(p_off, dec_sel)))
-                                                         << (8 * (3 - p_cnt));
+                                                          32'(mrb(p_off, dec_sel))) <<
+                                                         (8 * (3 - p_cnt));
                                         f_tl[f_tail]  <= (p_off + 16'd1 == d_size);
                                         f_tail <= f_tail + 1;
                                         p_word <= 0;

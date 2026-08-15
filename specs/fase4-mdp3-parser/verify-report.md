@@ -1,8 +1,17 @@
 # verify-report — fase4-mdp3-parser
 
+> **Estado vigente: REABIERTA (2026-08-15).** La evidencia previa no representa
+> últimos beats con un número parcial de bytes válidos. Los resultados se
+> conservan como evidencia histórica, pero los criterios 1, 2, 3, 5, 7, 8, 9 y 10
+> están abiertos. El framing requiere implementar y verificar `s_axis_tkeep`;
+> los hallazgos de schema/version, tamaño y backpressure se resolverán por
+> separado.
+
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
-> Estado: **spec commiteada (2026-08-14), pendiente de /build (iteración 1)**.
+> Estado histórico: **se declaró cerrada funcionalmente (2026-08-15)**. Los criterios 1-9 pasaban
+> en DW=32 y DW=64; el objetivo de frecuencia no se presenta como timing
+> cerrado porque Vivado no está disponible en este entorno.
 
 ## Iteración 1 — golden MDP3 (criterio 1: loader schema + decoder + generator)
 
@@ -19,15 +28,18 @@ arrancar el verde:
 - `decode_message` decodificaba cualquier template conocido del schema (48
   etc.); ahora solo el subset 46/47/52/53; el resto es passthrough.
 
-**Verde final (gate A, golden):** `python3 -m unittest discover -s
-golden_model/tests -t .` → **35 tests OK** (32 de fases 0-3 sin cambios + 3
-nuevos). Espejos del criterio 1 (M3-GEN-01/02) en
+**Verde histórico (gate A, golden; evidencia insuficiente):** `python3 -m
+unittest discover -s golden_model/tests -t .` → **35 tests OK** (32 de fases
+0-3 sin cambios + 3 nuevos). Espejos del criterio 1 (M3-GEN-01/02) en
 `golden_model/tests/test_mdp3.py` (área de golden, precedente fase 0).
 
-**Stress del round-trip (evidencia extra):** 4.000 mensajes del subset
+**Stress histórico del round-trip (invalidado como evidencia semántica):**
+4.000 mensajes del subset
 (46/47/52/53, 50 seeds) con `decode(encode(m))` re-encodeado byte a byte
 idéntico; corpus sintético de 30 paquetes → 206 records Anexo M de oráculo
-(media 14 words/record).
+(media 14 words/record). Esa igualdad solo demostraba autoconsistencia de los
+bytes: tanto el primer encode como el re-encode escribían ceros y, por tanto,
+podían coincidir sin conservar los valores de entrada.
 
 **Schema pinned:** `data/mdp3/templates_FixBinary_v12.xml` (2021-03-10,
 id=1 version=12, byteOrder=littleEndian, md5
@@ -46,11 +58,45 @@ derivación por template (ReferenceID del 46 resuelto por índice).
 | Test | Espejo |
 |---|---|
 | `test_m3gen01_el_golden_hace_roundtrip_decode_encode_m_es_m` | M3-GEN-01 |
+| `test_m3gen01_el_encoder_preserva_valores_no_cero_del_subset` | M3-GEN-01 (oráculo semántico) |
 | `test_m3gen01_el_passthrough_preserva_el_cuerpo_crudo` | M3-GEN-01 (2ª parte) |
 | `test_m3gen02_el_loader_deriva_los_tamanos_esperados_desde_el_xml` | M3-GEN-02 |
 
-Pendiente: iter 2 (RTL `mdp3_parser.sv`: framing + Anexo M bit a bit vs
-golden, criterios 2-3).
+## Iteración 1b — reparación del falso verde del encoder (2026-08-15)
+
+**Rojo semántico:**
+
+```text
+test_m3gen01_el_encoder_preserva_valores_no_cero_del_subset ... FAIL
+AssertionError: 0 != 72623859790382856
+```
+
+El encoder pasaba `root[f.offset:]` y `e[gf.offset:]` a `_encode_value`.
+Esos slices de `bytearray` son copias, de modo que los valores root y de grupo
+no llegaban al mensaje original. Se corrigieron ambas rutas en el punto común:
+codificar el valor y copiar los bytes resultantes al rango del buffer destino.
+
+**Verde semántico (gate A):** el test literal compara todos los valores
+provistos de 46/47/52/53, incluido precio signed, IDs y los dos grupos
+multi-entry de 46. Resultado:
+
+```text
+golden_model.tests.test_mdp3 ... Ran 4 tests ... OK
+golden_model/tests completo     ... Ran 36 tests ... OK
+```
+
+**Rebaselining RTL contra el golden reparado:**
+
+```text
+M3-FRM-01 FAIL: byte 116: got 0x00 exp 0x9f
+M3-FRM-02 FAIL: bytes distintos (cruces de límite mal alineados)
+M3-FRM-03 FAIL: backpressure sostenida: 139 ciclos
+TESTS=3 PASS=0 FAIL=3 SKIP=0
+```
+
+La fase 4 permanece abierta. Este rojo sustituye como baseline vigente la
+longitud histórica `6056 != 9664`; no se atribuye PASS al RTL.
+
 ## Iteración 2 — RTL `mdp3_parser.sv` (criterios 2-3: framing + Anexo M bit a bit)
 
 **Progreso frente al baseline** con la corrección estructural de captura
@@ -75,173 +121,117 @@ correctos; los del reuso, no.
 word retenida vía `qc_eff` en el consumo, no desde `tdata` ya avanzada) y dejar
 los 3 espejos en verde, luego correlación con corpus completo y commit.
 
-## Iteración 3 — causa raíz del byte huérfano + gating del exponente (criterios 2-3)
+## Iteración 3 — framing, subset y robustez RTL (criterios 2-7)
 
-**Rojo diagnosticado con dump de buffer.** Instrumenté el RTL (`M3_DBG`,
-dump de `mbuf` en `DS_DONE`) y correlacioné los dumps contra los bytes de
-cada mensaje reconstruidos del paquete (caminando desde el header de 12 B).
-Resultado: **todos** los mensajes corruptos tenían exactamente **un byte
-huérfano en `mbuf[10]`** (el primer byte del cuerpo, tras el prefijo de
-10 B), que quedaba stale del uso previo del buffer ping-pong.
+El rojo vigente de 0/3 se resolvió en la causa común de captura y packet-end:
 
-**Causa raíz (bug real, distinto del descrito en iter 2):** las ramas de
-`CS_BODY` (parcial y completa) escribían en el buffer a lo sumo `2*BYTES`
-(8) bytes por ciclo — el lazo `for (k=0; k<2*BYTES; k++)` — pero avanzaban
-`cap_len`/`qh` por `qavail_eff` (o `cap_size-cap_len`), que puede superar 8
-cuando la cola acumuló bytes. El byte sobrante (el 9º, `mbuf[10]`) nunca se
-escribía. Se reescribió `CS_BODY` para consumir/avanzar **exactamente lo que
-escribe**: `cnt = min(restante, qavail_eff, 2*BYTES)`, y ambas ramas quedan
-unificadas en una sola.
+- la copia desde la cola debía admitir hasta `3*BYTES` disponibles en el
+  handoff, no solo `2*BYTES`;
+- `tlast` aceptado se conserva en `pkt_end` hasta drenar los bytes ya
+  encolados, evitando perder el último mensaje o confundirlo con el header del
+  paquete siguiente, especialmente en DW=64;
+- el passthrough parcial alinea a MSB la última word y rellena a cero;
+- los grupos validan `base + numInGroup*blockLength <= msg_size` antes de leer
+  entries; un `ReferenceID` fuera de rango pulsa `error` y emite los campos
+  dependientes a cero, igual que el golden;
+- el último push de un grupo terminal libera el buffer en el mismo ciclo. El
+  rojo específico era una racha real de **19 ciclos** en DW=64; tras eliminar
+  tres estados ociosos queda dentro del contrato sin añadir otra FIFO.
 
-**Hallazgo concatenado (contrato #5 — ReferenceID fuera de rango):** tras
-cerrar el byte huérfano quedaron 7 bytes distintos en 7 records `tpl=46`
-MBOFD: el golden pone `w15` (exponente) a `0` en el fallback
-`src=None` (`ReferenceID >= NoMDEntries`, mensajes con `NoMD=0`), pero el
-RTL hardcodeaba `EXP_BYTE=0xF7` en `rrec[15]`. El schema fija el exponente
-constante `-9` (PRICENULL9/PRICE9), así que `0xF7` es correcto cuando la
-referencia es válida; solo faltaba **gatearlo** por `rref < g1_n`, igual
-que `rrec[5]/6/13/14`. Corregido.
+Evidencia limpia de simulación:
 
-**Verde (criterio 2 — framing bit a bit):**
-```
-** test_mdp3_framing.test_m3frm01_..._bit_a_bit_vs_el_golden   PASS
-** test_mdp3_framing.test_m3frm02_mensajes_que_cruzan_limites  PASS
-** test_mdp3_framing.test_m3frm03_peor_caso_a_1_palabra...      PASS (tras iter 5, MBP)
-** TESTS=3 PASS=3 FAIL=0
-```
-**Gate B/C:** `verilator --lint-only -Wall -Wno-DECLFILENAME
--Wno-PINCONNECTEMPTY --top-module mdp3_parser rtl/parser/mdp3_parser.sv`
-→ **0 warnings**, exit 0.
-
-**Régimen de `M3-FRM-03` (criterio 3, line-rate) — documentado y cerrado en
-iter 5:** inicialmente usaba `tpl=47` (MBOFD) back-to-back, que decodifica en
-**56 records MBOFD = 1008 words de salida** frente a ~707 words de entrada
-(ratio **1.43**, expansión del Anexo M: cada record MBOFD emite 72 B por ~43 B
-de entrada). A DW=32 el parser **no puede** sostener 1 palabra/ciclo de
-entrada si la salida crece más que la entrada. Ese es un **límite inherente
-del Anexo M** (ya admitido en el comentario de cabecera del RTL), no un bug.
-
-Resolución (decisión de spec, iter 5): el line-rate del criterio 3 se mide
-sobre el subset con **expansión contenida (MBP**: 46-MBP y 52), donde salida ≤
-entrada. Reescrito `test_m3frm03` con mensajes mínimos **46 de 1 entry MBP**
-(64 B de entrada, 52 B de salida, ratio 1.23): **max_stall = 8 ≤ 16** → PASA,
-bit a bit. Los templates **MBOFD** quedan documentados como backpressure
-inherente en el constraint *Line-rate* de la spec (no se oculta con FIFO, regla
-global; no se mide como fallo de line-rate). También se corrigió la medición de
-`max_stall_run` en `drive_and_collect` (no contar los ciclos idle posteriores a
-la entrada como backpressure).
-
-**Regresión (criterio 8):** golden `35/35`; `make sim` en
-`testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**.
-
-## Iteración 4 — criterios 4-7 (subset, passthrough, gaps, robustez) + DW=64
-
-Nuevo testbench `verification/testbenches/mdp3/test_mdp3_robustez.py` (7
-tests cocotb) que cubre los criterios 4-7, con un driver que además muestrea
-`gap_detected`/`error` y mide la parada de entrada solo mientras queda
-entrada pendiente. Sin cambios de RTL (comportamiento ya correcto tras el
-iter 3); son tests de cobertura red→verde del contrato.
-
-**Verde (ambos tramos del gate A, área mdp3):**
-```
-# DW=32, make sim (framing) + make sim MODULE=test_mdp3_robustez
-framing :  M3-FRM-01 PASS, M3-FRM-02 PASS, M3-FRM-03 PASS
-robustez:  M3-SUB-01 PASS, M3-SUB-02 PASS, M3-PASS-01 PASS,
-           M3-GAP-01 PASS, M3-INV-01 PASS, M3-INV-02 PASS, M3-INV-03 PASS
-# DW=64, make sim-dw64 (mismos módulos)
-framing :  M3-FRM-01 PASS, M3-FRM-02 PASS, M3-FRM-03 PASS
-robustez:  7/7 PASS
+```text
+DW=32  TESTS=8 PASS=8 FAIL=0 SKIP=0
+DW=64  TESTS=8 PASS=8 FAIL=0 SKIP=0
+M3-FRM-03 DW=32: racha máxima tvalid&&!tready = 8
+M3-FRM-03 DW=64: racha máxima tvalid&&!tready = 16
 ```
 
-**Cobertura (gate D nivel 1) — criterios 4-7:**
-| Test | Espejo |
+Los ocho tests cocotb cubren framing aleatorio, cruces de palabra, el vector
+literal de throughput, 46/47/52/53 con valores no cero y multi-entry,
+passthrough conocido/desconocido, gap/reset, tamaños/truncados con
+recuperación, grupo incompleto y `ReferenceID` inválido.
+
+El corpus válido también se corrigió: el generator ya no crea entries MBOFD
+con `ReferenceID=0` cuando `NoMDEntries` está vacío. Los casos inválidos viven
+en tests adversariales explícitos, no mezclados silenciosamente en el corpus
+nominal.
+
+## Iteración 4 — gates A-G y regresión 0-3 (criterios 8-9)
+
+| Gate | Comando/evidencia actual | Resultado |
+|---|---|---|
+| A — simulación | `python3 -m unittest discover -s golden_model/tests -t .`; `make .../mdp3 sim`; `make .../mdp3 sim-dw64` | **37/37 Python, 8/8 DW32, 8/8 DW64 — PASS** |
+| B — compilación | `python3 -m compileall -q golden_model scripts/verify verification/testbenches/mdp3`; Verilator en ambas anchuras | **PASS** |
+| C — estilo | `verilator --lint-only --Wall -GDW=32/64 --top-module mdp3_parser rtl/parser/mdp3_parser.sv`; `command -v verible-verilog-lint` | **0 warnings Verilator; verible NO EJECUTADO (no instalado)** |
+| D — cobertura | mapa literal de los 14 escenarios abajo; checker schema v12↔RTL | **PASS funcional** |
+| E — mutación | `python3 scripts/verify/mutate_mdp3.py` | **8/8 compilables muertos, 0 supervivientes — PASS** |
+| F — completitud | 14 IDs únicos en `mdp3.feature`; entrada de fase 4 en `specs/gherkin-espejos.json` | **PASS** |
+| G — rigor/timing | golden desde XML, corpus sintético, ningún feed real versionado; `command -v vivado` | **Rigor PASS; timing NO EJECUTADO (Vivado ausente)** |
+
+### Gate E — resumen adversarial
+
+```text
+TPL47-ID       killed (DW32)
+TRUNC-NOERROR  killed (DW32)
+SEQ-NOGAP      killed (DW32)
+GROUP-COUNT    killed (DW32)
+GROUP-BOUNDS   killed (DW32)
+PASS-NOBODY    killed (DW32)
+PRICE-SWAP     killed (DW32)
+PUSH-IDLE      killed (DW64)
+TODOS LOS MUTANTES COMPILAN Y MUEREN. Gate E PASS.
+```
+
+El primer candidato `SIZE-PACKET` retiraba una comprobación temprana que el
+FSM repetía de forma equivalente en `CS_BODY`; sobrevivió sin cambiar el
+comportamiento. No se contó como evidencia: se sustituyó por
+`TRUNC-NOERROR`, que silencia la propiedad observable y muere en M3-INV-01/02.
+
+### Gate D/F histórico — mapa anterior a los escenarios reabiertos
+
+| Escenario | Test o gate que lo cierra |
 |---|---|
-| `test_m3sub01_el_subset_se_decodifica_campo_a_campo` | M3-SUB-01 |
-| `test_m3sub02_precio_compuesto_y_grupos_multi_entry` | M3-SUB-02 |
-| `test_m3pass01_el_passthrough_crudo_es_bit_a_bit_y_no_aborta` | M3-PASS-01 (incl. template `9999` y `777`) |
-| `test_m3gap01_gap_de_secuencia_y_nuevo_canal` | M3-GAP-01 |
-| `test_m3inv01_msg_size_incoherente_señaliza_error` | M3-INV-01 |
-| `test_m3inv02_paquete_truncado_por_tlast_señaliza_error` | M3-INV-02 |
-| `test_m3inv03_grupo_con_numin_group_cero_no_trunca` | M3-INV-03 |
+| M3-GEN-01 | cuatro tests semánticos/round-trip/passthrough en `golden_model/tests/test_mdp3.py` |
+| M3-GEN-02 | `test_m3gen02_el_loader_deriva_los_tamanos_esperados_desde_el_xml` |
+| M3-FRM-01 | `test_m3frm01_el_parser_emite_el_anexo_m_bit_a_bit_vs_el_golden` |
+| M3-FRM-02 | `test_m3frm02_mensajes_que_cruzan_limites_de_palabra` |
+| M3-FRM-03 | `test_m3frm03_peor_caso_a_1_palabra_por_ciclo_sin_backpressure` |
+| M3-SUB-01/02 | `test_m3sub01_sub02_subset_y_multi_entry_bit_a_bit` |
+| M3-PASS-01 | `test_m3pass01_passthrough_crudo_y_schema_desconocido` |
+| M3-GAP-01 | `test_m3gap01_salto_y_reset_de_canal` |
+| M3-INV-01/02 | `test_m3inv01_inv02_tamanos_invalidos_y_truncado_recuperan` |
+| M3-INV-03 | `test_m3inv03_grupo_vacio_o_entry_fuera_del_mensaje` |
+| M3-SCH-01 | `test_m3sch01_los_localparams_rtl_coinciden_con_el_schema_v12` |
+| M3-REG-01 | matriz de regresión siguiente |
 
-**Nuevas coberturas con evidencia:**
-- **M3-SUB:** corpus subset-only (46/47/52/53) bit a bit; `M3-SUB-02` fuerza
-  mensajes multi-entry y verifica al menos un record por entry, mantissa y
-  exponente sin mezclarse (el golden emite `n_records >= 1` por mensaje 52).
-- **M3-PASS:** passthrough de templates no-subset **y desconocidos** con
-  `schemaId=9999` (`UNKNOWN_TEMPLATE=777`) + un paquete con `blockLength/ver`
-  desconocidos seguido de un mensaje del subset → el flujo no aborta y sigue
-  bit a bit.
-- **M3-GAP:** paquete `seq=100` → `seq=105` señaliza `gap_detected`; tras
-  reset del DUT (canal nuevo, `seq=7`) no se señala gap; salida bit a bit.
-- **M3-INV:** `msg_size<10` y `msg_size>256` señalizan `error` sin colgar la
-  entrada; `tlast` en medio de un mensaje señaliza `error` y el siguiente
-  paquete bueno sale bit a bit; mensaje `46` con `NoMDEntries` vacío
-  (numInGroup 0) no trunca y emite lo mismo que el golden (contrato #5: el
-  MBOFD sin referencia → exponente y px a 0, ver iter 3).
+### M3-REG-01 — regresión integral post-mutación
 
-**Criterio 8 — regresión global:** golden `35/35`; `make sim` en
-`testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**;
-mdp3 a **DW=64** (nuevo `make sim-dw64`, `-GDW=64`) → framing 3/3 y robustez
-7/7. `M3-FRM-03` PASS a ambos DW con la redefinición del criterio 3 (MBP;
-MBOFD = backpressure inherente documentada en la spec).
-
-## Iteración 5 — cierre del criterio 3 (line-rate)
-
-Decisión de spec con evidencia: el line-rate se mide sobre **MBP** (46-MBP,
-52), donde el Anexo M no expande (salida ≤ entrada). Confirmado por medición:
-mensaje mínimo 46 de 1 entry MBP = 64 B de entrada, 52 B de salida, ratio
-1.23 → `max_stall = 8 ≤ 16` a DW=32 y DW=64, **bit a bit** (probe `46` con 1
-entry MBP). Se actualizaron `spec.md` (constraint *Line-rate*, criterio 3,
-tabla de verificación y abuso M3-FRM-03) y el Gherkin `M3-FRM-03`; y se
-corrigió la medición de `max_stall_run` en `test_mdp3_framing.py` (no contar
-los ciclos idle posteriores a la entrada como backpressure). Los MBOFD quedan
-explícitamente como backpressure inherente (no se ocultan con FIFO).
-
-## Gate E — mutación `scripts/verify/mutate_mdp3.py` (criterio 9)
-
-Runner `mutate_mdp3.py` (mismo esquema que `mutate_parser.py`/`mutate_orderbook.py`):
-aplica un flip a `mdp3_parser.sv`, corre **framing + robustez**, y mata el
-mutante si alguna de las dos suites falla; restaura el RTL y limpia `sim_build`
-tras cada mutante (evita falsos verdes por timestamp). 6 mutantes (tipos de la
-lista de la spec): seq sin comparar, exponente sin gatear, ReferenceID
-off-by-one, numInGroup del 52, base del body del 46, y passthrough sin cuerpo.
-
-**Evidencia (gate E):**
+```text
+fase1 parser                 TESTS=20 PASS=20 FAIL=0
+fase2 orderbook              TESTS=14 PASS=14 FAIL=0
+fase3 book DW32              TESTS=5  PASS=5  FAIL=0
+fase3 parser DW32            TESTS=4  PASS=4  FAIL=0
+fase3 hash K=20              TESTS=8  PASS=8  FAIL=0
+fase3 depth ND=5             TESTS=3  PASS=3  FAIL=0
+fase3 hardening              TESTS=2  PASS=2  FAIL=0
+fase3 chain ND=5             TESTS=3  PASS=3  FAIL=0
+fase3 chain ND=3             TESTS=3  PASS=3  FAIL=0
+fase3 latencia               TESTS=1  PASS=1  FAIL=0
+fase3 Anexo A/URAM           TESTS=2  PASS=2  FAIL=0
+fase3 URAM                   TESTS=4  PASS=4  FAIL=0
 ```
-[MATADO] SEQ-GAP: FAIL=1   (func != a ==)
-[MATADO] EXP-UNCOND: FAIL=3   (exponente MBOFD 46 sin gatear)
-[MATADO] REF-INDEX-OOB: FAIL=1 (ReferenceID off-by-one)
-[MATADO] NUMGROUP-52: FAIL=3   (numInGroup del 52)
-[MATADO] BODY-BASE-46: FAIL=3  (base del body del 46)
-[MATADO] PASS-NOBODY: FAIL=3   (passthrough sin cuerpo)
-=== RESUMEN MUTACION === 6/6 killed → Gate E PASS
-```
-RTL restaurado tras la campaña (`git diff rtl/` vacío) y suite verde de nuevo.
 
-## Gate C — estilos `verible-verilog-lint` (criterio 9) — PASS
+## Veredicto histórico — sustituido por la reapertura
 
-Se instaló `verible-verilog-lint` (binario oficial de ChipsAlliance/Verible
-en `.venv/bin`, docs/DESARROLLO.md) y se creó la config del repo
-`./.rules.verible_lint` (formato `--print_rules_file`), que fija
-`parameter-name-style` a la convención SCREAMING_SNAKE del proyecto
-(`localparam_style:ALL_CAPS`) en lugar de renombrar cientos de constantes de
-RTL verificado. Sobre esa base se corrigieron los hallazgos **genuinos** de
-`mdp3_parser.sv`:
-- 18/18 constantes con `storage type` explícito (`localparam logic [..]`, `parameter int DW`).
-- 7/7 arrays unpacked `[0:N-1]` → `[N]` (`qbytes`, `mbuf0/1`, `occ`, `rrec`,
-  `f_mem`, `f_tl`).
-- 1/1 `case (p_n)` sin `default` en `DS_PASS` (añadido `default: dst <= DS_DONE`).
+El parser CME MDP3 se declaró **cerrado en su alcance funcional**: golden
+schema-driven, framing multi-mensaje y packet-end en dos anchuras, subset
+46/47/52/53, passthrough, gaps, inválidos, mutación y regresión completa. No
+se incluyen datos DataMine ni se afirma evidencia real que no existe. Este
+veredicto ya no representa el estado actual por los hallazgos descritos al
+inicio del informe.
 
-**Evidencia (gate C):**
-```
-verible-verilog-lint --rules_config_search rtl/parser/mdp3_parser.sv
-  → 0 hallazgos (exit limpio)
-verilator --lint-only -Wall ... --top-module mdp3_parser → 0 warnings
-```
-Suite intacta tras el fix de estilo (framing 3/3 y robustez 7/7 a DW=32 y
-DW=64; golden 35/35). Los RTL de fases 1-3 (cerrados) conservan hallazgos de
-convención y no se tocan.
-
-
-
+La frecuencia objetivo de 322,265625 MHz (DW=32) / 156,25 MHz (DW=64) sigue
+siendo una **propiedad física no acreditada**: no hay Vivado en el entorno ni
+WNS/TNS/utilización del `mdp3_parser`. Este límite no invalida el cierre
+funcional histórico, pero prohíbe describir la fase como timing-closed.

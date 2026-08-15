@@ -64,12 +64,13 @@ Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
     Dado un locate fuera del subset de NSYM=20
     Cuando llega un mensaje de ese símbolo
     Entonces señaliza error
+    Y el índice interno del símbolo permanece menor que NSYM en todo ciclo
     Y no corrompe los niveles de los símbolos registrados
 
   Escenario: SEC-BP-01 — el BBO se retiene bajo backpressure sin perderse
-    Dado un consumidor con bbo_tready en 0 durante el evento
-    Cuando el book emite un evento BBO
-    Entonces el evento se retiene hasta que tready sube
+    Dado un consumidor que baja bbo_tready después de observar bbo_tvalid
+    Cuando mantiene el stall durante dos ciclos completos
+    Entonces bbo_tvalid y el payload permanecen estables hasta que tready sube
     Y se entrega exactamente una vez, sin pérdida ni duplicado
 
   Escenario: SEC-DP-01 — depth de un símbolo vacío es todo ceros
@@ -81,6 +82,7 @@ Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
     Dado un símbolo con ND niveles o más por lado
     Cuando el book emite un evento de ese símbolo
     Entonces depth_tdata contiene los ND mejores niveles por lado, mejor primero
+    Y una elaboración de itch_chain con ND=3 produce exactamente 384 bits
     Y coincide bit a bit con los niveles ordenados del golden book.py
 
   Escenario: SEC-LAT-01 — la latencia por tipo es determinista y reproducible

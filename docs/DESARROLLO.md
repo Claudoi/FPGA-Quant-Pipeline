@@ -26,6 +26,19 @@ cocotb-config --version
 python -c "import cocotb, numpy; print('cocotb', cocotb.__version__)"
 ```
 
+## Comandos de referencia
+
+| Gate | Comando de referencia |
+|---|---|
+| A. Simulación | `make -C verification/<area> sim` (o `cocotb-config` + verilator makefile) |
+| A. Simulación (fase 0, Python) | `python3 -m unittest discover -s golden_model/tests -t .` |
+| B. Compilación/lint | `verilator --lint-only -Wall --top-module <módulo> rtl/<area>/<file>.sv` |
+| C. Estilo | `verible-verilog-lint --rules_config_search rtl/<area>/<file>.sv` |
+| D. Cobertura funcional | informe de cobertura Verilator/Questa + tabla spec↔test (gate D nivel 1) |
+| E. Mutación HDL | runner de mutación sobre `rtl/<área>` (flip de guard/comparador → test debe matarlo) |
+| F. Completitud | `specs/gherkin-espejos.json` consistente + títulos espejo literales |
+| G. Timing/recursos | Vivado: `synth/` project, informe WNS/TNS y utilización LUT/FF/BRAM/URAM |
+
 ### Gate C — verible
 
 `verible-verilog-lint` (y `verible-verilog-format`) está instalado en
@@ -53,10 +66,24 @@ verificado) y deja activas las reglas de consistencia genuinas.
   instaló `requirements-dev.txt`; los Makefiles RTL no pueden arrancar.
 - Vivado no está disponible localmente. El run de fase 3 se ejecuta desde
   `synth/` y sus informes se guardan en `synth/reports/`.
-- Los datos y pcaps reales son locales e ignorados por Git. Descargar el schema
-  CME antes de ejecutar su golden: `python3 scripts/fetch_mdp3_schema.py`.
+- Los datos y pcaps reales son locales e ignorados por Git; los testbenches
+  leen vectores de `verification/vectors/` o artefactos locales ignorados. Un
+  replay omitido por pcap ausente no cuenta como PASS de datos reales.
+- `scripts/verify/synth_check.py` comprueba coherencia estática entre
+  RTL/Tcl/XDC; no sustituye una ejecución Vivado. Sin `vivado`, WNS, TNS y
+  utilización permanecen NO EJECUTADOS y fase 3 no está timing-closed.
+- **Los parámetros de fase 3 se sobrescriben desde el top**: `itch_chain.sv`
+  declara su propio `QB` (y otros) y los pasa a los módulos con `.QB(QB)` —
+  cambiar un default de módulo NO afecta a la cadena (hallazgo 2026-08-14:
+  "QB 64" en `itch_parser.sv` no movió la latencia; el binario elaboró 128).
+  El parámetro efectivo vive en el top y en la línea `-G` del Makefile. Antes
+  de medir un cambio de parámetro, confirmar QUÉ módulo elabora el valor
+  (traza de señales internas con cocotb o inspección de constantes del C++
+  generado por Verilator).
 - `verible-verilog-lint` sí está instalado (`.venv/bin`, ver Gate C arriba);
   usarlo siempre con `--rules_config_search` para respetar la config del repo.
   El estilo de los RTL de fases 1-3 aún reporta hallazgos de convención
   (está cerrado y no se renombran constantes verificadas); el gate C de fase 4
   cubre `mdp3_parser.sv`.
+- Cada campaña conserva outputs reales y gates no ejecutados en
+  `specs/<campaña>/verify-report.md`. Un gate sin output no está pasado.

@@ -7,11 +7,15 @@ el oráculo, y el peor caso sigue aceptándose a 1 palabra/ciclo con stalls
 acotados. El layout vive SOLO en `oracle_words32`/`anexo_words32` (oráculos de
 phase3); aquí se importan, nunca se re-escriben (contrato sin gate nº 2).
 """
+import os
+
 import cocotb
 
 from test_parser32 import (corpus_all_types, oracle_words32, run_oracle32,
                            drive_raw32, _packet_seq, _reset)
 from test_orderbook import _pcap_msgs_subset
+
+REAL_TRADING_PCAP = "/tmp/real_trading.pcap"
 
 
 @cocotb.test()
@@ -27,19 +31,23 @@ async def test_anx_01_anexo_a_32_bits_recortado_es_bit_a_bit_contra_el_oraculo(d
         f"ANX-01 OK: {len(expected)} words de 32 bits bit a bit "
         f"({len(msgs)} mensajes, layout recortado)")
 
-    import os
-    pcap = "/tmp/real_trading.pcap"
-    if os.path.exists(pcap):
-        msgs_real, keep = _pcap_msgs_subset(pcap, max_symbols=20)
-        expected_real = run_oracle32(msgs_real)
-        got_real, _ = await drive_raw32(dut, _packet_seq(msgs_real, 1),
-                                        max_cycles=3_000_000)
-        assert got_real == expected_real, (
-            f"ANX-01 (feed real): got({len(got_real)}) exp({len(expected_real)}) "
-            f"sobre {len(msgs_real)} mensajes de {len(keep)} símbolos")
-        cocotb.log.info(
-            f"ANX-01 OK (feed real): {len(msgs_real)} mensajes -> "
-            f"{len(expected_real)} words bit a bit")
+
+@cocotb.test(skip=not os.path.exists(REAL_TRADING_PCAP))
+async def test_anx_01_replay_real_es_bit_a_bit_contra_el_oraculo(dut):
+    """ANX-01 real: ausencia es SKIP; artefacto vacío/no observable falla."""
+    msgs_real, keep = _pcap_msgs_subset(REAL_TRADING_PCAP, max_symbols=20)
+    assert msgs_real, "ANX-01 real: pcap presente sin mensajes del subset"
+    assert keep, "ANX-01 real: pcap presente sin símbolos del subset"
+    expected_real = run_oracle32(msgs_real)
+    assert expected_real, "ANX-01 real: subset sin words Anexo A observables"
+    got_real, _ = await drive_raw32(
+        dut, _packet_seq(msgs_real, 1), max_cycles=3_000_000)
+    assert got_real == expected_real, (
+        f"ANX-01 real: got({len(got_real)}) exp({len(expected_real)}) "
+        f"sobre {len(msgs_real)} mensajes de {len(keep)} símbolos")
+    cocotb.log.info(
+        f"ANX-01 OK (feed real): {len(msgs_real)} mensajes -> "
+        f"{len(expected_real)} words bit a bit")
 
 
 @cocotb.test()

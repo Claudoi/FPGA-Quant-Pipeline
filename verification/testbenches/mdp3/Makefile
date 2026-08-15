@@ -1,26 +1,29 @@
 # Makefile — testbench cocotb del parser MDP 3.0 (fase 4)
 #   SIM=verilator, cocotb 2.x. Uso:
-#       make sim            # correr la suite del área (DW=32)
-#       make sim-dw64       # regresión DW=64 (criterio 8, M3-REG-01)
-#       make sim TESTCASE=test_m3frm01   # un solo test
+#       make sim            # suite DW=32
+#       make sim-dw64       # misma suite con entrada DW=64
+#       make sim TESTCASE=test_m3frm01   # un solo test DW=32
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 TOPLEVEL = mdp3_parser
-# MODULE por defecto: framing + robustez se corren por separado (el cocotb
-# pegado no soporta MODULE con espacios). Uso: make sim, y make sim
-# MODULE=test_mdp3_robustez para la suite de criterios 4-7.
 MODULE ?= test_mdp3_framing
-# DW de elaboración del top (32 en regresión normal, 64 en sim-dw64).
 DW ?= 32
+EXTRA_ARGS += -GDW=$(DW)
+SIM_BUILD = sim_build_dw$(DW)
 
-# Fuentes RTL del parser (común + parser). Se ensamblan aquí en orden de
-# la jerarquía top => hojas.
+# Fuente RTL del parser.
 RTL_PARSER = $(CURDIR)/../../../rtl/parser
-RTL_COMMON = $(CURDIR)/../../../rtl/common
 
 VERILOG_SOURCES = \
-	$(wildcard $(RTL_COMMON)/*.sv) \
-	$(wildcard $(RTL_PARSER)/*.sv)
+	$(RTL_PARSER)/mdp3_parser.sv
+
+.PHONY: sim-dw64 clean-all
+
+sim-dw64:
+	$(MAKE) sim DW=64
+
+clean-all:
+	rm -rf sim_build_dw32 sim_build_dw64
 
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 
@@ -29,10 +32,5 @@ REPO_ROOT := $(CURDIR)/../../..
 # embebido: por defecto usa SOLO el del entorno cocotb, así que propagamos el
 # conjunto (raíz repo + golden_model + el área) aquí.
 export PYTHONPATH := $(REPO_ROOT):$(REPO_ROOT)/golden_model:$(CURDIR):$(PYTHONPATH)
-
-EXTRA_ARGS = -GDW=$(DW)
-
-sim-dw64:
-	$(MAKE) sim DW=64
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
