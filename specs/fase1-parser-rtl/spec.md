@@ -5,7 +5,8 @@
 Construir el parser RTL **a line rate** Nasdaq TotalView-ITCH 5.0 en
 SystemVerilog (compatible Verilator): consume el **payload MoldUDP64**
 (decapado de IP/UDP en el testbench), valida el framing y la secuencia,
-alinea los mensajes que cruzan límites de palabra/paquete, decodifica los
+alinea los mensajes que cruzan límites de palabra —un cruce de `tlast` es
+truncado y nunca continuación—, decodifica los
 tipos del subset (`S, R, A, F, E, C, X, D, U, P`) y emite por AXI-Stream un
 **registro decodificado por mensaje**, byte a byte idéntico al de los
 vectores de mensajes del golden model. Es la etapa previa al order book
@@ -26,7 +27,9 @@ un datapath 64-bit @ 156,25 MHz.
     esperado). Decap IP/UDP queda en el testbench (ver no-goals). — decisión
     de la entrevista Q8: los gaps SÍ entran en fase 1.
   - **Alineador** (barrel shifter): mensajes que cruzan límites de palabra de
-    8 B y de paquete (tlast), manteniendo 1 palabra/ciclo.
+    8 B, manteniendo 1 palabra/ciclo. Un mensaje nunca cruza `tlast`: si el
+    datagrama termina antes de la longitud declarada, se cancela con `error` y
+    no se reanuda con bytes del paquete siguiente.
   - **FSM de parsing**: identifica `msg_type`, valida longitud declarada,
     extrae campos.
   - **Decoder `S,R,A,F,E,C,X,D,U,P`** → registro normalizado.
@@ -36,7 +39,8 @@ un datapath 64-bit @ 156,25 MHz.
 - `verification/testbenches/parser/` — testbenches cocotb + Verilator:
   - **Replay de pcaps** generados con `scripts/binaryfile_to_pcap.py`:
     decap de Ethernet/IPv4/UDP en el testbench (los paquetes reales que sí
-    cruzan palabras/paguetes), alimentando el payload MoldUDP64 al RTL.
+    cruzan palabras, pero no límites de datagrama), alimentando el payload
+    MoldUDP64 al RTL.
   - Oráculo byte a byte contra los **vectores de mensajes** del golden.
   - Vectores congelados commiteados en `verification/vectors/messages/`.
 - **Extensión pactada de fase 0** (`golden_model/`): nuevo modo de volcado
@@ -128,6 +132,11 @@ es la lista literal que el barrido de `/verify` ataca.
   independiente y el padding nunca precede al header posterior. — SEC-FRM-05.
 - **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
   `error`, descarte y recuperación en el paquete siguiente. — SEC-FRM-06.
+- **`count` no coincide con el cierre físico**: mensajes o bytes extra tras
+  consumir `count`, o `count=0` con payload, dan `error` y se drenan hasta
+  `tlast`; jamás se reinterpretan como header. — SEC-FRM-07.
+- **Backpressure de entrada**: `(tdata,tkeep,tlast)` permanece estable mientras
+  `tvalid && !tready`. — SEC-FRM-08.
 - **Mensaje que cruza límite de paquete** (tlast en medio de un mensaje:
   en MoldUDP64 un mensaje nunca se parte entre paquetes, pero el RTL debe
   gestionarlo con firmeza: count inconsistente con el último paquete) —
@@ -195,13 +204,15 @@ real del feed (decisión Q8/Q9).
    el parsing continúa; seq == esperado (sin gap) no señaliza; cambio de
    sesión resetea el seq esperado; count=0 es válido. Cada payload se presenta
    como burst independiente con `tkeep`; dos paquetes no alineados no comparten
-   beat ni contaminan cabeceras.
+   beat ni contaminan cabeceras. `count` debe terminar exactamente con `tlast`:
+   cualquier byte válido residual o cierre tardío se señaliza y drena.
    — Gherkin: `framing.feature` §FRM-01, §FRM-02, §SEC-GAP-01, §SEC-GAP-02,
-   §SEC-FRM-03, §SEC-FRM-04, §SEC-FRM-05, §SEC-FRM-06
-5. [x] **AXI-Stream con backpressure:** con `tready` bajo intermite el parser
+   §SEC-FRM-03, §SEC-FRM-04, §SEC-FRM-05, §SEC-FRM-06, §SEC-FRM-07
+5. [ ] **AXI-Stream con backpressure:** con `tready` bajo intermite el parser
    retiene el stream sin perder ni duplicar ningún registro (oráculo byte a
-   byte); la secuencia `tvalid/tready/tlast` respeta el handshake.
-   — Gherkin: `output.feature` §OUT-02, §OUT-03
+   byte); la secuencia `tvalid/tready/tlast` respeta el handshake y el productor
+   mantiene estable `(tdata,tkeep,tlast)` durante cada stall de entrada.
+   — Gherkin: `output.feature` §OUT-02, §OUT-03; `framing.feature` §SEC-FRM-08
 6. [x] Los 22 tipos canónicos de `MESSAGE_LENGTHS`, incluidos los que están
    fuera del subset, se validan por longitud antes de continuar. Los tipos
    fuera del subset se contabilizan en el `msg_idx` global y **no** emiten
@@ -227,7 +238,7 @@ real del feed (decisión Q8/Q9).
    verify-report de fase 0 (edit de ese informe) o en este spec como
    pre-trabajo pactado.
    — Verificación: comando de `run_golden.py` sobre el día de regresión.
-10. [x] Cocotb + Verilator compilan el top con `--Wall` sin warnings reales
+10. [ ] Cocotb + Verilator compilan el top con `--Wall` sin warnings reales
     silenciados (trinquete documentado por área, cero silencios).
     — Gherkin: estático (gate B/C de verify; sin escenario).
 11. [ ] Lint y estilo: `verible-verilog-lint` + `verilator --lint-only` en
@@ -241,8 +252,8 @@ real del feed (decisión Q8/Q9).
 | 1 | cocotb `test_*` espejo de `parser.feature`/`output.feature` sobre vectores sintéticos (oráculo messages.py + `--emit-messages`) |
 | 2 | cocotb: cuatro A/U back-to-back con QB=64, salida bit a bit y stalls `<=24` con tready=1 |
 | 3 | cocotb: barrido de las 8 alineaciones (escenario ALN-01 con Esquema) |
-| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0), dos datagramas no alineados y máscaras `tkeep` válidas/inválidas |
-| 5 | cocotb: tready aleatorio/pérdida controlada, comparar salida vs oráculo sin pérdida/dup |
+| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0), dos datagramas no alineados, `count↔tlast` exacto y máscaras `tkeep` válidas/inválidas |
+| 5 | cocotb: tready aleatorio/pérdida controlada, comparar salida vs oráculo y monitorizar `(tdata,tkeep,tlast)` estable en stalls de entrada |
 | 6 | cocotb: H canónico/longitud H incorrecta entre mensajes A; chequear validación, avance de `msg_idx` y no-registro |
 | 7 | cocotb: longitudes rotas / frames truncados, incluidos bordes sub-word según `tkeep` → `error`, continuación |
 | 8 | cocotb: replay de pcap del día real como bursts independientes + conteo de `tlast` + vectores congelados commiteados |

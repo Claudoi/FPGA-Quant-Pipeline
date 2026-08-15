@@ -1,8 +1,9 @@
 # mdp3.feature — fase 4: parser CME MDP 3.0 (SBE) verificado contra golden del schema
 
-Espejo de «Criterios de aceptación» 1-9 de `spec.md` de fase4-mdp3-parser.
+Espejo de «Criterios de aceptación» 1-10 de `spec.md` de fase4-mdp3-parser.
 La semántica de cada campo del subset se deriva del schema SBE XML oficial de
-CME (`templates_FixBinary.xml`, ftp.cmegroup.com) — nunca de literales.
+CME (`templates_FixBinary.xml`, ftp.cmegroup.com), no de una segunda tabla
+manual en el testbench.
 
 #language: es
 Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
@@ -23,6 +24,11 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Cuando se calcula el tamaño esperado de cada mensaje del subset
     Entonces coincide con blockLength + grupos + padding root a 8 B del XML
 
+  Escenario: M3-GEN-03 — schemaId y version proceden del XML pinned
+    Dado el schema oficial con id 1 y version 12
+    Cuando el loader lo carga y el encoder crea un mensaje sin overrides
+    Entonces la cabecera SBE contiene schemaId 1 y version 12
+
   Escenario: M3-FRM-01 — el parser emite el Anexo M bit a bit vs el golden
     Dado un corpus sintético de paquetes MDP 3.0 (header 12 B + mensajes)
     Cuando el parser procesa el stream
@@ -41,6 +47,12 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Entonces la racha de ciclos valid sin ready es como máximo 16
     Y la secuencia de salida es bit a bit idéntica al golden
 
+  Escenario: M3-FRM-04 — el cierre exacto del paquete no deja residuo ambiguo
+    Dado un paquete de exactamente 12 bytes y otro con un byte residual tras el header
+    Cuando el parser recibe cada uno con su tkeep y tlast exactos
+    Entonces el paquete vacío no emite records ni error
+    Y el residual pulsa error y permite procesar el siguiente paquete íntegro
+
   Escenario: M3-SUB-01 — el subset de libro se decodifica campo a campo
     Dado mensajes de los templates de libro (snapshot e incremental)
     Cuando el parser decodifica cada entry del grupo NoMDEntries
@@ -55,10 +67,16 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Y hay un record por entry en el mismo orden del grupo
 
   Escenario: M3-PASS-01 — passthrough crudo de templates no-subset
-    Dado mensajes de templates fuera del subset (definiciones, estados)
+    Dado mensajes fuera del subset y cada template 46, 47, 52 y 53 con schemaId o version no soportados
     Cuando el parser los procesa
     Entonces emite w0/w1 + cuerpo crudo bit a bit
     Y un schemaId o version desconocidos no abortan el flujo
+
+  Escenario: M3-PASS-02 — el máximo de mensaje es explícito y recuperable
+    Dado un mensaje passthrough válido con msg_size 256 y otro que declara 257 bytes
+    Cuando cada uno llega en su propio paquete seguido de un paquete íntegro
+    Entonces el mensaje de 256 bytes se preserva bit a bit
+    Y el de 257 pulsa error, no emite record parcial y permite la recuperación
 
   Escenario: M3-GAP-01 — gap de secuencia señalizado sin abortar
     Dado un canal con msg_seq_num saltando un valor
@@ -96,7 +114,19 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Entonces cada literal estructural del RTL coincide con el valor del XML
 
   Escenario: M3-REG-01 — las fases 1-3 siguen verdes
-    Dado el RTL nuevo añadido sin tocar lo existente
+    Dado s_axis_tkeep propagado por itch_parser e itch_chain sin cambiar el enlace al book
     Cuando se re-ejecutan las suites de fase 1, 2 y 3
     Entonces todos los tests siguen pasando sin cambios
     Y el mdp3_parser a DW=64 pasa su suite en regresión
+
+  Escenario: M3-BP-01 — la salida se retiene estable durante backpressure
+    Dado un record presentado con m_axis_tvalid y m_axis_tready bajo
+    Cuando el consumidor mantiene el stall durante al menos dos ciclos
+    Entonces la tupla m_axis_tdata, m_axis_tvalid y m_axis_tlast permanece estable
+    Y m_axis_tvalid sigue activo hasta entregar el record exactamente una vez
+
+  Escenario: M3-BP-02 — la entrada permanece estable mientras el parser no acepta
+    Dado un burst válido presentado a DW=32 o DW=64
+    Cuando s_axis_tvalid está activo y s_axis_tready permanece bajo
+    Entonces s_axis_tdata, s_axis_tkeep y s_axis_tlast permanecen estables
+    Y el beat se contabiliza una sola vez cuando ocurre el handshake

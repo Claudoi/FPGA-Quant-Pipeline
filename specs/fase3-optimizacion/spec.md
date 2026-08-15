@@ -159,7 +159,7 @@ hash = nuevo vector de error).
      sintético (criterios 1-7 de fase 2 re-ejecutados a 32 bits) y sobre el
      replay real de 20 símbolos.
      — Gherkin: §B32-01, §B32-02
-3. [ ] **Regresión 64-bit**: suites fase 1 (19/19) y fase 2 (14/14) verdes con
+3. [ ] **Regresión 64-bit**: suites completas vigentes de fases 1 y 2 verdes con
      el RTL extendido (parametrización no rompe el default).
      — Gherkin: §REG-01
 4. [ ] **Cadena parser→book DW=32**: feed real decapado → BBO bit a bit vs
@@ -199,7 +199,7 @@ hash = nuevo vector de error).
 |---|---|
 | 1 | cocotb: corpus sintético + replay REP-02 a DW=32 (words 32-bit vs `message_oracle`); peor caso mínimo back-to-back sin backpressure |
 | 2 | cocotb: corpus BBO-01..SEC-* a DW=32 contra `book.py`; REPLAY-01 a 32 bits |
-| 3 | cocotb: `make sim` en `testbenches/parser` (19) y `testbenches/orderbook` (14) tras el cambio |
+| 3 | cocotb: `make sim` completo en `testbenches/parser` y `testbenches/orderbook` tras el cambio |
 | 4 | cocotb: top `chain32` (parser→book a DW=32) sobre el pcap real del subset |
 | 5 | cocotb: misma secuencia con tabla hashada vs directa; casos probe-limit y tabla-llena; mutante de hash (slot sin comparar ref) lo mata |
 | 6 | cocotb: depth vs `book.py` a ND=5 y `itch_chain -GND=3`; mutante de orden/truncado lo mata |

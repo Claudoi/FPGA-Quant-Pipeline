@@ -44,7 +44,7 @@ Escenario: SEC-FRM-03 — un cambio de sesión resetea el seq esperado
 #language: es
 Escenario: SEC-FRM-04 — un paquete con count igual a cero es válido
   Dado una sesión nueva con seq 100 y cuenta de mensajes cero
-  Y el payload de 20 bytes termina con cuatro lanes válidos en su último beat
+  Y el payload de 20 bytes termina con tkeep igual a 8'b11110000 en DW=64
   Cuando el siguiente paquete de la misma sesión llega en un burst nuevo también con seq 100
   Entonces no emite ningún registro y no señaliza error
   Y no señaliza gap porque el seq esperado avanzó por cero
@@ -63,3 +63,17 @@ Escenario: SEC-FRM-06 — una máscara tkeep inválida se descarta con señal
   Cuando el RTL acepta el beat y después recibe un paquete íntegro
   Entonces pulsa error y descarta el datagrama inválido
   Y procesa el paquete posterior sin estado ni cabecera corruptos
+
+#language: es
+Escenario: SEC-FRM-07 — count y tlast deben cerrar el datagrama en el mismo byte
+  Dado un payload cuyo count termina antes de tlast, deja bytes residuales o vale cero con payload adicional
+  Cuando el RTL termina de consumir los mensajes declarados
+  Entonces pulsa error y drena los bytes restantes hasta tlast
+  Y nunca interpreta esos bytes como la cabecera de un paquete nuevo
+
+#language: es
+Escenario: SEC-FRM-08 — la entrada permanece estable durante backpressure
+  Dado un burst válido en el que el parser desactiva tready
+  Cuando tvalid permanece activo sin handshake
+  Entonces tdata, tkeep y tlast conservan exactamente su valor
+  Y el beat se transfiere una sola vez al volver tready

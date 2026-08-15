@@ -19,4 +19,5 @@ Escenario: REP-02 — el RTL sobre un pcap del día real coincide byte a byte co
   Y el oráculo --emit-messages del golden model sobre ese mismo pcap
   Cuando el RTL procesa el stream de entrada
   Entonces la salida de los mensajes del subset es byte a byte idéntica al oráculo
+  Y observa exactamente un handshake de entrada con tlast por payload decapsulado
   Y el line rate se mantiene en los tramos de back-to-back reales

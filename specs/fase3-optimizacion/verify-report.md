@@ -448,7 +448,7 @@ SEC-HASH-01/02/03, SEC-NSYM-01, SEC-BP-01, SEC-DP-01, DP-01, SEC-LAT-01 —
 - **G5** ✔: revisión adversarial independiente (0 CRITICO, 2 MAYOR) cerrada en
   la iteración 6 con TDD rojo→verde (INV-U-01, INV-OV-01).
 
-## Veredicto
+## Veredicto histórico de la iteración 6 — sustituido por la reapertura
 
 Iteraciones 1-6 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
 informe del run externo pendiente de pegar): **verde con evidencia**;
@@ -599,7 +599,15 @@ synth/reports/README.md
 ```
 
 No existen `timing_impl.txt`, WNS/TNS ni `util_impl.txt` producidos por Vivado.
-Por tanto, criterios 1-9 y 11 quedan cerrados funcionalmente, pero el criterio
-10 y la **fase 3 completa permanecen ABIERTOS**. No se declara timing cerrado
-ni inferencia URAM física hasta ejecutar el batch en Vivado y adjuntar
-WNS >= 0, TNS = 0, endpoints correctamente restringidos y recursos.
+En aquella iteración se declararon cerrados funcionalmente los criterios 1-9 y
+11, quedando abierto el criterio 10. Esa conclusión es histórica: la revisión
+de 2026-08-15 reabrió además la frontera `s_axis_tkeep`, el replay por datagrama
+y su regresión integral.
+
+## Veredicto vigente tras la reapertura de framing — 2026-08-15
+
+La fase 3 permanece **ABIERTA** por dos fronteras independientes: implementar y
+verificar `s_axis_tkeep` de extremo a extremo en la cadena DW=32, y obtener el
+run Vivado real con WNS >= 0, TNS = 0, endpoints correctamente restringidos y
+utilización. Los outputs anteriores se conservan como evidencia histórica de
+las propiedades no afectadas; no cierran framing, replay ni timing vigentes.

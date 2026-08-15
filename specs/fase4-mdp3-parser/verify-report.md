@@ -2,9 +2,10 @@
 
 > **Estado vigente: REABIERTA (2026-08-15).** La evidencia previa no representa
 > últimos beats con un número parcial de bytes válidos. Los resultados se
-> conservan como evidencia histórica, pero los criterios 2, 7 y 8 vuelven a
-> estar abiertos hasta implementar y verificar `s_axis_tkeep`. Los restantes
-> hallazgos de schema/version, tamaño y backpressure se resolverán por separado.
+> conservan como evidencia histórica, pero los criterios 1, 2, 3, 5, 7, 8, 9 y 10
+> están abiertos. El framing requiere implementar y verificar `s_axis_tkeep`;
+> los hallazgos de schema/version, tamaño y backpressure se resolverán por
+> separado.
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
@@ -187,7 +188,7 @@ FSM repetía de forma equivalente en `CS_BODY`; sobrevivió sin cambiar el
 comportamiento. No se contó como evidencia: se sustituyó por
 `TRUNC-NOERROR`, que silencia la propiedad observable y muere en M3-INV-01/02.
 
-### Gate D/F — mapa Gherkin ↔ test/evidencia
+### Gate D/F histórico — mapa anterior a los escenarios reabiertos
 
 | Escenario | Test o gate que lo cierra |
 |---|---|

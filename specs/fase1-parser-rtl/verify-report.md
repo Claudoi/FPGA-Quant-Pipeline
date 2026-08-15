@@ -3,12 +3,12 @@
 > **Estado vigente: REABIERTA (2026-08-15).** La revisión adversarial demostró
 > que el driver concatenaba datagramas antes de formar beats y no modelaba qué
 > bytes del último beat eran válidos. Los outputs de la iteración 4 permanecen
-> como evidencia histórica, pero los criterios 4, 7 y 8 vuelven a estar abiertos
+> como evidencia histórica, pero los criterios 4, 5, 7, 8 y 10 vuelven a estar abiertos
 > hasta implementar y verificar `s_axis_tkeep` por datagrama.
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. El owner no lee HDL/Python:
 > esta evidencia (outputs reales) es lo que `/grade` re-ejecutará.
-> Fecha de verificación vigente: 2026-08-15. Área: `rtl/parser/` +
+> Fecha de la evidencia histórica: 2026-08-15. Área: `rtl/parser/` +
 > `verification/testbenches/parser/`. Iteración 4: valida los 22 tipos, recupera
 > el paquete posterior a un truncado y cubre las ocho alineaciones literales.
 
@@ -45,7 +45,7 @@ datagrama terminado antes de completar el mensaje**.
 - LIN-01 queda reconciliado con QB=64: cuatro A/U, salida bit a bit y stalls
   `<=24`. ALN-01 recorre offsets 0–7, no tres muestras parciales.
 
-## Tabla de gates
+## Tabla histórica de gates — no representa los criterios reabiertos
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|

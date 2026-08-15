@@ -40,7 +40,7 @@ mensaje y ~15 % de palabras del stream interno.
   lista ordenada best-first, jamás precio stale ni cantidad envuelta).
 - **Regresión completa**: 30.729 eventos BBO bit a bit + depth 640 bits +
   anomalías/cross/gaps idénticos (CHAIN-01) con el layout recortado; suites
-  fase 1 (19/19), fase 2 (14/14) y phase3 (25/25) verdes.
+  completas vigentes de fases 1, 2 y 3 verdes, sin fijar un recuento obsoleto.
 - **Latencia**: histograma wire→BBO por tipo regenerado con el layout nuevo;
   media ≤ 45 ciclos (mejorable a ~35-40 con el recorte del Anexo A),
   determinismo de SEC-LAT-01 conservado.
@@ -130,8 +130,8 @@ por el alargamiento del apply multi-ciclo.
 - `rtl/orderbook/orderbook.sv` — se **refactoriza** internamente (memoria +
   FSM de sonda + pipeline de niveles); puertos y parámetros efectivos
   conservados (SLOT=16, PROBE=8, ND=5, K=19, P=32, NSYM=20).
-- `rtl/parser/itch_parser.sv` — se **edita** solo en ST_TS (recorte); el resto
-  del datapath y la cola intactos.
+- `rtl/parser/itch_parser.sv` — conserva el recorte de ST_TS y añade el contrato
+  de bytes válidos en la captura/cola de entrada; el formato de salida no cambia.
 - `rtl/itch_chain.sv` — propaga `s_axis_tkeep` al parser; el enlace normalizado
   parser→book y los parámetros efectivos no cambian.
 - `golden_model/src/book.py` / `golden_model/itch/messages.py` — oráculos
@@ -165,7 +165,7 @@ por el alargamiento del apply multi-ciclo.
      ≤ 2 ciclos por operación; invariantes de fase 3 intactos (sin precio
      stale, sin fantasma, sin cantidad envuelta).
      — Gherkin: §SEC-URAM-03 + regresión INV-OV-01, DP-01/02, SEC-DP-01
-5. [ ] **Regresión total**: fase 1 19/19, fase 2 14/14, phase3 25/25 verdes
+5. [ ] **Regresión total**: suites completas vigentes de fases 1, 2 y 3 verdes
      con el RTL nuevo; CHAIN-01: 30.729 eventos BBO bit a bit + depth 640
      bits, anomaly=671, cross=0, gaps=0 con el layout recortado.
      — Gherkin: §REG-01, §CHAIN-01

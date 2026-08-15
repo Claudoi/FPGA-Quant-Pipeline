@@ -573,6 +573,13 @@ VIVADO=NO_INSTALADO
 synth/reports/README.md
 ```
 
-**Veredicto:** RTL, simulación, lint estático, completitud y mutación están
-cerrados localmente. WNS/TNS, endpoints reales e inferencia/utilización URAM
-siguen sin evidencia; por ello la fase 3 permanece **ABIERTA EN TIMING**.
+**Veredicto histórico:** en esta iteración se declararon cerrados RTL,
+simulación, lint estático, completitud y mutación, quedando abierta la evidencia
+física. La revisión de 2026-08-15 sustituyó esa conclusión al reabrir también la
+frontera de entrada.
+
+## Veredicto vigente tras la reapertura de framing — 2026-08-15
+
+La variante URAM permanece **ABIERTA** hasta repetir cadena, replay, lint,
+mutación y completitud con `s_axis_tkeep`, además de adjuntar WNS/TNS,
+endpoints e inferencia/utilización URAM del run Vivado real.
