@@ -41,6 +41,7 @@ module itch_parser #(
     input  wire              clk,
     input  wire              rst_n,
     input  wire [DW-1:0]     s_axis_tdata,
+    input  wire [DW/8-1:0]   s_axis_tkeep,
     input  wire              s_axis_tvalid,
     output reg               s_axis_tready,
     input  wire              s_axis_tlast,
@@ -83,6 +84,7 @@ module itch_parser #(
     reg  [47:0]   ts_ns;
     reg           len_ok;
     reg           eop_seen;   // latch: terminado el datagrama (tlast visto)
+    reg           drop_packet;
     reg  [351:0]  msg_reg;
     reg  [6:0]    body_w;
     reg  [6:0]    bi;
@@ -108,6 +110,24 @@ module itch_parser #(
 
     function automatic logic [7:0] pbyte(input [QQ-1:0] w, input [6:0] i);
         pbyte = w[(QB-1-i)*8 +: 8];
+    endfunction
+
+    function automatic [7:0] keep_nbytes(input logic [BYTES-1:0] keep);
+        keep_nbytes = 0;
+        for (int k = 0; k < BYTES; k++)
+            keep_nbytes = keep_nbytes + keep[k];
+    endfunction
+
+    function automatic logic keep_is_msb_prefix(input logic [BYTES-1:0] keep);
+        logic seen_zero;
+        begin
+            seen_zero = 1'b0;
+            keep_is_msb_prefix = (keep != '0);
+            for (int k = BYTES-1; k >= 0; k--) begin
+                if (!keep[k]) seen_zero = 1'b1;
+                else if (seen_zero) keep_is_msb_prefix = 1'b0;
+            end
+        end
     endfunction
 
     function automatic logic issubset(input [7:0] t);
@@ -178,17 +198,31 @@ module itch_parser #(
 
     wire [7:0] drain_int = (8'(drain_need) <= avail) ? {1'b0, drain_need} : 8'd0;
 
-    // tready combinacional: hay sitio y no drenamos este ciclo (el drain se
-    // consume en el flanco con la palabra que ya estaba en la cola).
+    wire [7:0] in_nbytes = keep_nbytes(s_axis_tkeep);
+    wire keep_shape_ok = keep_is_msb_prefix(s_axis_tkeep);
+    wire in_keep_ok = keep_shape_ok &&
+                      (s_axis_tlast || s_axis_tkeep == {BYTES{1'b1}});
+    wire [DW-1:0] in_compact = in_keep_ok ?
+        (s_axis_tdata >> (8 * (32'(BYTES) - 32'(in_nbytes)))) : '0;
+
+    // tready combinacional: hay sitio después del posible drenaje de este
+    // ciclo. Durante un descarte se acepta todo hasta el tlast físico.
     wire drain_active = (drain_int > 0) && (qn >= drain_int);
+    wire [7:0] base_n = drain_active ? qn - drain_int : qn;
     // Tras aceptar tlast no se prefetchea el datagrama siguiente hasta cerrar
     // o descartar el actual: la cola no guarda marcadores de frontera internos.
     wire can_aug = s_axis_tvalid && !eop_seen && !drain_active &&
-                   (qn + 8'(BYTES) <= QB);
+                   (qn + in_nbytes <= QB);
     wire can_da  = s_axis_tvalid && !eop_seen && drain_active &&
-                   (8'(qn) - 8'(drain_int) + 8'(BYTES) <= QB);
-    assign s_axis_tready = can_aug || can_da;
+                   (base_n + in_nbytes <= QB);
+    assign s_axis_tready = drop_packet || can_aug || can_da;
     wire in_take = s_axis_tvalid && s_axis_tready;
+    wire [QQ-1:0] append_bits = QQ'(in_compact) <<
+        (8 * (32'(QB) - 32'(base_n) - 32'(in_nbytes)));
+    wire [7:0] qn_post = base_n +
+        ((in_take && in_keep_ok) ? in_nbytes : 8'd0);
+    wire eop_eff = eop_seen ||
+                   (in_take && in_keep_ok && s_axis_tlast);
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
@@ -196,34 +230,48 @@ module itch_parser #(
             msg_idx <= 0; exp_seq <= 64'd1; this_seq <= 0; session_id <= 0;
             pack_left <= 0; pack_count <= 0; msg_len <= 0;
             in_subset <= 1'b0; msg_type <= 0; locate <= 0; ts_ns <= 0; len_ok <= 1'b0;
-            eop_seen <= 1'b0;
+            eop_seen <= 1'b0; drop_packet <= 1'b0;
             msg_reg <= 0; body_w <= 0; bi <= 0;
             out_valid_reg <= 1'b0; out_data_reg <= 0; out_last_reg <= 1'b0;
             gap_detected <= 1'b0; error <= 1'b0;
         end else begin
             gap_detected <= 1'b0;
             error <= 1'b0;
-            // latch de fin de datagrama: se fija cuando el stream marca tlast
-            // (SEC-FRM-01/02) y se limpia al cerrar o descartar el datagrama.
-            if (in_take && s_axis_tlast) eop_seen <= 1'b1;
+            if (out_take) out_valid_reg <= 1'b0;
+            if (drop_packet) begin
+                if (in_take && s_axis_tlast) begin
+                    drop_packet <= 1'b0;
+                    eop_seen <= 1'b0;
+                    st <= ST_HDR;
+                end
+            end else if (in_take && !in_keep_ok) begin
+                error <= 1'b1;
+                q <= '0;
+                qn <= '0;
+                eop_seen <= 1'b0;
+                drop_packet <= !s_axis_tlast;
+                st <= ST_HDR;
+            end else begin
+                // latch de fin de datagrama: se fija cuando el stream marca tlast
+                // (SEC-FRM-01/02) y se limpia al cerrar o descartar el datagrama.
+                if (in_take && s_axis_tlast) eop_seen <= 1'b1;
 
-            // ------------------------------------------------------------
-            // cola: drena drain_int y acepta entrada en paralelo si cabe
-            // ------------------------------------------------------------
-            if (can_da) begin
-                q <= ((q << (8*drain_int)) |
-                      (QQ'(s_axis_tdata) << ((32'(QB-1) - 32'(qn) + 32'(drain_int))*8 - (DW-8))));
-                qn <= qn - drain_int + 8'(BYTES);
-            end else if (drain_active) begin
-                q <= q << (8*drain_int);
-                qn <= qn - drain_int;
-            end else if (can_aug) begin
-                q <= q | (QQ'(s_axis_tdata) << ((32'(QB-1) - 32'(qn))*8 - (DW-8)));
-                qn <= qn + 8'(BYTES);
-            end
+                // ------------------------------------------------------------
+                // cola: drena drain_int y acepta entrada válida en paralelo
+                // ------------------------------------------------------------
+                if (can_da) begin
+                    q <= (q << (8*drain_int)) | append_bits;
+                    qn <= qn_post;
+                end else if (drain_active) begin
+                    q <= q << (8*drain_int);
+                    qn <= base_n;
+                end else if (can_aug) begin
+                    q <= q | append_bits;
+                    qn <= qn_post;
+                end
 
 
-            case (st)
+                case (st)
                 ST_HDR: begin
                     if (drain_int == 20) begin
                         // header de un datagrama nuevo: reinicia el latch de tlast.
@@ -253,13 +301,29 @@ module itch_parser #(
                         // Se usa el header, no el valor previo de exp_seq: en una
                         // sesión nueva ambas asignaciones ocurren en este flanco.
                         if ({pbyte(q,18), pbyte(q,19)} == 16'h0) begin
-                            exp_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
-                                        pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
-                            eop_seen <= 1'b0;
-                            st <= ST_HDR;
+                            if (eop_eff && qn_post == 0) begin
+                                exp_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
+                                            pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
+                                eop_seen <= 1'b0;
+                                st <= ST_HDR;
+                            end else begin
+                                error <= 1'b1;
+                                q <= '0;
+                                qn <= '0;
+                                eop_seen <= 1'b0;
+                                drop_packet <= !eop_eff;
+                                st <= ST_HDR;
+                            end
                         end else begin
                             st <= ST_LEN;
                         end
+                    end else if (eop_seen) begin
+                        // tlast antes de completar los 20 bytes de cabecera.
+                        error <= 1'b1;
+                        q <= '0;
+                        qn <= '0;
+                        eop_seen <= 1'b0;
+                        st <= ST_HDR;
                     end
                 end
 
@@ -383,16 +447,25 @@ ST_LEN: begin
                         if (pack_left > 1) begin
                             pack_left <= pack_left - 1;
                             st <= ST_LEN;
-                        end else begin
+                        end else if (eop_eff && qn_post == 0) begin
                             exp_seq <= this_seq + 64'(pack_count);
                             eop_seen <= 1'b0;
+                            st <= ST_HDR;
+                        end else begin
+                            error <= 1'b1;
+                            q <= '0;
+                            qn <= '0;
+                            eop_seen <= 1'b0;
+                            pack_left <= 0;
+                            drop_packet <= !eop_eff;
                             st <= ST_HDR;
                         end
                     end
                 end
 
-                default: st <= ST_HDR;
-            endcase
+                    default: st <= ST_HDR;
+                endcase
+            end
         end
     end
 
