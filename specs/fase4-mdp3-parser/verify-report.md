@@ -129,3 +129,56 @@ medirse sobre el subset con expansión contenida, no sobre MBOFD puro).
 **Regresión (criterio 8):** golden `35/35`; `make sim` en
 `testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**.
 
+## Iteración 4 — criterios 4-7 (subset, passthrough, gaps, robustez) + DW=64
+
+Nuevo testbench `verification/testbenches/mdp3/test_mdp3_robustez.py` (7
+tests cocotb) que cubre los criterios 4-7, con un driver que además muestrea
+`gap_detected`/`error` y mide la parada de entrada solo mientras queda
+entrada pendiente. Sin cambios de RTL (comportamiento ya correcto tras el
+iter 3); son tests de cobertura red→verde del contrato.
+
+**Verde (ambos tramos del gate A, área mdp3):**
+```
+# DW=32, make sim (framing) + make sim MODULE=test_mdp3_robustez
+framing :  test_m3frm01 PASS, test_m3frm02 PASS, test_m3frm03 FAIL (inherente)
+robustez:  M3-SUB-01 PASS, M3-SUB-02 PASS, M3-PASS-01 PASS,
+           M3-GAP-01 PASS, M3-INV-01 PASS, M3-INV-02 PASS, M3-INV-03 PASS
+# DW=64, make sim-dw64 (mismos módulos)
+framing :  test_m3frm01 PASS, test_m3frm02 PASS, test_m3frm03 FAIL (inherente)
+robustez:  7/7 PASS
+```
+
+**Cobertura (gate D nivel 1) — criterios 4-7:**
+| Test | Espejo |
+|---|---|
+| `test_m3sub01_el_subset_se_decodifica_campo_a_campo` | M3-SUB-01 |
+| `test_m3sub02_precio_compuesto_y_grupos_multi_entry` | M3-SUB-02 |
+| `test_m3pass01_el_passthrough_crudo_es_bit_a_bit_y_no_aborta` | M3-PASS-01 (incl. template `9999` y `777`) |
+| `test_m3gap01_gap_de_secuencia_y_nuevo_canal` | M3-GAP-01 |
+| `test_m3inv01_msg_size_incoherente_señaliza_error` | M3-INV-01 |
+| `test_m3inv02_paquete_truncado_por_tlast_señaliza_error` | M3-INV-02 |
+| `test_m3inv03_grupo_con_numin_group_cero_no_trunca` | M3-INV-03 |
+
+**Nuevas coberturas con evidencia:**
+- **M3-SUB:** corpus subset-only (46/47/52/53) bit a bit; `M3-SUB-02` fuerza
+  mensajes multi-entry y verifica al menos un record por entry, mantissa y
+  exponente sin mezclarse (el golden emite `n_records >= 1` por mensaje 52).
+- **M3-PASS:** passthrough de templates no-subset **y desconocidos** con
+  `schemaId=9999` (`UNKNOWN_TEMPLATE=777`) + un paquete con `blockLength/ver`
+  desconocidos seguido de un mensaje del subset → el flujo no aborta y sigue
+  bit a bit.
+- **M3-GAP:** paquete `seq=100` → `seq=105` señaliza `gap_detected`; tras
+  reset del DUT (canal nuevo, `seq=7`) no se señala gap; salida bit a bit.
+- **M3-INV:** `msg_size<10` y `msg_size>256` señalizan `error` sin colgar la
+  entrada; `tlast` en medio de un mensaje señaliza `error` y el siguiente
+  paquete bueno sale bit a bit; mensaje `46` con `NoMDEntries` vacío
+  (numInGroup 0) no trunca y emite lo mismo que el golden (contrato #5: el
+  MBOFD sin referencia → exponente y px a 0, ver iter 3).
+
+**Criterio 8 — regresión global:** golden `35/35`; `make sim` en
+`testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**;
+mdp3 a **DW=64** (nuevo `make sim-dw64`, `-GDW=64`) → framing 2/3 y robustez
+7/7. `M3-FRM-03` sigue en FAIL a ambos DW por la misma limitación inherente
+del Anexo M documentada en el iter 3.
+
+
