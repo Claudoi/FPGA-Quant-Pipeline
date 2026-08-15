@@ -1,613 +1,158 @@
-# verify-report — fase3-optimizacion
+# verify-report — fase3-optimizacion — regresión `tkeep` DW=32
 
-> **Estado vigente: REABIERTA en la frontera de entrada (2026-08-15).** La
-> cadena DW=32 hereda del parser el contrato `s_axis_tkeep` aún pendiente. Los
-> outputs siguientes son evidencia histórica y no cierran framing ni replay
-> hasta repetirlos con límites de datagrama representables por AXI-Stream.
+> Evidencia vigente ejecutada el 2026-08-15 desde el commit base
+> `22130e3fae758edaf674a3ceb9c45b38711a2f5b`, con builds limpios y
+> `PATH=/Volumes/WD_Black/FPGA/.venv/bin:$PATH`. Sustituye como evidencia
+> vigente las pasadas producidas antes de que el driver representara límites
+> de datagrama mediante `s_axis_tkeep`.
 
-> Régimen de gates de Atenea re-mapeado al flujo HDL. El owner no lee HDL/Python:
-> esta evidencia (outputs reales) es lo que `/grade` re-ejecutará.
+## Veredicto
 
-## Iteración 1 — variante DW=32 parser + book + cadena (criterios 1-3), REG-01
+**PASS funcional del delta `tkeep` en parser y cadena DW=32. Fase 3 NO
+CERRADA.** La frontera de framing reabierta queda verificada; el gate físico
+continúa **ABIERTO** porque no existe un informe Vivado real con WNS, TNS,
+endpoints restringidos y utilización LUT/FF/BRAM/URAM.
 
-### Meta del atacante/diseño
+`synth_check.py` solo demuestra coherencia estática entre RTL, Tcl y XDC. La
+latencia de 44,318 ciclos es una medición de simulación; convertirla usando el
+periodo objetivo no acredita que el dispositivo alcance 322,265625 MHz.
 
-La parametrización de 64 bits fijos a DW ∈ {32, 64} no debe cambiar NI un bit
-del contrato de 64 bits (fases 1/2) y debe producir el Anexo A de 32 bits del
-Anexo de la spec (w0={type,locate,len}, w1=idx, w2=ts[31:0], w3={ts[47:32],16'b0},
-w4..=cuerpo) bit a bit contra el oráculo, y la cadena parser→book debe cerrar
-BBO bit a bit con el golden sobre el feed real.
-
-### Rojo con evidencia (TDD)
-
-| Test | Rojo | Causa raíz |
-|---|---|---|
-| P32-01 (parser DW=32) | `%Warning-WIDTHTRUNC` + `%Error: Exiting due to 5 warning(s)` en itch_parser.sv (RHS de 64 bits a reg de 32) | cbody/body_w/W0-TS fijos a 64 bits |
-| B32-01 (book DW=32) | `%Warning-SELRANGE` + `%Error: Exiting due to 7 warning(s)` — `63:56 outside 31:0` | campos del w0 fijos a 64 bits |
-| P32-01 (tras compilar) | `got(0) exp(95)` — sin emisión | cola: `qn += 8` por palabra (fijo 64) → nunca se junta el header de 20 B |
-| P32-01 (tras cola) | words de cuerpo desalineadas (stride de 8 B por palabra) | `cbody(..., 11 + 8*bi)` — stride fijo; a DW=32 debe ser `11 + BYTES*bi` |
-| CHAIN-01 | `got(146343) exp(30729)`; primer desajuste evento 67 | test mal dirigido: alimentaba el feed completo (150K registros, todos los símbolos) — overflow NSYM es el hallazgo F1 del grade, hardening de la iteración 4; el contrato es el stream del subset |
-
-### Verde (evidencia)
-
-| Suíte | Resultado |
-|---|---|
-| phase3/parser32 (P32-01, P32-02, INV-P32-01, P32-03 replay pcap real) | **4/4 PASS** (P32-03: 150.000 registros decapados bit a bit) |
-| phase3/book32 (B32-01, B32-02 replay real, INV-B32-01/02/03) | **5/5 PASS** (B32-02: 31.400 msgs → 30.729 eventos bit a bit, cross=0) |
-| phase3/chain32 (CHAIN-01 real, INV-CHAIN-01 sintético) | **2/2 PASS** (31.400 msgs → 30.729 eventos bit a bit, gaps=0) |
-| fase1 regresión DW=64 (REG-01) | **19/19 PASS** |
-| fase2 regresión DW=64 (REG-01) | **14/14 PASS** (incl. REPLAY-01) |
-
-### Cambios
-
-- `rtl/parser/itch_parser.sv`: localparams BYTES/L2B; cola con `BYTES` por beat
-  (qn/can_aug/can_da, shifts con `+ drain_int` corregido — signo); `cbody` a DW;
-  `body_w = ceil((len-11)/BYTES)`; ST_W0/ST_TS emiten el layout de 32 bits con
-  contador `hw` (w0, w1=idx, w2-3=ts); casts `DW'()` y `8'()/32'()` para el
-  trinquete de anchos en ambas variantes.
-- `rtl/orderbook/orderbook.sv`: `pbody` generalizado (índice `b>>L2B`, byte
-  `DW-1-8*(b&(BYTES-1))`); campos del w0 por `[DW-1 -: 8]` etc.; `nbody_w`
-  a `ceil((len-11)/BYTES)`; `hrem` consume 3 words de cabecera a DW=32 (captura
-  `m_idx` de w1); `bi` a 4 bits y `body_acc[0:15]` (cuerpo máximo a DW=32).
-- `rtl/itch_chain.sv` (nuevo): top de integración parser→book sin FIFO, DW
-  parametrizado, `error = p_error | b_error`.
-- `verification/testbenches/phase3/`: Makefile (EXTRA_ARGS `-GDW=32`),
-  `test_parser32.py`, `test_orderbook32.py`, `test_chain32.py` — espejos
-  P32-01/02, B32-01/02, CHAIN-01 + adversariales; reuso de helpers de fases 1/2.
-
-### Pendiente para iteraciones siguientes
-
-- Criterios 4-11 (hash+probing, top-N, hardening F1/F2, latencia, URAM/synth).
-- F1 (NSYM overflow) y F2 (bbo_tready) son SEC-NSYM-01/SEC-BP-01 (criterios 8-9).
-
-## Iteración 2 — tabla de órdenes hashada + linear probing (criterios 4-6)
-
-### Meta del atacante/diseño
-
-La tabla `o_*[2^K]` de indexación directa (fase 2) se reemplaza por una tabla
-hashada de `NSLOT = 2^SLOT = 65.536` slots con `hash(ref) = ref[SLOT-1:0]` y
-linear probing acotado a `PROBE = 8` pasos, reproduciendo EXACTO el contrato de
-la fase 2 (mismos eventos, anomalías y refs) y añadiendo la semántica del
-criterio 5: ref no encontrada tras agotar probes = anomalía (sin abortar);
-tabla llena = `error` señalizado, nunca wrap ni overwrite silencioso.
-
-Decisión de diseño: tabla en **registros con lookup combinacional de hasta
-PROBE slots/ciclo** (8 comparadores en paralelo) — el mapeo a URAM y la lectura
-registrada se difieren a la iteración 5 (criterio 9); los tiempos ST_APPLY /
-ST_UADD no cambian, así que la regresión de fase 2 pasa sin tocar sus tests.
-Los borrados dejan `valid=0` y el lookup continúa a través de esos slots
-(semántica de tombstones sin bit muerto: el bit `tomb` era lógica no leída y se
-eliminó durante el build — la entrada coincide con la spec `{valid, ref, side,
-price, qty}`); el insert reutiliza el primer slot `valid=0` del camino.
-
-**Radio real del feed (31.400 msgs del subset)**: 12.742 adds, **13.456 refs
-distintas**, pico 272 vivas, carga pico 0,415 % de los 65.536 slots,
-max_ref = 372.297 (19 bits), 12.662 hashes-16 distintos → sin cadenas largas
-ni riesgo de llenado (incluso acumulando borrados, 13.456/65.536 = 20,5 %);
-con carga 20 % la probabilidad de agotar 8 probes es ~2,6e-6.
-
-### Rojo con evidencia (TDD)
-
-| Test | Rojo | Causa raíz |
-|---|---|---|
-| SEC-HASH-02 (tabla llena) | `SEC-HASH-02: la tabla llena debe señalar error` (`assert 0 > 0`) | con indexación directa de 2^K nunca hay llenado: el 9º add del hash cabe siempre |
-| SEC-HASH-02 (tras el hash) | `got` ≠ `expected[:8] + expected[9:]` | el test asumía igualdad bit a bit tras el fallo; el golden no modela la tabla y su estado diverge tras el add fallido → el test se reformuló cerrado (adds previos bit a bit + ausencia del evento del add fallido + BBO posterior verificado de forma cerrada) |
-
-(Nota: con K=19 y PROBE=8, el probe agotado es inalcanzable por construcción
-— 2^19/2^16 = 8 refs por hash; SEC-HASH-01/02 se ejecutan con `-GK=20` vía el
-target `sim-hash` del Makefile para hacer real el 9º ref del hash.)
-
-### Verde (evidencia)
-
-| Suíte | Resultado |
-|---|---|
-| phase3/hash32 (SEC-HASH-01/02/02b/02c/03/04, K=20) | **6/6 PASS** |
-| phase3/book32 (B32-01/02, INV-B32-01/02/03, K=19) | **5/5 PASS** (B32-02: 31.400 msgs → 30.729 eventos bit a bit, cross=0) |
-| phase3/parser32 | **4/4 PASS** |
-| phase3/chain32 (CHAIN-01 real) | **2/2 PASS** (bit a bit, gaps=0) |
-| fase1 regresión DW=64 | **19/19 PASS** |
-| fase2 regresión DW=64 (incl. REPLAY-01) | **14/14 PASS** |
-
-### Cambios
-
-- `rtl/orderbook/orderbook.sv`: parámetros `SLOT=16`, `PROBE=8`; arrays
-  `o_valid/o_ref/o_side/o_price/o_qty` de `NSLOT=2**SLOT` (entrada exacta de la
-  spec, sin bit `tomb` — lógica muerta eliminada); funciones `lookup_ref`
-  (proba hasta PROBE comparando `o_ref`, `found` por salida) y `first_empty`
-  (primer slot `valid=0`, `full` si el camino está lleno); `apply_one`
-  reescrito (A/F: dup-ref o qty 0 o tabla llena → error; E/C/X/D/U: lookup →
-  anomalía si no existe; U con `newref` duplicada → error); `reduce_order` por
-  slot; tarea `apply_uadd_half` para ST_UADD (mitad add: `first_empty` → si
-  llena, error y BBO del replace cancelado vía `emit_ok`); reset de los 5
-  arrays. Tras el refactor el lint queda limpio (BLKSEQ movido a tarea,
-  UNUSEDSIGNAL de bits altos resuelto pasando el hash ya truncado a
-  `first_empty`).
-- `verification/testbenches/phase3/test_hash32.py` (nuevo): 6 tests espejo
-  SEC-HASH-01/02/03 + bordes; driver con muestreo del pulso `error`.
-- `verification/testbenches/phase3/Makefile`: target `sim-hash`
-  (`TOPLEVEL=orderbook MODULE=test_hash32 EXTRA_ARGS="-GDW=32 -GK=20"`).
-- `scripts/verify/mutate_orderbook.py`: runner del gate E con doble suite
-  (fase 2 a DW=64 + hash a K=20) y 7 mutantes nuevos de la tabla hashada
-  (ref sin comparar, bounds de probing off-by-one en lookup e insert, guard de
-  tabla llena en add y en mitad-add del replace, dup-ref sin error, insert sin
-  valid).
-
-### Mutación (gate E)
-
-15/15 mutantes muertos (8 de fase 2 actualizados al RTL hashado + 7 nuevos de
-hash). Evidencia `scripts/verify/mutate_orderbook.py` (runner), re-ejecutable.
-
-### Pendiente para iteraciones siguientes
-
-- Criterios 7-11 (top-N, hardening F1/F2, latencia, URAM/synth).
-
-## Iteración 3 — top-N público ND=5 (criterio 6)
-
-### Meta del atacante/diseño
-
-Nuevos puertos del book (y de la cadena): `depth_tdata` (2*ND*64 = 640 bits),
-`depth_tvalid`, `depth_tready`. El depth acompaña al BBO como **par atómico**
-(mismo pulso registrado): `depth_tdata` = ND niveles por lado del símbolo del
-evento, best-first, `{bid[ND-1..0], ask[ND-1..0]}` MSB→LSB con el mejor a la
-izquierda (depth[639:576] = mejor bid), cada nivel `{px[31:0], qty[31:0]}`,
-vacíos a 0. Los niveles se leen de las listas ordenadas internas (slot 0 =
-mejor, invariante de la burbuja de fase 2), NUNCA se recalculan: el oráculo de
-los tests es `book.py` (`run_book_depth`, snapshot de `_levels` por evento).
-
-El handshake `depth_tready` entra en el guard de ST_APPLY junto al de BBO
-(par aceptado solo con ambos tready; la retención completa bajo backpressure
-es SEC-BP-01, iteración 4).
-
-### Rojo con evidencia (TDD)
-
-| Test | Rojo | Causa raíz |
-|---|---|---|
-| DP-01 (top-N) | `AttributeError: orderbook contains no child object named depth_tready` | el RTL aún no tiene puertos de depth |
-| DP-02 (replay real) | `DP-02: depth diverge en evento 5 (locate 6960): got=…00149bc8…` — un slot del bid con `px=0x149bc8, qty=0` | **BUG real del feed**: `level_add` ponía `qty=0` al vaciar un nivel pero dejaba el **precio stale** en el slot; el BBO solo lee el primer slot con qty≠0 (nunca se notó en fases 1-2), el top-N empaqueta el slot entero y filtra el precio muerto. Fix en la raíz: nivel vacío se limpia completo (`lpr[found]=0`), invariante «el nivel vacío no existe» del golden |
-
-### Verde (evidencia)
-
-| Suíte | Resultado |
-|---|---|
-| phase3/depth32 (DP-01 sintético, SEC-DP-01 vacíos a 0, DP-02 replay real) | **3/3 PASS** (DP-02: 31.400 msgs → **30.729 depths bit a bit** contra el golden, todos los símbolos) |
-| phase3/book32 + hash32 + chain32 + parser32 | **5/5 + 6/6 + 2/2 + 4/4 PASS** (regresión tras el fix de nivel vacío) |
-| fase1 regresión DW=64 | **19/19 PASS** |
-| fase2 regresión DW=64 (incl. REPLAY-01) | **14/14 PASS** |
-
-### Cambios
-
-- `rtl/orderbook/orderbook.sv`: parámetro `ND=5`; puertos `depth_tdata/
-  depth_tvalid/depth_tready`; `emit_bbo` empaqueta el depth (bucle de ND
-  niveles por lado con `dacc = {dacc[…], px, qty}` MSB→LSB, slot 0 = mejor) y
-  valida el par; guard de ST_APPLY extendido a ambos tready; reset de los
-  puertos; **fix de nivel vacío** (`lqt[found]=0` + `lpr[found]=0`).
-- `rtl/itch_chain.sv`: puertos de depth cableados del book al top.
-- `verification/testbenches/phase3/test_depth32.py` (nuevo): driver que
-  muestrea el par y **exige depth_tvalid=1 en cada handshake de BBO**
-  (mata al mutante DP-NOVALID); DP-01/DP-02/SEC-DP-01.
-- `verification/testbenches/orderbook/test_orderbook.py`: oráculos
-  `run_book_depth` (snapshot de niveles por evento) y `pack_depth` (bus de
-  640 bits).
-- `verification/testbenches/phase3/Makefile`: target `sim-depth`.
-- `scripts/verify/mutate_orderbook.py`: tercera suite (sim-depth) y 4 mutantes
-  de depth (DP-BADORDER, DP-ASKSWAP, DP-NOVALID, DP-EMPTYSTALE).
-
-### Mutación (gate E)
-
-19/19 mutantes muertos (15 previos + 4 de depth). Evidencia:
-`scripts/verify/mutate_orderbook.py` (runner, triple suite), re-ejecutable.
-
-### Pendiente para iteraciones siguientes
-
-- Criterios 7-11 (hardening F1/F2, latencia, URAM/synth).
-
-## Iteración 4 — hardening (criterios 7-8) y latencia (criterio 8)
-
-### Meta del atacante/diseño
-
-Cierra los dos hallazgos de la lente 9 del grade de fase 2 y mide la latencia:
-
-- **SEC-NSYM-01 (F1)**: un locate fuera del subset con NSYM=20 registrados
-  señaliza `error` (pulso) y el mensaje se descarta **sin tocar el libro**;
-  nunca un índice OOB en `lv_*`/`loc_map`. El guard se implementa en ST_W0
-  (registro `bad_sym` + pulso de error) y se consume en ST_APPLY (el mensaje
-  salta apply_one y vuelve a ST_W0).
-- **SEC-BP-01 (F2)**: el par BBO/depth se **retiene** en AXI: `tvalid`
-  permanece en 1 mientras `tready` no lo acepte, y el guard de ST_APPLY frena
-  el pipeline mientras el par penda (evento entregado exactamente una vez).
-- **SEC-LAT-01 (criterio 8)**: latencia wire→BBO por tipo en la cadena DW=32:
-  desde el handshake en `s_axis` de la word que cubre el primer byte del
-  mensaje hasta el handshake de su evento BBO. Histograma determinista
-  (re-ejecución idéntica) + JSON commiteado en `verification/vectors/latency/`
-  + conversión a ns en `docs/writeup/latencia.md` (1 ciclo = 3,103 ns a
-  322,265625 MHz).
-
-### Rojo con evidencia (TDD)
-
-| Test | Rojo | Causa raíz |
-|---|---|---|
-| SEC-NSYM-01 | `AssertionError: el símbolo 21 no señalizó error` | el RTL no tenía guard: el locate desconocido con loc_cnt=NSYM entraba con `m_loc_idx=31` (OOB en `lv_*`) |
-| SEC-BP-01 | `AssertionError: got(5) exp(7) — evento perdido` | `tvalid` se limpiaba incondicionalmente: un emit durante `tready=0` se perdía (2 de 7 eventos) |
-| regresión fase 3 | `sim-hash: 6/6 -> 5/6` y `fase2: 14/14 -> 3/14` | gotcha del entorno: drivers antiguos sin `depth_tready` (X) + retención nueva → `depth_tvalid` en X → guard de ST_APPLY bloqueado → timeout. Fix: los drivers conducen ambos `tready` (el consumidor AXI debe) |
-
-### Verde (evidencia)
-
-| Suíte | Resultado |
-|---|---|
-| phase3/hard32 (SEC-NSYM-01, SEC-BP-01 con ventanas de tready=0) | **2/2 PASS** |
-| phase3/lat32 (SEC-LAT-01: 2 re-ejecuciones idénticas) | **1/1 PASS** — 31.400 msgs → 30.729 eventos; p99 ≈ 77 ciclos ≈ 239 ns; media 69,3 ciclos ≈ 215 ns |
-| phase3 regresión (book32 5/5, hash 6/6, depth 3/3, parser32 4/4, chain32 2/2) | **20/20 PASS** |
-| fase1 regresión | **19/19 PASS** |
-| fase2 regresión (incl. REPLAY-01) | **14/14 PASS** |
-
-### Cambios
-
-- `rtl/orderbook/orderbook.sv`: reg `bad_sym` (reset + clear en ST_W0 + set en
-  el guard del símbolo 21); ST_APPLY con rama `bad_sym` (descarta sin
-  apply_one); **retención AXI** del par (`tvalid <= tvalid && !tready` para
-  bbo y depth).
-- `verification/testbenches/phase3/test_hard32.py` (nuevo): driver con
-  backpressure opcional (ventanas de 5 ciclos de tready=0 cada 17) y muestreo
-  del pulso `error`; SEC-NSYM-01 (forma cerrada: golden sobre el subset
-  filtrado) y SEC-BP-01 (bit a bit + exactamente una vez).
-- `verification/testbenches/phase3/test_lat32.py` (nuevo): driver con tracking
-  de ciclos de handshake; mapeo evento→mensaje vía índices emisores del golden;
-  histograma por tipo; doble ejecución + comparación; persistencia del JSON.
-- `verification/testbenches/phase3/Makefile`: targets `sim-hard` y `sim-lat`.
-- `verification/testbenches/phase3/test_orderbook32.py`, `test_hash32.py` y
-  `verification/testbenches/orderbook/test_orderbook.py`: los drivers conducen
-  `depth_tready` (consumidor AXI completo).
-- `verification/vectors/latency/latency_dw32.json` (nuevo, evidencia derivada
-  sin datos crudos) y `docs/writeup/latencia.md` (conversión a ns).
-- `scripts/verify/mutate_orderbook.py`: cuarta suite (sim-hard) y 2 mutantes
-  (NSYM-GUARD, BP-NORET).
-
-### Mutación (gate E)
-
-21/21 mutantes muertos (19 previos + NSYM-GUARD + BP-NORET). Evidencia:
-`scripts/verify/mutate_orderbook.py` (runner, cuádruple suite), re-ejecutable.
-
-### Pendiente para iteraciones siguientes
-
-- Criterios 9-11 (URAM/registrada, sin rutas O(P·P), síntesis).
-
-## Iteración 5 — pipeline URAM y artefactos de síntesis (criterios 9-11)
-
-### Meta del atacante/diseño
-
-- **Criterio 9 (URAM)**: documentar el mapeo de la tabla de órdenes a URAM
-  (65.536×86 bits ≈ 20 URAM del VU9P), el patrón de lectura registrada
-  (probe serializado 1 slot/ciclo con prefetch durante ST_BODY) y auditar que
-  no existe ninguna ruta O(P·P) en el cálculo del mejor precio.
-- **Criterio 10 (síntesis)**: constraints 322,265625 MHz (period 3,103 ns) +
-  script tcl synth/impl (part `xcvu9p-flga2104-2L-e`, top `itch_chain`,
-  generic DW=32) commiteados en `synth/`; el run de Vivado es externo (owner).
-- **Criterio 11 (lint)**: cubierto por el gate B — `verilator --lint-only
-  -Wall` limpio en las 5 variantes (orderbook DW32/K19, DW32/K20, DW64/K19,
-  chain DW32, chain DW64), sin warnings reales silenciados.
-
-### Evidencia
-
-| Entregable | Resultado |
-|---|---|
-| `docs/writeup/uram.md` | mapeo URAM + patrón registrado + auditoría de complejidad (sin O(P·P): emit O(P), level_add O(P) de una pasada, lookup O(PROBE), top-N O(ND)) |
-| `synth/constraints/fase3_322mhz.xdc` | reloj 3,103 ns + I/O delays sobre puertos reales del top (verificados contra `itch_chain.sv`) |
-| `synth/fase3_synth.tcl` | synth→opt→place→route + informes WNS/TNS/utilización → `synth/reports/` |
-| `synth/reports/README.md` | qué pega el owner tras el run externo |
-| Lint (criterio 11) | 5/5 variantes `--lint-only -Wall` sin errores |
-
-### Pendiente del owner (externo)
-
-- Correr `fase3_synth.tcl` en Vivado y pegar `timing_impl.txt` (WNS/TNS,
-  criterio: **WNS ≥ 0**) y `util_impl.txt` (LUT/FF/BRAM/**URAM**) en
-  `synth/reports/`. La inferencia URAM del synth confirma el criterio 9
-  (guardarraíl del contrato sin gate nº 4).
-
-## Iteración 6 — revisión adversarial G5 y refactor O(P) de level_add
-
-### Meta del atacante/diseño
-
-Revisión adversarial independiente (G5) del libro al cerrar la iteración 5:
-0 CRITICO, **2 MAYOR** + 1 hallazgo propio de complejidad:
-
-1. **U no atómico con tabla llena (MAYOR)**: el delete se aplicaba en ST_APPLY
-   y la capacidad del newref solo se comprobaba en ST_UADD; con el camino
-   lleno, la mitad add se cancelaba (emit_ok=0) y la orden original se perdía
-   silenciosamente (libro divergente, sin señal alguna).
-2. **Wrap fantasma en `level_add` (MAYOR)**: un reduce (delta<0) sobre un
-   precio ausente (orden en tabla sin nivel, cascada del overflow de P=32)
-   escribía `QW'(delta)` envuelto en el slot libre -> nivel fantasma ~4,29e9
-   que salía como mejor bid. Reproducible: 33 adds (el 33º desborda y entra
-   en tabla sin nivel) + D que libera slot + D sobre el 33º.
-3. **Burbuja O(P²) en `level_add`** (hallazgo propio): el reordenamiento tras
-   cada operación era una burbuja anidada P×P -> contradecía el criterio 9
-   y el propio `docs/writeup/uram.md` (que afirmaba O(P), falso).
-
-### Rojo con evidencia (TDD)
-
-`test_inv_u01_tabla_llena_no_borra_la_original` e
-`test_inv_ov01_phantom_no_envuelve_cantidad` (sim-hash K=20):
-
-```
-INV-U-01: errores==0 exp>0 (el U con el path del newref lleno no señalizaba)
-INV-OV-01: errores=1 exp>=2 (el reduce sobre nivel ausente no señalizaba)
-** TESTS=8 PASS=6 FAIL=2 **
-```
-
-(Escenario U-01 rediseñado una vez: con un solo grupo de hash el delete
-liberaba un slot del propio path y el U cabía; se usan dos grupos disjuntos
-— A: hash 5 → slots 5..12, B: hash 100 → slots 100..107 — para que el path
-del newref esté lleno con refs ajenas y el delete libere un slot ajeno al
-path. El primer rojo de la iteración 4 (`SEC-HASH-02b: sin errores, vistos 2`)
-era una aserción residual de la versión antigua del INV-OV-01, ya eliminada.)
-
-### Verde (evidencia)
-
-```
-** TESTS=8 PASS=8 FAIL=0 **   (sim-hash)
-** TESTS=5 PASS=5 FAIL=0 **   (sim, orderbook32)
-** TESTS=3 PASS=3 FAIL=0 **   (sim-depth)
-** TESTS=2 PASS=2 FAIL=0 **   (sim-hard)
-** TESTS=1 PASS=1 FAIL=0 **   (sim-lat)
-** TESTS=4 PASS=4 FAIL=0 **   (sim, parser32)
-** TESTS=2 PASS=2 FAIL=0 **   (sim, chain32)
-** TESTS=14 PASS=14 FAIL=0 ** (fase 2)
-** TESTS=19 PASS=19 FAIL=0 ** (fase 1)
-```
-
-### Cambios
-
-- **U atómico**: en ST_APPLY el caso U pre-verifica la capacidad
-  (`first_empty(newref[SLOT-1:0], full)`); si `full` → `error`, SIN delete y
-  SIN emit; si cabe → delete + captura `u_newref/u_side/u_price/u_shares` +
-  `u_nidx` (nueva reg de SLOT bits, reseteada), emit con out_uadd. La mitad
-  add (`apply_uadd_half`, ST_UADD) usa el `u_nidx` ya verificado: ni recompute
-  ni rama full ni `emit_ok` (reg eliminada).
-- **Guard anti-fantasma**: en `level_add`, `found == -1 && delta < 0` →
-  `error` (el reduce sobre nivel ausente jamás escribe cantidad envuelta).
-- **Refactor O(P)**: el reordenamiento ya no es una burbuja P×P: en borrados
-  compacta a la izquierda en una pasada (el hueco queda en la cola, `P-1`
-  limpio con `lpr/lqt = 0`); en inserts, burbuja de inserción de una pasada
-  derecha→izquierda con comparación `(ask ? lpr[slot] < lpr[slot-1] :
-  lpr[slot] > lpr[slot-1])` y parada al llegar a posición; un cambio de
-  cantidad no reordena (invariante: la lista ya está ordenada). Con esto el
-  precio stale de un nivel vaciado es estructuralmente imposible (la
-  compactación lo barre en el mismo ciclo) — el mutante DP-EMPTYSTALE pasó a
-  ser equivalente y se sustituyó por DP-TOPNCOUNT.
-- **Runner de mutación**: `apply_safe` escribe el mutante en `.mut` temporal y
-  usa `os.replace` — un SystemExit de un patrón no encontrado YA NO puede
-  truncar el RTL (incidente en esta iteración: U-NOTATOMIC dejó el archivo en
-  0 bytes por el `open(RTL,"w")` truncador; restaurado desde `.bak`).
-
-### Mutación (gate E)
-
-**22/22 mutantes muertos** (cuádruple suite fase2 + sim-hash + sim-depth +
-sim-hard; OV-BEST re-textado a la comparación nueva, U-NOTATOMIC a
-`o_valid[u_nidx]`, HASH-UADD-FULL a U-NOFULLCHECK del pre-check en ST_APPLY,
-LV-NEGWRAP nuevo, DP-EMPTYSTALE → DP-TOPNCOUNT por equivalencia):
-
-```
-TODOS LOS MUTANTES MUERTOS. Gate E PASS.
-```
-
-Lint: `--lint-only -Wall` limpio en los 3 módulos (orderbook, itch_parser,
-itch_chain con dependencias).
-
-## Tabla de gates
-
-| Gate | Comando / evidencia | Resultado |
-|---|---|---|
-| **A. Simulación** | 7 suites phase3 (25/25) + fase1 19/19 + fase2 14/14 PASS (outputs reales en iteraciones 1-6 y post-grade 6bis) | ✔ |
-| **B. Compilación/lint sintaxis** | Verilator 5.050 `--lint-only -Wall` limpio en orderbook, itch_parser, itch_chain (con deps) | ✔ |
-| **C. Estilo** | `verible-verilog-lint` NO instalado en el entorno (verificable: `which verible-verilog-lint`) | NO EJECUTADO |
-| **D. Cobertura + mapeo** | Nivel 1: tabla spec↔tests abajo (11/11 criterios con test nombrado; 10 y 11 por evidencias G4/lint) | ✔ (nivel 1) |
-| **E. Mutación HDL** | 22/22 mutantes muertos (cuádruple suite fase2+hash+depth+hard) | ✔ |
-| **F. Completitud Gherkin** | `optimizacion.feature`: 14 escenarios ↔ 14 tests espejo (IDs literales); área en `specs/gherkin-espejos.json` | ✔ |
-| **G. Rigor + timing** | G0/G2/G3 ✔; G5 adversarial: 0 CRITICO, 2 MAYOR cerrados en iteración 6; G timing: run externo del owner (criterio 10) | — |
-
-## Gate D nivel 1 — cruce spec ↔ tests
-
-| Criterio | Test que lo pincha | Suite |
-|---|---|---|
-| 1. Parser DW=32 (Anexo A 32b + peor caso) | `test_p32_01_anexo_a_32_bits`, `test_p32_02_peor_caso_una_palabra_ciclo`, `test_p32_03_replay_pcap_real_32`, `test_inv_p32_01_backpressure_salida_sin_perdida` | phase3 (4/4) |
-| 2. Book DW=32 (BBO bit a bit) | `test_b32_01_bbo_igual_golden`, `test_b32_02_replay_feed_real_32`, `test_inv_b32_01_replace_atomico`, `test_inv_b32_02_raw_add_execute`, `test_inv_b32_03_dos_simbolos_independientes` | phase3 (5/5) |
-| 3. Regresión 64-bit | suites fase 1 (19/19) y fase 2 (14/14) re-ejecutadas tras cada iteración | fase1 + fase2 |
-| 4. Cadena DW=32 | `test_chain01_feed_real_bit_a_bit`, `test_chain02_sintetico_bit_a_bit` | phase3 (2/2) |
-| 5. Hash + probing | `test_sec_hash01_probe_agotado_anomalia`, `test_sec_hash02_tabla_llena_error`, `test_sec_hash02b_tombstone_reutilizado`, `test_sec_hash02c_replace_half_llena_error`, `test_sec_hash03_colision_entre_simbolos`, `test_sec_hash04_ref_duplicada_error`, `test_inv_u01_tabla_llena_no_borra_la_original`, `test_inv_ov01_phantom_no_envuelve_cantidad` | phase3 hash (8/8) |
-| 6. Top-N (ND=5) | `test_dp01_topn_igual_golden`, `test_dp02_replay_feed_real_depth`, `test_sec_dp01_simbolo_vacio_ceros` | phase3 depth (3/3) |
-| 7. Hardening | `test_sec_nsym01_simbolo_21_error_sin_oob`, `test_sec_bp01_bbo_se_retiene_bajo_backpressure` | phase3 hard (2/2) |
-| 8. Latencia | `test_sec_lat01_histograma_determinista_por_tipo` + `verification/vectors/latency/latency_dw32.json` (re-ejecución idéntica) | phase3 lat (1/1) |
-| 9. Pipeline URAM | auditoría de código: lectura registrada + sin O(P·P) (refactor iter 6); `docs/writeup/uram.md` (≈20 URAM) | revisión |
-| 10. Síntesis | `synth/constraints/fase3_322mhz.xdc` (3,103 ns) + `synth/fase3_synth.tcl`; **WNS ≥ 0 pendiente del run externo del owner** | — |
-| 11. Lint | gate B: 3 módulos `--lint-only -Wall` limpios (criterio 11 con Gherkin de regresión) | — |
-
-## Gate F — espejos Gherkin (evidencia)
-
-`specs/gherkin-espejos.json` declara el área
-`specs/fase3-optimizacion/gherkin → verification/testbenches/phase3`; el
-`.feature` tiene 14 escenarios y cada ID tiene su test espejo con el ID en el
-nombre literal: P32-01/02, B32-01/02, REG-01 (suites fase1+fase2), CHAIN-01,
-SEC-HASH-01/02/03, SEC-NSYM-01, SEC-BP-01, SEC-DP-01, DP-01, SEC-LAT-01 —
-14/14, sin escenario huérfano ni test sin escenario.
-
-## Gate G — checklist por superficie (iteración 6, diff sobre orderbook)
-
-- **G0** ✔: `git status` limpio de feeds/artefactos reales; vectores solo en
-  `verification/vectors/`; feeds en `/tmp/` (gitignored).
-- **G1** (parser): no aplica al diff de esta iteración (cerrado en fase 1).
-- **G2** ✔: U atómico (pre-check de capacidad antes del delete, nunca una
-  ventana Delete+Add inconsistente; mutantes U-NOTATOMIC/U-DELETE-HALF/
-  U-SKIP-ROUTE); doble cuenta (D-DOUBLE); hazards RAW sobre la misma orden
-  (`test_inv_b32_02_raw_add_execute`); overflow de niveles/cantidades
-  (OV-EMPTY, LV-NEGWRAP, guard en `reduce_order` con `rest[33]`).
-- **G3** ✔: bit a bit contra el golden en cada evento (REPLAY 30.729 eventos
-  BBO + depth 640 bits bit a bit sobre el feed real del subset).
-- **G4** ✔ (artefactos) + pendiente: constraints 3,103 ns coherentes con la
-  frecuencia objetivo; WNS/TNS y utilización pegados por el owner en
-  `synth/reports/` → cierra criterio 10.
-- **G5** ✔: revisión adversarial independiente (0 CRITICO, 2 MAYOR) cerrada en
-  la iteración 6 con TDD rojo→verde (INV-U-01, INV-OV-01).
-
-## Veredicto histórico de la iteración 6 — sustituido por la reapertura
-
-Iteraciones 1-6 (criterios 1-9 + 11; criterio 10 con artefactos commiteados y
-informe del run externo pendiente de pegar): **verde con evidencia**;
-pendiente de `/grade` y del WNS del owner.
-
-## Grade (2026-08-14) — FAIL (1) con stop limit alcanzado; escala al owner
-
-Re-ejecución adversarial completa: gates A (25/25 + 19/19 + 14/14), B (lint
-`--Wall` limpio), D, E (22/22 mutantes muertos), F (14/14 espejos), G0 en
-verde. Criterios 1-9 y 11 PASS. Dos asuntos:
-
-1. **Criterio 10 (síntesis) FAIL — pendiente externo**: `synth/reports/` vacío;
-   `vivado` no está en el entorno de desarrollo. El owner corre
-   `synth/fase3_synth.tcl` y pega `timing_impl.txt` (WNS/TNS) y `util_impl.txt`
-   (LUT/FF/BRAM/URAM) — cierra criterio 10 y confirma la inferencia URAM del
-   criterio 9. Nuevo: `scripts/verify/synth_check.py` valida los artefactos
-   sin Vivado (10/10 PASS).
-2. **Hallazgo lente 1 (doc) — corregido en el commit 7e7954f**: la tabla por
-   tipo de `docs/writeup/latencia.md` (p99 por tipo) discrepaba de la
-   evidencia `verification/vectors/latency/latency_dw32.json`; regenerada
-   desde el JSON (el total ya coincidía).
-
-## Post-grade (2026-08-14) — iteración 6bis: QB de la cadena y latencia 1,63×
-
-Revisión exhaustiva post-traslado (`docs/writeup/revision-exhaustiva-2026-08-14.md`):
-auditoría de corrección (golden/oráculos/testbenches/scripts — sin fallos; nit
-de código muerto en `test_orderbook.py:195`), de síntesis (B1/B2/B3, ver
-addendum de spec) y de latencia. Cierre del hallazgo de latencia con TDD y
-evidencia:
-
-### Hallazgo
-
-El backlog estacionario de la cola del parser dominaba la latencia (entrada a
-4 B/c vs drenaje medio del CAP ~2,7 B/c → cola fijada en QB). El default del
-parser era 128→64, pero **`itch_chain.sv` sobrescribe `QB` al instanciar
-(`.QB(QB)`, top con su propio default 128)**: los experimentos de "QB 64"
-sobre el módulo no afectaban a la cadena (latencia idéntica 72,191 con builds
-limpios — síntoma engañoso; diagnóstico con traza interna `qn`, no teoría).
-
-### Rojo con evidencia
-
-Tras alinear el default del top (`itch_chain.sv` QB 128→64) y el de la spec
-addendum: LIN-01 (fase 1) y P32-02 (phase3) pasan de exigir `stalls == 0` a
-**stalls acotados ≤ 24** (el tramo 4×A/U con QB=64 acumula ~15; el régimen del
-criterio 1 es "sin backpressure sostenida" — feed infinito back-to-back está
-documentado como fuera de alcance en LIN-01). Los asserts se enmendaron con la
-corrección bit a bit intacta.
-
-### Verde (evidencia)
-
-```
-** TESTS=2 PASS=2 FAIL=0 **   (sim-chain: CHAIN-01 bit a bit, 30729 eventos, cross=0, anomaly=671, gaps=0)
-** TESTS=19 PASS=19 FAIL=0 ** (fase 1, incl. LIN-01 enmendado y REP-02 replay real)
-** TESTS=5+8+3+2+4 PASS=0 FAIL ** (phase3 sim/hash/depth/hard/parser32)
-** TESTS=1 PASS=1 FAIL=0 **   (sim-lat, determinista 2 ejecuciones idénticas)
-```
-
-Latencia re-medida (QB=64 en la cadena): total media **69,26 → 42,40 ciclos**
-(214,9 → 131,5 ns), p99 77 → 47, min 27 → 27 — **~1,63×**, con la corrección
-bit a bit intacta. Evidencia: `verification/vectors/latency/latency_dw32.json`
-(regenerado por SEC-LAT-01).
-
-### Cambios
-
-- `rtl/itch_chain.sv`: `QB = 128` → `64` (default del top; comentario del
-  gotcha de sobrescritura).
-- `rtl/parser/itch_parser.sv`: default `QB = 64` (ya era 64 en iter 6bis;
-  comentario de arquitectura actualizado con la medición y el gotcha del top).
-- `verification/testbenches/parser/test_itch_parser.py` (LIN-01) y
-  `verification/testbenches/phase3/test_parser32.py` (P32-02): assert de
-  stalls acotados ≤ 24 con justificación.
-- `specs/fase3-optimizacion/spec.md`: addendum iteración 6 (causa raíz,
-  gotcha del parámetro efectivo, régimen de stalls, pendiente URAM).
-- `docs/writeup/latencia.md` + `docs/writeup/revision-exhaustiva-2026-08-14.md`.
-
-### Pendiente
-
-Criterio 10 sigue siendo el run Vivado externo del owner, y con un bloqueador
-estructural documentado: el book de registros planos (NSLOT=65.536, sonda
-combinacional paralela, `level_add` O(P) ~6-8 ns) no es sintetizable a 3,1 ns —
-la iteración URAM (`docs/writeup/uram.md`) es la vía; el addendum de spec lo
-formaliza.
-
-## Iteración 7 — parametrización ND, gates adversariales y frontera Vivado (2026-08-15)
-
-### Objetivo y rojo TDD
-
-La revisión final encontró que `itch_chain.ND` formaba parte del puerto público
-pero no llegaba a la instancia del book. El nuevo shard `ND=3` falló al elaborar
-antes del cambio mínimo:
+## Entorno reproducido
 
 ```text
-%Warning-WIDTHEXPAND: output port connection 'depth_tdata' expects 640 bits
-on the pin connection, but pin connection's VARREF 'depth_tdata' generates 384 bits.
-%Error: Exiting due to warning(s)
+fecha: 2026-08-15T14:58:46+01:00
+Python 3.11.14; cocotb 2.0.1
+Verilator 5.050 2026-07-01; GNU Make 3.81
+verible-verilog-lint: no instalado
+vivado: no instalado
+/tmp/real_subset.pcap: 91 paquetes, 3000 mensajes
+/tmp/real_trading.pcap: 3222 paquetes, 150000 mensajes
 ```
 
-Se añadió únicamente `.ND(ND)` en `u_book`. El test
-`test_dp01_nd_parametrizado_llega_al_book` comprueba el ancho efectivo y el
-contenido golden tanto con ND=5 como en el shard ND=3 (384 bits).
+## Gates A–G
 
-La primera pasada integral de mutación dejó tres supervivientes honestos:
-`URAM-COMB-INDEX`, `NSYM-GUARD` y `BP-NORET`. Se reforzaron sus contratos antes
-de tocar los tests: lectura URAM exclusivamente registrada, índice de símbolo
-siempre en `[0, NSYM)` y par BBO/depth válido y estable durante dos ciclos de
-stall. Los rojos dirigidos fueron supervivencia (`FAIL=0`); tras endurecer los
-oráculos, cada uno fue matado (`FAIL=1`) sin cambiar el comportamiento del DUT.
-
-### Gates locales reejecutados
-
-| Gate | Evidencia real | Resultado |
+| Gate | Evidencia fresca del loop `tkeep` | Resultado |
 |---|---|---|
-| A — simulación DW32 | `sim` 5/5; `sim-hash` 8/8; `sim-depth` 3/3; `sim-hard` 2/2; `sim-parser` 4/4; `sim-chain` 3/3; `sim-chain-nd3` 3/3; `sim-lat` 1/1 | PASS |
-| A — URAM | `make -C verification/testbenches/uram sim-uram`: 4/4 | PASS |
-| A — regresión DW64 | parser 20/20; order book 14/14 | PASS |
-| B — compilación | Verilator 5.050 `--lint-only --Wall` sobre `itch_chain` con ND=5 y ND=3, cero warnings; Python tocado compila | PASS |
-| C — estilo | `VERIBLE_VERILOG_LINT=NO_INSTALADO` | NO EJECUTADO |
-| D/F — cobertura literal | 14 escenarios de `optimizacion.feature` con test espejo; el shard ND=3 amplía DP-01 sin inventar un contrato nuevo | PASS |
-| E — mutación | 26 mutantes compilables, 26 matados, 0 supervivientes, 0 mutantes rotos | PASS |
-| G — rigor/timing | datos reales fuera de Git; golden independiente; Tcl/XDC estáticos verdes; Vivado ausente | ABIERTO |
+| A — simulación | golden 37/37; parser32 5/5; chain ND=5 4/4; chain ND=3 4/4; latencia 1/1; todos con `FAIL=0 SKIP=0` | **PASS** |
+| B — compilación | lint `--Wall` de parser DW32 y `itch_chain` DW32 con dependencias, exit 0 y cero warnings | **PASS** |
+| C — estilo | `verible-verilog-lint` no instalado | **NO EJECUTADO** |
+| D — cobertura | P32-01/02, CHAIN-01 y DP-01 cubiertos; frontera `tkeep` multi-datagrama en parser/cadena; cobertura instrumental no configurada | **PASS nivel 1** |
+| E — mutación | delta de entrada heredado del parser: 19/19 mutantes compilables y muertos; no se presenta la mutación histórica del order book como fresca | **PASS para el delta `tkeep`** |
+| F — completitud | script literal de unicidad/presencia de IDs y espejos, exit 0 | **PASS** |
+| G — rigor/timing | pcaps fuera de Git, golden independiente, `synth_check.py` 22/22 estático; sin Vivado WNS/TNS/utilización | **ABIERTO** |
 
-Evidencia de replay real preservada:
-
-- book/depth/cadena: 31.400 mensajes, 30.729 eventos bit a bit, `cross=0`,
-  `anomaly=671`, `gaps=0` en la cadena;
-- parser DW32: 91 paquetes y 26.904 palabras de 32 bits bit a bit;
-- latencia determinista en dos ejecuciones: 30.729 eventos, media 44,318
-  ciclos, p99 61, mínimo 32 y máximo 74 a 322,265625 MHz.
-
-### Preparación de síntesis y resultado honesto
-
-`synth_check.py` pasa sus 22 comprobaciones: ND propagado; tres RTL presentes;
-DW=32 fijado; reloj de 3,103 ns; lectura URAM registrada y ausencia de
-`o_mem[pr_*]`; `check_timing`, `report_methodology`, clocks y endpoints sin
-constraint post-synth/post-route; delays min/max para todos los puertos
-síncronos; y aborto del batch si queda un path con slack negativo.
-
-El XDC documenta una suposición de wrapper síncrono, no un pinout físico. Los
-delays 0,0/1,0 ns son budgets de integración y deben sustituirse por los de la
-placa/PHY real. El Tcl genera además utilización RAM, DRC, checkpoints e
-informes de timing.
-
-Intento local:
+## Gate A — salida fresca desde builds limpios
 
 ```text
-VIVADO=NO_INSTALADO
-synth/reports/README.md
+$ make -C verification/testbenches/phase3 clean-all
+$ make -C verification/testbenches/phase3 sim-parser
+P32-03 OK: 91 paquetes, 26904 words de 32 bits bit a bit
+TESTS=5 PASS=5 FAIL=0 SKIP=0
+exit 0
+
+$ make -C verification/testbenches/phase3 clean-all
+$ make -C verification/testbenches/phase3 sim-chain
+CHAIN-01: 31400 msgs / 20 símbolos contra golden
+CHAIN-01 OK: 30729 eventos, cross=0, anomaly=671, gaps=0
+TESTS=4 PASS=4 FAIL=0 SKIP=0
+exit 0
+
+$ make -C verification/testbenches/phase3 clean-all
+$ make -C verification/testbenches/phase3 sim-chain-nd3
+CHAIN-01 OK: 30729 eventos, cross=0, anomaly=671, gaps=0
+TESTS=4 PASS=4 FAIL=0 SKIP=0
+exit 0
+
+$ make -C verification/testbenches/phase3 clean-all
+$ make -C verification/testbenches/phase3 sim-lat
+SEC-LAT-01 OK: 30729 eventos, dos ejecuciones idénticas
+TESTS=1 PASS=1 FAIL=0 SKIP=0
+exit 0
 ```
 
-No existen `timing_impl.txt`, WNS/TNS ni `util_impl.txt` producidos por Vivado.
-En aquella iteración se declararon cerrados funcionalmente los criterios 1-9 y
-11, quedando abierto el criterio 10. Esa conclusión es histórica: la revisión
-de 2026-08-15 reabrió además la frontera `s_axis_tkeep`, el replay por datagrama
-y su regresión integral.
+### Frontera real de `tlast`
 
-## Veredicto vigente tras la reapertura de framing — 2026-08-15
+- P32-03 conserva los 91 payloads reales de `/tmp/real_subset.pcap`; el
+  assert `accepted_tlast == len(payloads)` verificó **91 handshakes `tlast`**.
+- CHAIN-01 filtra el pcap de trading a 20 símbolos y reconstruye esos 31.400
+  mensajes en **un** payload MoldUDP64 para el subset; su driver verificó
+  **1 handshake `tlast`**. No se presenta ese único burst como preservación
+  de los 3.222 límites originales del pcap.
+- `test_chain_tkeep_datagramas_no_alineados_y_estabilidad` usa dos payloads
+  sintéticos no múltiplos de cuatro, fuerza backpressure y verificó **2
+  handshakes `tlast`**, `tkeep` y estabilidad de la fuente en la cadena.
 
-La fase 3 permanece **ABIERTA** por dos fronteras independientes: implementar y
-verificar `s_axis_tkeep` de extremo a extremo en la cadena DW=32, y obtener el
-run Vivado real con WNS >= 0, TNS = 0, endpoints correctamente restringidos y
-utilización. Los outputs anteriores se conservan como evidencia histórica de
-las propiedades no afectadas; no cierran framing, replay ni timing vigentes.
+Esta separación evita convertir el replay filtrado de cadena en una evidencia
+que no produce: los límites reales los pinza P32-03; la integración
+multi-datagrama la pinza el adversarial de cadena.
+
+### Latencia de simulación
+
+```text
+eventos=30729; mean=44.318 ciclos; p50=44; p99=61; min=32; max=74
+A mean=48.660; D mean=41.189; E mean=40.857;
+U mean=55.408; X mean=39.402
+```
+
+El test hizo warm-up de invalidación URAM y dos ejecuciones idénticas sobre
+el subset real. Es latencia desde el handshake de la word que contiene el
+primer byte del mensaje hasta el evento BBO en simulación.
+
+## Gates B/C/G — salida fresca
+
+```text
+$ verilator --lint-only --Wall --top-module itch_parser -GDW=32 \
+    rtl/parser/itch_parser.sv
+exit 0; cero warnings
+
+$ verilator --lint-only --Wall --top-module itch_chain -GDW=32 \
+    rtl/itch_chain.sv rtl/parser/itch_parser.sv rtl/orderbook/orderbook.sv
+exit 0; cero warnings
+
+Gate C NO EJECUTADO: verible-verilog-lint no instalado
+
+$ python3 scripts/verify/synth_check.py
+22 PASS; 0 FAIL
+synth_check: OK — tcl/constraints coherentes con el RTL y la spec
+exit 0
+```
+
+Los 22 checks incluyen periodo XDC de 3,103 ns, puertos/delays min-max,
+lectura registrada de `o_mem` y comandos de informes/aborto del Tcl. No
+ejecutan síntesis, place ni route.
+
+## Gates D/E/F
+
+| ID | Test/evidencia vigente |
+|---|---|
+| P32-01 | `test_p32_01_anexo_a_32_bits`, P32-03 real y validación `tkeep`/truncados |
+| P32-02 | `test_p32_02_peor_caso_una_palabra_ciclo` |
+| CHAIN-01 | `test_chain01_feed_real_bit_a_bit`, `test_chain02_sintetico_bit_a_bit` |
+| DP-01 | `test_dp01_nd_parametrizado_llega_al_book`, ejecutado con ND=5 y ND=3 |
+
+```text
+$ python3 scripts/verify/mutate_parser.py
+19/19 killed; cada mutante compiló; 0 supervivientes; 0 mutantes rotos
+19/19 mutantes compilables y muertos. Gate E PASS.
+exit 0
+
+$ python3 - <<'PY'  # script literal del brief
+IDs ITCH/fase 3 únicos y mapas a tests completos
+exit 0
+```
+
+La mutación 19/19 cierra el delta compartido de framing. En este loop no se
+ejecutó `mutate_orderbook.py`; sus resultados anteriores no se etiquetan como
+frescos ni se usan para cerrar el gate físico.
+
+## Bloqueador físico
+
+No se encontraron `vivado`, `timing_impl.txt` ni `util_impl.txt` producidos
+por un run vigente. Para cerrar fase 3 siguen siendo obligatorios, como mínimo:
+
+- WNS y TNS post-route;
+- endpoints sin constraint y clocking efectivo;
+- utilización LUT/FF/BRAM/URAM e inferencia real de URAM;
+- confirmación de que los budgets I/O del XDC corresponden al wrapper/PHY.
+
+Hasta adjuntar esa evidencia, **fase 3 permanece NO CERRADA**.

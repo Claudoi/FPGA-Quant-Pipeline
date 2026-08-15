@@ -1,149 +1,136 @@
-# verify-report — fase1-parser-rtl (iteración 4)
+# verify-report — fase1-parser-rtl — cierre de framing `tkeep`
 
-> **Estado vigente: REABIERTA (2026-08-15).** La revisión adversarial demostró
-> que el driver concatenaba datagramas antes de formar beats y no modelaba qué
-> bytes del último beat eran válidos. Los outputs de la iteración 4 permanecen
-> como evidencia histórica, pero los criterios 4, 5, 7, 8 y 10 vuelven a estar abiertos
-> hasta implementar y verificar `s_axis_tkeep` por datagrama.
+> Evidencia vigente ejecutada el 2026-08-15 desde el commit base
+> `22130e3fae758edaf674a3ceb9c45b38711a2f5b`, con builds limpios y
+> `PATH=/Volumes/WD_Black/FPGA/.venv/bin:$PATH`. Sustituye la evidencia de la
+> iteración cuyo driver concatenaba datagramas y no representaba los bytes
+> válidos del último beat.
 
-> Régimen de gates de Atenea re-mapeado al flujo HDL. El owner no lee HDL/Python:
-> esta evidencia (outputs reales) es lo que `/grade` re-ejecutará.
-> Fecha de la evidencia histórica: 2026-08-15. Área: `rtl/parser/` +
-> `verification/testbenches/parser/`. Iteración 4: valida los 22 tipos, recupera
-> el paquete posterior a un truncado y cubre las ocho alineaciones literales.
+## Veredicto
 
-## Meta del atacante/diseño (1-2 frases)
+**PASS funcional del delta de framing `s_axis_tkeep`.** El driver vigente
+presenta cada payload MoldUDP64 como un burst AXI independiente, conserva
+`(tdata,tkeep,tlast)` durante stalls y exige un handshake `tlast` por payload.
+La reapertura técnica de los criterios 4, 5, 7, 8 y 10 queda cubierta por la
+evidencia fresca inferior. La fase 1 no reclama cierre de timing físico: ese
+gate no aplica a esta campaña.
 
-¿Cómo podría este módulo dar un registro incorrecto, perder un mensaje, romper el
-handshake AXI o atascarse con un feed real? Ataques cubiertos: mensaje que cruza
-palabra/paquete, longitud incoherente por tipo, gap de secuencia, cambio de
-sesión, count=0, backpressure intermitente de salida, tready bajo con datos
-retenidos, feed real back-to-back que llena la cola (desbordamiento del contador),
-tipo fuera de subset, **tlast en medio de un mensaje, frame truncado con el
-datagrama terminado antes de completar el mensaje**.
+No se usó una pasada sintética como sustituto del replay: el artefacto local
+`/tmp/real_subset.pcap` existía, contenía 91 datagramas no vacíos y REP-02 se
+ejecutó con `SKIP=0`.
 
-## Cambios de iteración 3 (criterio 7)
+## Entorno reproducido
 
-- RTL histórico: la iteración 3 introdujo `eop_seen` y el salto a `ST_HDR`,
-  pero limpiaba el latch al capturar un mensaje anterior y no vaciaba la cola;
-  la iteración 4 demuestra y corrige esos dos huecos.
-- Tests `test_sec_frm01` / `test_sec_frm02` reescritos con asserts reales
-  (antes `or True`): verificar `errores > 0` y que el parser continúa / no
-  emite registro parcial.
-
-## Cambios de iteración 4
-
-- `explen` cubre los 22 tipos de `MESSAGE_LENGTHS`; toda longitud canónica
-  incorrecta pulsa `error`, también fuera del subset. Un H válido no emite,
-  pero avanza el `msg_idx` observable del A posterior.
-- `tlast` se latchea solo con handshake. Tras aceptarlo, la entrada se bloquea
-  hasta cerrar o descartar el datagrama, evitando mezclar dos paquetes en una
-  cola que no contiene marcadores internos. En truncado se vacía la cola y se
-  prueba el A de un paquete íntegro posterior.
-- En sesión nueva con `count=0`, `exp_seq` toma el `seq` del header actual; se
-  elimina la carrera entre dos asignaciones no bloqueantes.
-- LIN-01 queda reconciliado con QB=64: cuatro A/U, salida bit a bit y stalls
-  `<=24`. ALN-01 recorre offsets 0–7, no tres muestras parciales.
-
-## Tabla histórica de gates — no representa los criterios reabiertos
-
-| Gate | Comando / evidencia | Resultado |
-|---|---|---|
-| **A. Simulación** | `make -C verification/testbenches/parser sim` desde build limpio | 20/20 PASS, 0 FAIL; REP-02 91 paquetes/17.937 words — **PASS** |
-| **B. Compilación/lint sintaxis** | `verilator --lint-only --Wall --top-module itch_parser rtl/parser/itch_parser.sv` | 0 warnings — **PASS** |
-| **C. Estilo** | `verible-verilog-lint` **NO EJECUTADO** (herramienta no instalada; sustituto `--Wall` + revisión manual) | **NO EJECUTADO** |
-| **D. Cobertura + mapeo** | Tabla spec↔tests abajo; cobertura funcional runner **NO EJECUTADO** (no configurado) | Nivel 1 **PASS** |
-| **E. Mutación HDL** | `python3 scripts/verify/mutate_parser.py` | **12/12 muertos, 0 sobreviven** — **PASS** |
-| **F. Completitud Gherkin** | conteo reproducible | 20 escenarios ↔ 20 tests espejo — **PASS** |
-| **G. Rigor + timing** | G0/G1/G3 checklist; G timing NO APLICA (fase 1) | **PASS** |
-
-## Gate D nivel 1 — cruce spec ↔ tests
-
-| Criterio spec | Test(s) espejo | Estado |
-|---|---|---|
-| 1 (registro Anexo A byte a byte) | `test_par01`, `test_out01`, `test_rep01`, `test_rep02` | PASS |
-| 2 (line-rate, alcance acotado) | `test_lin01`, `test_sec_lin01` | PASS (acotado) |
-| 3 (alineador, 8 desplazamientos) | `test_aln01` | PASS |
-| 4 (framing/gaps/sesión/count=0) | `test_frm01`, `test_sec_gap01/02`, `test_sec_frm03/04` | PASS |
-| 5 (AXI-Stream con backpressure) | `test_out02`, `test_out03` | PASS |
-| 6 (22 longitudes; no-subset avanza índice, sin registro) | `test_sec_par04`, `test_sec_par05` | PASS |
-| 7 (longitud incoherente/truncado → error + recuperación) | `test_sec_par03`, `test_sec_par03b`, `test_sec_par05`, `test_sec_frm01`, `test_sec_frm02` | **PASS (iteración 4)** |
-| 8 (replay real + vectores congelados) | `test_rep01`, `test_rep02` (pcap 12302019) | PASS |
-| 10/11 (lint y estilo) | gates B/C | B PASS, C NO EJECUTADO |
-| 9 (cabos fase 0: día 01302019) | `run_golden` completo, addendum inferior | PASS |
-
-## Gate F — espejos Gherkin (título literal → test)
-
-Los cinco `.feature` contienen 20 escenarios/esquemas y el módulo cocotb tiene
-20 tests. SEC-PAR-05 añade el espejo de validación de tipos conocidos; ALN-01
-recorre internamente los ocho ejemplos de su esquema.
-
-## Gate E — mutación HDL (evidencia resumida)
-
-Runner: `scripts/verify/mutate_parser.py` (aplica cada flip, corre la suite,
-restaura, y limpia sim_build al final).
-
-```
-[MATADO] ALN-OFFBYONE: FAIL=18
-[MATADO] ALN-PAD-FILL: FAIL=18
-[MATADO] SEQ-GAP-NOGAP: FAIL=3
-[MATADO] SEQ-GAP-SESSION: FAIL=2
-[MATADO] NEXT-OFFBYONE: FAIL=7
-[MATADO] LEN-BODY_W: FAIL=6
-[MATADO] CAP-SUBSET: FAIL=6
-[MATADO] OUT-FREE: FAIL=18
-[MATADO] LEN-CAPT-ERR: FAIL=1
-[MATADO] LEN-H: FAIL=2
-[MATADO] SEQ-ZERO-SESSION: FAIL=1
-[MATADO] TRUNC-EOP: FAIL=2
-TODOS LOS MUTANTES MUERTOS. Gate E PASS.
+```text
+fecha: 2026-08-15T14:58:46+01:00
+Python 3.11.14 (ejecutable: /Volumes/WD_Black/FPGA/.venv/bin/python3)
+cocotb 2.0.1
+Verilator 5.050 2026-07-01
+GNU Make 3.81
+verible-verilog-lint: no instalado
+/tmp/real_subset.pcap: 129930 bytes, 91 paquetes, 91 payloads no vacíos,
+                       3000 mensajes
 ```
 
-## Gate G — checklist por superficie
+La cabecera de cocotb informa Python 3.11.9 para el intérprete embebido de la
+misma `.venv`; el comando de orquestación y los unittest se ejecutaron con
+Python 3.11.14. Se registran ambos valores para no ocultar esa diferencia del
+entorno.
 
-**G0:** feeds reales fuera del repo (`/tmp/real_subset.pcap` para REP-02);
-vectores commiteados sintéticos; `.gz` del feed gitignored. Sin secretos.
+## Gates A–G
 
-**G1:** line-rate acotado (`test_lin01`, `test_sec_lin01`), alineador
-(`test_aln01`), gaps/sesión/count=0 (`test_sec_gap*`, `test_sec_frm03/04`),
-**secuencia robusta**: frame truncado y tlast en medio señalan `error` sin
-cuelgue ni registro parcial (`test_sec_frm01/02`), big-endian cubierto por la
-comparación byte a byte.
+| Gate | Evidencia fresca | Resultado |
+|---|---|---|
+| A — simulación | golden `37/37`; parser desde `make clean`: `TESTS=31 PASS=31 FAIL=0 SKIP=0`; REP-02 real: 91 paquetes y 17.937 words de 64 bits bit a bit | **PASS** |
+| B — compilación | elaboración limpia de cocotb/Verilator y `verilator --lint-only --Wall --top-module itch_parser rtl/parser/itch_parser.sv`, exit 0, cero warnings | **PASS** |
+| C — estilo | `verible-verilog-lint` no está instalado | **NO EJECUTADO** |
+| D — cobertura | mapa literal de los criterios reabiertos a tests, incluido `SEC-FRM-04..08` y `REP-02`; cobertura instrumental no configurada | **PASS nivel 1** |
+| E — mutación | `mutate_parser.py`: 19/19 mutantes compilables y muertos; 0 supervivientes, 0 mutantes rotos | **PASS** |
+| F — completitud | script literal Gherkin↔tests: `IDs ITCH/fase 3 únicos y mapas a tests completos` | **PASS** |
+| G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; timing físico no aplica a fase 1 | **PASS** |
 
-**G3:** comparación bit a bit contra `message_oracle` (independiente del RTL);
-REP-02 17937 words byte a byte.
+## Gate A — salida fresca
 
-## D.2 / hallazgos abiertos
+```text
+$ python3 -m unittest discover -s golden_model/tests -t .
+Ran 37 tests in 0.016s
+OK
+exit 0
 
-1. Gate C (verible) y D nivel 2 (cobertura runner): NO EJECUTADOS (herramientas
-   no disponibles/configuradas en el entorno; verible no está en brew ni pip
-   como binario). Declarados, no ocultados.
-2. Criterio 9 (cabo fase 0): **CERRADO el 2026-08-15** con la jornada completa
-   `01302019`: 368.366.634 mensajes, 8.713 símbolos, 0 anomalías y 63
-   `cross_events`. Artefacto de 4.764.426.091 bytes ignorado por Git y
-   `gzip -t` verde; evidencia completa en el verify-report de fase 0.
-3. Line-rate mínimo infinito (criterio 2): **DECISIÓN DE SPEC TOMADA (edit
-   2026-08-13)**: non-goal físico derivado del Anexo A (16 B overhead/mensaje →
-   salida > entrada). Ver spec.md criterio 2.
-4. El runner restaura el RTL en un `finally` por mutante y hace `make clean` al
-   final; una interrupción no deja el DUT mutado ni objetos reutilizables.
+$ make -C verification/testbenches/parser clean
+exit 0
 
-## Veredicto histórico de la iteración 4 — sustituido por la reapertura
+$ make -C verification/testbenches/parser sim
+REP-02 OK: 91 paquetes, 17937 words byte a byte
+TESTS=31 PASS=31 FAIL=0 SKIP=0
+exit 0
+```
 
-**Se declaró cerrada funcionalmente en la iteración 4.** Gates A/B/E/F PASS; C y cobertura
-nivel 2 declarados NO EJECUTADOS por herramienta ausente; G0/G1/G3 PASS y
-timing NO APLICA en fase 1. Quedan probados los 22 tipos, ocho offsets, sesión
-nueva con count=0, recuperación tras truncado, replay real y mutación 12/12.
-No se presenta el non-goal de mensajes mínimos infinitos como line-rate. Este
-veredicto ya no representa el estado actual por el defecto de framing descrito
-al inicio del informe.
+El assert del driver es literal:
+`accepted_tlast == len(payloads)`. En REP-02 `len(payloads) == 91`; por tanto
+la pasada verde observó **91 handshakes de entrada con `tlast`**, uno por cada
+datagrama decapsulado. Los últimos beats se forman con un prefijo MSB contiguo
+en `tkeep`; los lanes no válidos no se incorporan al parser.
 
-## Addendum de evidencia — segundo día real (2026-08-15)
+Además del replay, la suite cubre:
 
-`python3 -m golden_model.scripts.run_golden
-data/itch_sample/01302019.NASDAQ_ITCH50.gz --out /tmp/fpga-fase0-0130` procesó
-368.366.634 mensajes completos con 0 anomalías, 8.713 símbolos y 63
-`cross_events` en 22m15s. `gzip -t` sobre los 4.764.426.091 bytes terminó con
-exit 0.
-El feed y sus derivados siguen fuera de Git. El detalle autoritativo está en
-`specs/fase0-golden-model/verify-report.md`.
+- `SEC-FRM-04`: `count=0` y último beat parcial `tkeep=11110000`;
+- `SEC-FRM-05`: dos datagramas no alineados, dos `tlast` aceptados;
+- `SEC-FRM-06`: máscaras cero, con huecos, LSB y parcial sin `tlast`, con
+  descarte y recuperación;
+- `SEC-FRM-07`: cierre exacto `count↔tlast`, residuo y cierre tardío;
+- `SEC-FRM-08`: estabilidad de `tdata`, `tkeep` y `tlast` bajo backpressure;
+- `REP-02`: límites reales conservados y comparación byte a byte.
+
+## Gates B y C — salida fresca
+
+```text
+$ verilator --lint-only --Wall --top-module itch_parser \
+    rtl/parser/itch_parser.sv
+Verilator 5.050; exit 0; cero warnings
+
+$ if command -v verible-verilog-lint ...
+Gate C NO EJECUTADO: verible-verilog-lint no instalado
+exit 0
+```
+
+Gate C no se convierte en PASS por haber pasado `--Wall`.
+
+## Gate D/F — mapa del contrato vigente
+
+| ID | Test que lo pincha |
+|---|---|
+| SEC-FRM-04 | `test_sec_frm04_count_cero_valido`, `test_sec_frm04_count_cero_parcial_msb_y_recuperacion` |
+| SEC-FRM-05 | `test_sec_frm05_datagramas_no_alineados_no_comparten_beat` |
+| SEC-FRM-06 | `test_sec_frm06_*`, `test_axi_keep_orientacion_msb_lsb` |
+| SEC-FRM-07 | `test_sec_frm07_count_tlast_cierre_exacto`, `test_sec_frm07_count_exacto_sin_tlast_da_error` |
+| SEC-FRM-08 | `test_sec_frm08_fuente_estable_bajo_backpressure_entrada` |
+| REP-02 | `test_rep02_replay_pcap_real_dia_local` |
+
+El script literal verificó unicidad en Gherkin y presencia normalizada en los
+tests. `specs/gherkin-espejos.json` ya era coherente; no se modificaron spec,
+Gherkin ni espejos.
+
+## Gate E — salida fresca
+
+```text
+$ python3 scripts/verify/mutate_parser.py
+ALN-OFFBYONE ... COUNT-RESIDUAL: compiló=sí, MATADO
+19/19 killed; 0 survivors; 0 errores de compilación del mutante
+19/19 mutantes compilables y muertos. Gate E PASS.
+exit 0
+```
+
+Los siete mutantes nuevos del contrato de bytes válidos/cierre de datagrama
+(`KEEP-ALL-BYTES`, `KEEP-LSB-FIRST`, `KEEP-HOLES`,
+`KEEP-PARTIAL-NONLAST`, `KEEP-NODRAIN`, `COUNT-NO-EOP` y
+`COUNT-RESIDUAL`) compilaron y murieron. El runner restauró el RTL y eliminó
+su build; `git diff -- rtl/parser/itch_parser.sv` quedó vacío.
+
+## Límites
+
+- La evidencia de replay depende de un pcap local no versionado; si falta en
+  otra máquina, el test será `SKIP`, no PASS.
+- No se ejecutó cobertura instrumental ni Verible.
+- Esta campaña no mide WNS/TNS ni utilización y no pretende acreditar la
+  frecuencia física de fase 3.
