@@ -1,24 +1,26 @@
 # FPGA Quant Pipeline
 
 Pipeline de market data para trading de baja latencia sobre **AMD/Xilinx
-UltraScale+**: parser Nasdaq TotalView-ITCH 5.0 a line-rate 10G + order book
-en URAM con salida BBO. Proyecto por fases del documento maestro
+UltraScale+**: parser Nasdaq TotalView-ITCH 5.0 + order book con salida BBO.
+El RTL implementado empieza en MoldUDP64 ya decapsulado; MAC 10G y
+Ethernet/IP/UDP quedan fuera de este repositorio. Proyecto por fases del
+documento maestro
 (`Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`),
 orientado a perfil FPGA / low-latency trading infrastructure.
 
 ```
-10G MAC → decap IP/UDP → framing MoldUDP64 → parser ITCH → order book (URAM) → BBO
+MoldUDP64 → parser ITCH → order book (URAM) → BBO
 ```
 
 ## Estado del proyecto
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| **0** | Golden model Python (parser ITCH + order book + vectores de referencia + tooling de datos) | **Cerrada — PASS** (3 iteraciones del ciclo) |
-| 1 | Parser RTL a line rate (64-bit @ 156,25 MHz), verificación cocotb contra el golden | Siguiente |
-| 2 | Order book engine en URAM (hash por order ref, niveles, BBO) | Pendiente |
-| 3 | Optimización 32-bit @ 322,265625 MHz + cierre de timing | Pendiente |
-| 4 | Stretch: port CME MDP3/SBE, interfaz host, write-up | Pendiente |
+| 0 | Golden model Python ITCH + tooling de datos | Cerrada |
+| 1 | Parser RTL ITCH | Cerrada funcionalmente |
+| 2 | Order book RTL | Cerrada funcionalmente |
+| 3 | DW=32, tabla URAM y top-N | Pendiente de Vivado: WNS/TNS y recursos |
+| 4 | Parser CME MDP3/SBE | En construcción |
 
 ### Evidencia de la fase 0 (día Nasdaq 2019-12-30, 3,5 GB reales)
 
@@ -47,7 +49,7 @@ orientado a perfil FPGA / low-latency trading infrastructure.
 ## Uso
 
 ```bash
-# tests del golden model (29 espejos del Gherkin)
+# tests del golden model
 python3 -m unittest discover -s golden_model/tests -t .
 
 # descargar un día de muestra de emi.nasdaq.com (verificación md5; fail closed)
@@ -64,13 +66,11 @@ python3 scripts/binaryfile_to_pcap.py in.ITCH50 out.pcap
 Requisitos: Python 3.10+ stdlib pura (fase 0). Fases RTL: Verilator + cocotb
 + Vivado (ver `docs/DESARROLLO.md`).
 
-## Ciclo de trabajo
+## Proceso y estado
 
-Cada campaña sigue el loop **spec → build → verify → grade** (skills en
-`.opencode/skills/`): spec escribe el contrato testeable, build implementa
-con TDD estricto (rojo evidenciado), verify ejecuta los gates A-G re-mapeados
-a HDL, grade juzga adversarialmente. El criterio de cierre está en
-`AGENTS.md` y `docs/DESARROLLO.md`.
+`AGENTS.md` es la única guía operativa: define el proceso de campaña, los
+gates A–G, comandos de referencia, límites del hardware y estado actual.
+Las specs conservan el contrato y la evidencia de cada campaña.
 
 ## Reglas
 
