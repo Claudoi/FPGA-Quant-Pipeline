@@ -10,7 +10,7 @@ Vectores sintéticos (regla G0). Comparación byte a byte (gate G3).
 import cocotb
 from cocotb.clock import Clock
 from cocotb.handle import Immediate
-from cocotb.triggers import RisingEdge
+from cocotb.triggers import ReadOnly, RisingEdge
 import os
 import struct
 
@@ -583,6 +583,24 @@ async def test_sec_frm04_count_cero_parcial_msb_y_recuperacion(dut):
 
 
 @cocotb.test()
+async def test_sec_frm02_campo_len_final_conserva_eop_y_recupera(dut):
+    """Un tlast aceptado con solo el campo len no se pierde al drenar HDR."""
+    partial = struct.pack(">10sQH", b"SIM0000001", 1, 1) + (36).to_bytes(2, "big")
+    recovery = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    recovered = _packet_session(b"SIM0000002", 100, [recovery])
+    assert len(partial) == 22
+
+    got, errors, accepted_tlast = await drive_packets_err(
+        dut, [partial, recovered])
+
+    assert errors == 1, f"SEC-FRM-02 len final: errores={errors}"
+    assert accepted_tlast == 2, (
+        f"SEC-FRM-02 len final: tlast aceptados={accepted_tlast}")
+    assert got == run_oracle([recovery]), (
+        f"SEC-FRM-02 len final: got={got}")
+
+
+@cocotb.test()
 async def test_sec_frm07_count_tlast_cierre_exacto(dut):
     """Espejo §SEC-FRM-07: count y tlast cierran el mismo datagrama.
 
@@ -644,33 +662,116 @@ async def test_sec_frm06_tkeep_invalido_descarta_y_recupera(dut):
 
 
 @cocotb.test()
-async def test_sec_frm06_salida_pendiente_no_se_duplica(dut):
-    """Un descarte no repite un beat de salida retenido por backpressure."""
+async def test_sec_frm06_registro_capturado_termina_antes_de_recuperar(dut):
+    """Un descarte termina el record capturado antes de recuperar el siguiente."""
     first = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
     tail = A(14, 3, 8, b"\x00", 11, b"MSFT    ", 4)
-    payload = _packet_session(b"SIM0000001", 1, [first, tail])
-    beats = packet_beats([payload], 8)
-    data, _keep, last = beats[-1]
-    beats[-1] = (data, 0b00000011, last)
+    recovery = A(15, 4, 9, b"\x01", 12, b"GOOG    ", 5)
+    malformed = _packet_session(b"SIM0000001", 1, [first, tail])
+    recovered = _packet_session(b"SIM0000002", 100, [recovery])
+    bad_beats = packet_beats([malformed], 8)
+    data, _keep, last = bad_beats[-1]
+    bad_beats[-1] = (data, 0b00000011, last)
+    beats = bad_beats + packet_beats([recovered], 8)
 
     await _reset(dut)
     ci = 0
     errors = 0
+    accepted_tlast = 0
     out = []
-    for _ in range(len(beats) + 40):
+    held_in = None
+    held_out = None
+    quiet = 0
+    for cycle in range(5000):
         _present_beat(dut, beats, ci)
-        dut.m_axis_tready.value = int(ci >= len(beats))
+        dut.m_axis_tready.value = int(
+            ci >= len(bad_beats) and cycle % 3 != 1)
         await RisingEdge(dut.clk)
+
         if int(dut.error.value):
             errors += 1
-        if int(dut.m_axis_tvalid.value) and int(dut.m_axis_tready.value):
-            out.append(int(dut.m_axis_tdata.value))
+        held_in, took_last = _check_input_stability(dut, held_in)
+        accepted_tlast += took_last
+
+        out_valid = int(dut.m_axis_tvalid.value)
+        out_ready = int(dut.m_axis_tready.value)
+        out_beat = (int(dut.m_axis_tdata.value), int(dut.m_axis_tlast.value))
+        if held_out is not None:
+            assert out_beat == held_out, (
+                f"SEC-FRM-06 salida cambió bajo stall: {held_out} -> {out_beat}")
+        if out_valid and not out_ready:
+            held_out = out_beat
+        elif out_valid and out_ready:
+            out.append(out_beat)
+            held_out = None
+
         if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
             ci += 1
+        if ci >= len(beats) and not out_valid:
+            quiet += 1
+        else:
+            quiet = 0
+        if quiet > 80:
+            break
 
     assert errors == 1, f"SEC-FRM-06 salida pendiente: errores={errors}"
-    assert out == run_oracle([first])[:1], (
-        f"SEC-FRM-06 salida pendiente duplicada: got={out}")
+    assert accepted_tlast == 2, (
+        f"SEC-FRM-06 salida pendiente: tlast aceptados={accepted_tlast}")
+    expected_words = run_oracle([first, recovery])
+    assert [word for word, _last in out] == expected_words, (
+        f"SEC-FRM-06 records incompletos o duplicados: got={out}")
+    first_words = len(run_oracle([first]))
+    expected_last = [
+        int(index in (first_words - 1, len(expected_words) - 1))
+        for index in range(len(expected_words))
+    ]
+    assert [last for _word, last in out] == expected_last, (
+        f"SEC-FRM-06 límites de record incorrectos: got={out}")
+    assert out[first_words][0] & 0xFFFFFFFF == 1, (
+        f"SEC-FRM-06 msg_idx de recuperación={out[first_words][0] & 0xFFFFFFFF}")
+
+
+@cocotb.test()
+async def test_sec_frm06_tkeep_invalido_no_depende_de_capacidad(dut):
+    """El primer beat inválido se acepta aunque su popcount no quepa en q."""
+    payload = _packet_seq(corpus_all_types() * 3, 1)
+    beats = packet_beats([payload], 8)
+    await _reset(dut)
+    dut.m_axis_tready.value = 0
+
+    ci = 0
+    for _ in range(200):
+        _present_beat(dut, beats, ci)
+        await RisingEdge(dut.clk)
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            ci += 1
+        if int(dut.qn.value) + 7 > 64:
+            break
+
+    qn_before = int(dut.qn.value)
+    assert qn_before + 7 > 64, (
+        f"SEC-FRM-06 no se alcanzó presión de capacidad: qn={qn_before}")
+    assert ci < len(beats) and not beats[ci][2], (
+        "SEC-FRM-06 el setup agotó el datagrama antes del beat inválido")
+
+    bad_data = beats[ci][0]
+    accepted = 0
+    errors = 0
+    for _ in range(4):
+        dut.s_axis_tvalid.value = 1
+        dut.s_axis_tdata.value = bad_data
+        dut.s_axis_tkeep.value = 0b01111111
+        dut.s_axis_tlast.value = 0
+        await RisingEdge(dut.clk)
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            accepted += 1
+            await ReadOnly()
+            errors += int(dut.error.value)
+            break
+
+    assert accepted == 1, (
+        f"SEC-FRM-06 beat inválido bloqueado con qn={qn_before}")
+    assert errors == 1, f"SEC-FRM-06 errores del bypass={errors}"
 
 
 @cocotb.test()

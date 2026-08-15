@@ -215,7 +215,8 @@ module itch_parser #(
                    (qn + in_nbytes <= QB);
     wire can_da  = s_axis_tvalid && !eop_seen && drain_active &&
                    (base_n + in_nbytes <= QB);
-    assign s_axis_tready = drop_packet || can_aug || can_da;
+    wire invalid_offer = s_axis_tvalid && !eop_seen && !in_keep_ok;
+    assign s_axis_tready = drop_packet || invalid_offer || can_aug || can_da;
     wire in_take = s_axis_tvalid && s_axis_tready;
     wire [QQ-1:0] append_bits = QQ'(in_compact) <<
         (8 * (32'(QB) - 32'(base_n) - 32'(in_nbytes)));
@@ -223,6 +224,7 @@ module itch_parser #(
         ((in_take && in_keep_ok) ? in_nbytes : 8'd0);
     wire eop_eff = eop_seen ||
                    (in_take && in_keep_ok && s_axis_tlast);
+    wire record_active = (st >= ST_CAP) && (st <= ST_NEXT);
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
@@ -241,16 +243,26 @@ module itch_parser #(
             if (drop_packet) begin
                 if (in_take && s_axis_tlast) begin
                     drop_packet <= 1'b0;
-                    eop_seen <= 1'b0;
-                    st <= ST_HDR;
+                    if (record_active) begin
+                        eop_seen <= 1'b1;
+                        pack_left <= 1;
+                    end else begin
+                        eop_seen <= 1'b0;
+                        st <= ST_HDR;
+                    end
                 end
             end else if (in_take && !in_keep_ok) begin
                 error <= 1'b1;
                 q <= '0;
                 qn <= '0;
-                eop_seen <= 1'b0;
                 drop_packet <= !s_axis_tlast;
-                st <= ST_HDR;
+                if (record_active) begin
+                    eop_seen <= s_axis_tlast;
+                    pack_left <= 1;
+                end else begin
+                    eop_seen <= 1'b0;
+                    st <= ST_HDR;
+                end
             end else begin
                 // latch de fin de datagrama: se fija cuando el stream marca tlast
                 // (SEC-FRM-01/02) y se limpia al cerrar o descartar el datagrama.
@@ -274,10 +286,6 @@ module itch_parser #(
                 case (st)
                 ST_HDR: begin
                     if (drain_int == 20) begin
-                        // header de un datagrama nuevo: reinicia el latch de tlast.
-                        // Solo si el tlast NO está alto en este mismo ciclo (un tlast
-                        // coincidente marca el truncado de ESTE datagrama, SEC-FRM-02).
-                        if (!s_axis_tlast) eop_seen <= 1'b0;
                         this_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
                                      pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
                         pack_left <= {pbyte(q,18), pbyte(q,19)};
@@ -377,9 +385,11 @@ ST_LEN: begin
 
                 // ------------------------------------------------
                 ST_CAP: begin
-                    out_valid_reg <= 1'b0;
-                    // len_ok = 0: longitud incoherente o truncado -> sin registro
-                    st <= ((in_subset && msg_len >= 11 && len_ok) ? ST_W0 : ST_NEXT);
+                    if (out_free) begin
+                        out_valid_reg <= 1'b0;
+                        // len_ok = 0: longitud incoherente o truncado -> sin registro
+                        st <= ((in_subset && msg_len >= 11 && len_ok) ? ST_W0 : ST_NEXT);
+                    end
                 end
 
                 ST_W0: begin
