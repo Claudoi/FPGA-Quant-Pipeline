@@ -526,3 +526,75 @@ estructural documentado: el book de registros planos (NSLOT=65.536, sonda
 combinacional paralela, `level_add` O(P) ~6-8 ns) no es sintetizable a 3,1 ns —
 la iteración URAM (`docs/writeup/uram.md`) es la vía; el addendum de spec lo
 formaliza.
+
+## Iteración 7 — parametrización ND, gates adversariales y frontera Vivado (2026-08-15)
+
+### Objetivo y rojo TDD
+
+La revisión final encontró que `itch_chain.ND` formaba parte del puerto público
+pero no llegaba a la instancia del book. El nuevo shard `ND=3` falló al elaborar
+antes del cambio mínimo:
+
+```text
+%Warning-WIDTHEXPAND: output port connection 'depth_tdata' expects 640 bits
+on the pin connection, but pin connection's VARREF 'depth_tdata' generates 384 bits.
+%Error: Exiting due to warning(s)
+```
+
+Se añadió únicamente `.ND(ND)` en `u_book`. El test
+`test_dp01_nd_parametrizado_llega_al_book` comprueba el ancho efectivo y el
+contenido golden tanto con ND=5 como en el shard ND=3 (384 bits).
+
+La primera pasada integral de mutación dejó tres supervivientes honestos:
+`URAM-COMB-INDEX`, `NSYM-GUARD` y `BP-NORET`. Se reforzaron sus contratos antes
+de tocar los tests: lectura URAM exclusivamente registrada, índice de símbolo
+siempre en `[0, NSYM)` y par BBO/depth válido y estable durante dos ciclos de
+stall. Los rojos dirigidos fueron supervivencia (`FAIL=0`); tras endurecer los
+oráculos, cada uno fue matado (`FAIL=1`) sin cambiar el comportamiento del DUT.
+
+### Gates locales reejecutados
+
+| Gate | Evidencia real | Resultado |
+|---|---|---|
+| A — simulación DW32 | `sim` 5/5; `sim-hash` 8/8; `sim-depth` 3/3; `sim-hard` 2/2; `sim-parser` 4/4; `sim-chain` 3/3; `sim-chain-nd3` 3/3; `sim-lat` 1/1 | PASS |
+| A — URAM | `make -C verification/testbenches/uram sim-uram`: 4/4 | PASS |
+| A — regresión DW64 | parser 20/20; order book 14/14 | PASS |
+| B — compilación | Verilator 5.050 `--lint-only --Wall` sobre `itch_chain` con ND=5 y ND=3, cero warnings; Python tocado compila | PASS |
+| C — estilo | `VERIBLE_VERILOG_LINT=NO_INSTALADO` | NO EJECUTADO |
+| D/F — cobertura literal | 14 escenarios de `optimizacion.feature` con test espejo; el shard ND=3 amplía DP-01 sin inventar un contrato nuevo | PASS |
+| E — mutación | 26 mutantes compilables, 26 matados, 0 supervivientes, 0 mutantes rotos | PASS |
+| G — rigor/timing | datos reales fuera de Git; golden independiente; Tcl/XDC estáticos verdes; Vivado ausente | ABIERTO |
+
+Evidencia de replay real preservada:
+
+- book/depth/cadena: 31.400 mensajes, 30.729 eventos bit a bit, `cross=0`,
+  `anomaly=671`, `gaps=0` en la cadena;
+- parser DW32: 91 paquetes y 26.904 palabras de 32 bits bit a bit;
+- latencia determinista en dos ejecuciones: 30.729 eventos, media 44,318
+  ciclos, p99 61, mínimo 32 y máximo 74 a 322,265625 MHz.
+
+### Preparación de síntesis y resultado honesto
+
+`synth_check.py` pasa sus 22 comprobaciones: ND propagado; tres RTL presentes;
+DW=32 fijado; reloj de 3,103 ns; lectura URAM registrada y ausencia de
+`o_mem[pr_*]`; `check_timing`, `report_methodology`, clocks y endpoints sin
+constraint post-synth/post-route; delays min/max para todos los puertos
+síncronos; y aborto del batch si queda un path con slack negativo.
+
+El XDC documenta una suposición de wrapper síncrono, no un pinout físico. Los
+delays 0,0/1,0 ns son budgets de integración y deben sustituirse por los de la
+placa/PHY real. El Tcl genera además utilización RAM, DRC, checkpoints e
+informes de timing.
+
+Intento local:
+
+```text
+VIVADO=NO_INSTALADO
+synth/reports/README.md
+```
+
+No existen `timing_impl.txt`, WNS/TNS ni `util_impl.txt` producidos por Vivado.
+Por tanto, criterios 1-9 y 11 quedan cerrados funcionalmente, pero el criterio
+10 y la **fase 3 completa permanecen ABIERTOS**. No se declara timing cerrado
+ni inferencia URAM física hasta ejecutar el batch en Vivado y adjuntar
+WNS >= 0, TNS = 0, endpoints correctamente restringidos y recursos.

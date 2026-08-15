@@ -99,7 +99,8 @@ de entrada/salida (bbo_*, depth_*, cross/anomaly/error) es el de fase 3.
 - **Lectura no registrada de la tabla**: el probe indexa combinacionalmente
   (patrón de URAM roto) sin que la simulación funcional lo note. — SEC-URAM-01
   pinza el retardo estructural (dato válido exactamente 1 ciclo después de la
-  dirección; probe de 1 slot/ciclo).
+  dirección; probe de 1 slot/ciclo) y `synth_check.py` prohíbe cualquier lectura
+  directa `o_mem[pr_*]` que eluda `rd_data`.
 - **Prefetch desacoplado**: el grupo de hash no se precarga en ST_BODY y el
   lookup serializado entra en ST_APPLY → latencia y throughput peores. —
   SEC-URAM-02 (colisión forzada, K=20, mismo resultado y mismo número de

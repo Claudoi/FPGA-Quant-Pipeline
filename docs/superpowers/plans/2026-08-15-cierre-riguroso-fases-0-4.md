@@ -214,7 +214,7 @@ Ejecutar ambos tests por filtro; el primero debe fallar porque el helper actual 
 
 En `swap_next`, sustituir la rama DW64 `nx_bi >= 4'd0 && lt(nx_type)` por `lt(nx_type)`.
 
-- [ ] **Step 4: Verde completo y mutación** — simulación/lint y mutantes de
+- [x] **Step 4: Verde completo y mutación** — simulación/lint y mutantes de
   fase 2 en verde (9/9); el runner integral compartido detectó tres
   supervivientes de fase 3, trasladados al loop de Task 5 antes de marcarlo.
 
@@ -224,7 +224,7 @@ verilator --lint-only --Wall --top-module orderbook rtl/orderbook/orderbook.sv
 PATH="$VENV_BIN:$PATH" python3 scripts/verify/mutate_orderbook.py
 ```
 
-- [ ] **Step 5: Informe y commit**
+- [x] **Step 5: Informe y commit**
 
 ```bash
 git add specs/fase2-orderbook rtl/orderbook/orderbook.sv \
@@ -247,23 +247,23 @@ git commit -m "fix(fase2): restaurar gates y observabilidad del order book"
 - Consumes: parámetros `ND`, `QB`, `K`, `NSYM` del top.
 - Produces: `ND` propagado, constraints auditables y todos los shards reproducibles.
 
-- [ ] **Step 1: Test rojo de ND distinto de 5**
+- [x] **Step 1: Test rojo de ND distinto de 5**
 
 Elaborar `itch_chain` con `ND=3`, conducir tres niveles por lado y comparar `depth_tdata` de 384 bits contra golden. Debe fallar o no elaborar mientras `.ND(ND)` no llegue al book.
 
-- [ ] **Step 2: Propagar ND mínimamente**
+- [x] **Step 2: Propagar ND mínimamente**
 
 Añadir `.ND(ND)` a la instancia `u_book`; no cambiar el layout.
 
-- [ ] **Step 3: Endurecer Tcl/XDC**
+- [x] **Step 3: Endurecer Tcl/XDC**
 
 Añadir `check_timing -verbose`, `report_methodology`, informe de clocks y constraints. Restringir o documentar de forma explícita los puertos de ready/reset/estado; añadir delays mínimos coherentes con el wrapper supuesto, sin inventar una placa física.
 
-- [ ] **Step 4: Extender synth_check**
+- [x] **Step 4: Extender synth_check**
 
 El checker debe fallar si faltan `.ND(ND)`, `check_timing`, `report_methodology`, delays min/max o un puerto top queda fuera de la política declarada.
 
-- [ ] **Step 5: Regresión completa local**
+- [x] **Step 5: Regresión completa local**
 
 ```bash
 PATH="$VENV_BIN:$PATH" make -C verification/testbenches/phase3 sim
@@ -277,11 +277,11 @@ PATH="$VENV_BIN:$PATH" make -C verification/testbenches/uram sim-uram
 python3 scripts/verify/synth_check.py
 ```
 
-- [ ] **Step 6: Intentar Vivado y declarar la frontera real**
+- [x] **Step 6: Intentar Vivado y declarar la frontera real**
 
 Si `vivado` y la licencia están disponibles, ejecutar `vivado -mode batch -source fase3_synth.tcl` desde `synth/` y exigir WNS>=0, TNS=0, cero endpoints relevantes sin constraint y utilización URAM. Si no están disponibles, pegar el error real y mantener fase 3 abierta.
 
-- [ ] **Step 7: Informe y commit**
+- [x] **Step 7: Informe y commit**
 
 ```bash
 git add rtl/itch_chain.sv verification/testbenches/phase3 \

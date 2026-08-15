@@ -55,7 +55,7 @@ module itch_chain #(
         .gap_detected(gap_detected), .error(p_error)
     );
 
-    orderbook #(.DW(DW), .K(K), .P(P), .NSYM(NSYM), .PXW(PXW), .QW(QW)) u_book (
+    orderbook #(.DW(DW), .K(K), .P(P), .ND(ND), .NSYM(NSYM), .PXW(PXW), .QW(QW)) u_book (
         .clk(clk), .rst_n(rst_n),
         .s_axis_tdata(p_m_axis_tdata), .s_axis_tvalid(p_m_axis_tvalid),
         .s_axis_tready(p_m_axis_tready), .s_axis_tlast(p_m_axis_tlast),

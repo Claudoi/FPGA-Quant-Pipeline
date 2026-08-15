@@ -30,6 +30,7 @@ Funcionalidad: Order book sobre URAM sintetizable a 322,265625 MHz
     Cuando se emite una dirección de slot en el ciclo N
     Entonces el dato es válido exactamente en el ciclo N+1
     Y la sonda consume a lo sumo 1 slot por ciclo
+    Y ninguna comparación de la sonda indexa o_mem directamente
 
   Escenario: SEC-URAM-02 — el prefetch del grupo de hash ocurre durante ST_BODY
     Dado un mensaje cuyo grupo de hash tiene PROBE+ refs colisionando (K=20)

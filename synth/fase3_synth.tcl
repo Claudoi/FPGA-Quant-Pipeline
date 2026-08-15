@@ -23,7 +23,12 @@ read_xdc constraints/fase3_322mhz.xdc
 synth_design -top $top -part $part
 write_checkpoint -force $outdir/post_synth.dcp
 report_utilization -hierarchical -file $outdir/util_synth.txt
-report_timing_summary -max_paths 10 -file $outdir/timing_synth.txt
+report_ram_utilization -file $outdir/ram_synth.txt
+report_clocks -file $outdir/clocks_synth.txt
+check_timing -verbose -file $outdir/check_timing_synth.txt
+report_methodology -file $outdir/methodology_synth.txt
+report_timing_summary -check_timing_verbose -report_unconstrained \
+    -max_paths 10 -file $outdir/timing_synth.txt
 
 opt_design
 place_design
@@ -31,6 +36,20 @@ phys_opt_design
 route_design
 write_checkpoint -force $outdir/post_route.dcp
 report_utilization -file $outdir/util_impl.txt
-report_timing_summary -max_paths 10 -file $outdir/timing_impl.txt
+report_ram_utilization -file $outdir/ram_impl.txt
+check_timing -verbose -file $outdir/check_timing_impl.txt
+report_methodology -file $outdir/methodology_impl.txt
+report_drc -file $outdir/drc_impl.txt
+report_timing_summary -check_timing_verbose -report_unconstrained \
+    -max_paths 10 -file $outdir/timing_impl.txt
+
+# Un informe no cierra timing por existir: el batch falla si queda cualquier
+# path de setup con slack negativo. Sin paths negativos, WNS>=0 y TNS=0.
+set violating_paths [get_timing_paths -delay_type max -slack_lesser_than 0.0 \
+    -max_paths 1 -quiet]
+if {[llength $violating_paths] != 0} {
+    set wns [get_property SLACK [lindex $violating_paths 0]]
+    error "FASE3 TIMING FAIL: WNS=$wns ns (se exige WNS>=0 y TNS=0)"
+}
 
 puts "== FASE3 SYNTH/IMPL OK — informes en $outdir =="

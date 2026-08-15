@@ -9,10 +9,11 @@ Empaquetado del bus (spec): {bid[ND-1..0], ask[ND-1..0]} con el mejor nivel a
 la izquierda (MSB): depth[639:576] = mejor bid {px[31:0], qty[31:0]}.
 """
 import cocotb
+import os
 from cocotb.triggers import RisingEdge
 
 from test_orderbook import (A, E, S, run_book_depth, pack_depth,
-                            _pcap_msgs_subset, _reset)
+                            _pcap_msgs_subset, _reset, REAL_PCAP)
 from test_orderbook32 import anexo_words32
 
 
@@ -115,16 +116,12 @@ async def test_sec_dp01_simbolo_vacio_ceros(dut):
 # ---------------------------------------------------------------------------
 # DP-02: feed real (subset 20 símbolos) -> depth en todos los eventos
 # ---------------------------------------------------------------------------
-@cocotb.test()
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_dp02_replay_feed_real_depth(dut):
     """INV/DP-02: depth de TODOS los eventos del feed real (20 símbolos) bit a
     bit contra el golden (pcap local no commiteado; se omite si no existe)."""
-    import os
-    pcap = "/tmp/real_trading.pcap"
-    if not os.path.exists(pcap):
-        cocotb.log.info("DP-02: pcap local ausente, test omitido (env sin datos)")
-        return
-    msgs, keep = _pcap_msgs_subset(pcap, max_symbols=20)
+    assert os.path.exists(REAL_PCAP), "DP-02 OMITIDO: pcap local ausente"
+    msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
     cocotb.log.info(
         f"DP-02: {len(msgs)} mensajes de {len(keep)} símbolos, "
         f"depth bit a bit en cada evento")

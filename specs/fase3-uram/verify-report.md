@@ -510,3 +510,64 @@ estimación del plan.)
 - Criterios 2-8: memoria URAM (SEC-URAM-01), sonda serializada + prefetch
   (SEC-URAM-02), pipeline de niveles (SEC-URAM-03), latencia ≤ 45 (ya 34,8 —
   SEC-URAM-04), regresión con el RTL URAM (REG-01/CHAIN-01), synth (criterio 7).
+
+## Iteración 6 — cierre local adversarial y preparación de Vivado (2026-08-15)
+
+### Resultado
+
+La campaña local URAM queda verde, pero no se convierte en cierre físico sin
+Vivado. Se corrigieron tres huecos de prueba, no tres defectos del RTL:
+
+1. `URAM-COMB-INDEX` se mata ahora con un pin estructural que exige
+   `rd_data <= o_mem[rd_addr]` y prohíbe cualquier lectura `o_mem[pr_*]`.
+2. `NSYM-GUARD` fuerza el locate 21 por el camino primario `ST_W0` y observa el
+   índice efectivo durante todo el mensaje.
+3. `BP-NORET` baja `tready` después de observar `tvalid`, exige dos ciclos de
+   `valid+payload` estable y comprueba una única entrega al liberar el par.
+
+El runner integral terminó con código 0:
+
+```text
+=== RESUMEN MUTACION ORDERBOOK (gate E, fase3-uram iter 6) ===
+26/26 killed; 0 survivors; 0 errores de compilación del mutante
+TODOS LOS MUTANTES MUERTOS. Gate E PASS.
+```
+
+La lista completa incluye los 25 mutantes históricos más `QTY-NOERROR`, que
+prueba que un reduce por encima de la cantidad señala error. El runner ejecuta
+primero `synth_check.py`, compila cada mutante y corta en la primera suite que
+lo mata; la restauración ocurre en `finally` y la regresión posterior confirmó
+el RTL original.
+
+### Evidencia A-G
+
+| Gate | Evidencia | Resultado |
+|---|---|---|
+| A | phase3 5/5 + 8/8 + 3/3 + 2/2 + 4/4 + 3/3 + ND3 3/3 + latencia 1/1; URAM 4/4 | PASS |
+| B | `--Wall` limpio en `itch_chain` ND=5/ND=3; Python compilable | PASS |
+| C | `VERIBLE_VERILOG_LINT=NO_INSTALADO` | NO EJECUTADO |
+| D | 8 escenarios URAM cubiertos por suites ANX/URAM/regresión/cadena/latencia; DP-01 parametrizado en la campaña de optimización | PASS nivel 1 |
+| E | 26/26 mutantes muertos | PASS |
+| F | manifiesto `specs/gherkin-espejos.json` presente; títulos ANX/SEC-URAM/REG/CHAIN coherentes | PASS |
+| G | `synth_check.py` 22/22; datos reales no versionados; Vivado ausente | ABIERTO |
+
+`sim-uram` produjo 4/4: 90 lecturas serializadas en 10 probes con un slot por
+ciclo y lectura registrada; prefetch durante `ST_BODY`; 35 operaciones de
+nivel en 70 ciclos sin datos stale; y replace U con dos runs encadenados.
+
+`synth/fase3_synth.tcl` solicita `check_timing -verbose`, metodología, clocks,
+RAM, DRC, endpoints sin constraint, timing y utilización tanto tras síntesis
+como tras route; el batch aborta si encuentra slack de setup negativo. El XDC
+cubre todos los puertos síncronos con delays min/max bajo una hipótesis de
+wrapper compartiendo reloj.
+
+Intento del gate físico:
+
+```text
+VIVADO=NO_INSTALADO
+synth/reports/README.md
+```
+
+**Veredicto:** RTL, simulación, lint estático, completitud y mutación están
+cerrados localmente. WNS/TNS, endpoints reales e inferencia/utilización URAM
+siguen sin evidencia; por ello la fase 3 permanece **ABIERTA EN TIMING**.

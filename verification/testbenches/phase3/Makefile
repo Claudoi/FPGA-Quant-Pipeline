@@ -12,6 +12,7 @@
 #     make sim-lat                      -> cadena itch_chain (latencia)
 #     make sim-parser                   -> itch_parser DW=32
 #     make sim-chain                    -> cadena itch_chain DW=32 (end-to-end)
+#     make sim-chain-nd3                -> cadena itch_chain DW=32 ND=3
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 TOPLEVEL ?= orderbook
@@ -61,9 +62,12 @@ sim-parser:
 sim-chain:
 	$(MAKE) sim TOPLEVEL=itch_chain MODULE=test_chain32 EXTRA_ARGS="-GDW=32" SIM_BUILD=sim_build_chain
 
+sim-chain-nd3:
+	$(MAKE) sim TOPLEVEL=itch_chain MODULE=test_chain32 EXTRA_ARGS="-GDW=32 -GND=3" SIM_BUILD=sim_build_chain_nd3
+
 # limpia todos los builds del área (el clean de cocotb solo borra SIM_BUILD)
 clean-all:
-	rm -rf sim_build sim_build_hash sim_build_parser sim_build_chain
+	rm -rf sim_build sim_build_hash sim_build_parser sim_build_chain sim_build_chain_nd3
 
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 REPO_ROOT := $(CURDIR)/../../..

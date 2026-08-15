@@ -132,6 +132,11 @@ def run_suites():
     env["PATH"] = os.path.join(REPO, ".venv", "bin") + os.pathsep + env.get("PATH", "")
     env["PYTHONPATH"] = os.pathsep.join([REPO, os.path.join(REPO, "golden_model")]) + \
         os.pathsep + env.get("PYTHONPATH", "")
+    structural = subprocess.run(
+        [sys.executable, "scripts/verify/synth_check.py"], cwd=REPO, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if structural.returncode != 0:
+        return 1
     for area, cmd in SUITES:
         r = subprocess.run(cmd, cwd=os.path.join(REPO, area), env=env,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -207,7 +212,7 @@ def main():
     finally:
         clean()
     survivors = [r for r in results if not r[1]]
-    print("\n=== RESUMEN MUTACION ORDERBOOK (gate E, fase3-uram iter 5) ===")
+    print("\n=== RESUMEN MUTACION ORDERBOOK (gate E, fase3-uram iter 6) ===")
     for mid, killed, fails in results:
         print(f"  {mid}: {'killed' if killed else 'SOBREVIVE!'}")
     if survivors:

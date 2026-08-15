@@ -8,10 +8,12 @@ local. Adversariales INV-B32: replace atómico, RAW add->execute y multi-símbol
 a 32 bits (pincan errores de indexado de bytes del cuerpo a 4 B/palabra).
 """
 import cocotb
+import os
 from cocotb.triggers import RisingEdge
 
 from test_orderbook import (A, C, E, X, D, U, S, H, run_book, iter_records,
-                            _pcap_msgs_subset, _reset, drive_and_collect_bbo)
+                            _pcap_msgs_subset, _reset, drive_and_collect_bbo,
+                            REAL_PCAP)
 
 
 def anexo_words32(messages):
@@ -143,16 +145,12 @@ async def test_inv_b32_03_dos_simbolos_independientes(dut):
 # ---------------------------------------------------------------------------
 # B32-02: feed real (subset 20 símbolos) -> BBO idéntico al golden
 # ---------------------------------------------------------------------------
-@cocotb.test()
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_b32_02_replay_feed_real_32(dut):
     """Espejo §B32-02: el BBO del feed real a 32 bits es idéntico al golden,
     bit a bit, evento a evento (pcap local no commiteado; se omite si no existe)."""
-    import os
-    pcap = "/tmp/real_trading.pcap"
-    if not os.path.exists(pcap):
-        cocotb.log.info("B32-02: pcap local ausente, test omitido (env sin datos)")
-        return
-    msgs, keep = _pcap_msgs_subset(pcap, max_symbols=20)
+    assert os.path.exists(REAL_PCAP), "B32-02 OMITIDO: pcap local ausente"
+    msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
     cocotb.log.info(
         f"B32-02: {len(msgs)} mensajes de {len(keep)} símbolos "
         f"({sorted(keep)[:3]}...) contra golden a 32 bits")

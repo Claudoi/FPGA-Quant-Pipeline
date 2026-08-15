@@ -15,11 +15,14 @@ Adversariales INV-P32: backpressure de salida sin pérdida (espejo OUT-02 de la
 fase 1, ahora a 32 bits) y replay del pcap real del día local (espejo REP-02).
 """
 import cocotb
+import os
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
 
 from test_itch_parser import _packet_seq, corpus_all_types, _reset
 from golden_model.src import message_oracle
+
+REAL_SUBSET_PCAP = "/tmp/real_subset.pcap"
 
 
 def oracle_words32(packets):
@@ -156,16 +159,12 @@ async def drive_pcap32(dut, pcap_path, max_cycles=3_000_000):
     return out, exp, len(packets)
 
 
-@cocotb.test()
+@cocotb.test(skip=not os.path.exists(REAL_SUBSET_PCAP))
 async def test_p32_03_replay_pcap_real_32(dut):
     """Espejo §P32-01 (evidencia real): el parser 32 sobre el pcap del día local
     coincide bit a bit (pcap no commiteado; se omite si no existe)."""
-    import os
-    pcap = "/tmp/real_subset.pcap"
-    if not os.path.exists(pcap):
-        cocotb.log.info("P32-03: pcap local ausente, test omitido (env sin datos)")
-        return
-    out, exp, npack = await drive_pcap32(dut, pcap)
+    assert os.path.exists(REAL_SUBSET_PCAP), "P32-03 OMITIDO: pcap local ausente"
+    out, exp, npack = await drive_pcap32(dut, REAL_SUBSET_PCAP)
     assert out == exp, (
         f"P32-03: got({len(out)}) exp({len(exp)}) sobre {npack} paquetes:\n"
         f" got={out}\n exp={exp}")

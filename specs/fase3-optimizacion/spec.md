@@ -164,11 +164,14 @@ hash = nuevo vector de error).
      la indexación directa (mismos eventos, mismas anomalías, mismas refs);
      probe agotado = anomalía, tabla llena = `error`.
      — Gherkin: §SEC-HASH-01/02/03
-6. [ ] **Top-N (ND=5)**: `depth_tdata` bit a bit contra los niveles ordenados
-     del golden para el símbolo del evento; símbolo sin niveles → 0.
+6. [ ] **Top-N parametrizado**: con ND=5 y una elaboración adversarial ND=3,
+     `depth_tdata` es bit a bit contra los niveles ordenados del golden para el
+     símbolo del evento; símbolo sin niveles → 0. `itch_chain` propaga ND al
+     book, no sólo al ancho del puerto top.
      — Gherkin: §SEC-DP-01, §DP-01
-7. [ ] **Hardening**: símbolo 21 → `error` sin OOB; evento BBO retenido bajo
-     `bbo_tready=0` y entregado exacto al liberar.
+7. [ ] **Hardening**: símbolo 21 → `error` y `m_loc_idx < NSYM` en todo
+     ciclo; evento BBO retenido con `bbo_tready=0` después de observar
+     `bbo_tvalid=1`, estable al menos dos ciclos y entregado exacto al liberar.
      — Gherkin: §SEC-NSYM-01, §SEC-BP-01
 8. [ ] **Latencia**: histograma por tipo (ciclos wire→BBO en la cadena DW=32)
      commiteado en `verification/vectors/latency/` y determinista
@@ -194,8 +197,8 @@ hash = nuevo vector de error).
 | 3 | cocotb: `make sim` en `testbenches/parser` (19) y `testbenches/orderbook` (14) tras el cambio |
 | 4 | cocotb: top `chain32` (parser→book a DW=32) sobre el pcap real del subset |
 | 5 | cocotb: misma secuencia con tabla hashada vs directa; casos probe-limit y tabla-llena; mutante de hash (slot sin comparar ref) lo mata |
-| 6 | cocotb: depth vs `book.py` niveles ordenados; mutante de orden/truncado lo mata |
-| 7 | cocotb: `SEC-NSYM-01` (21 símbolos), `SEC-BP-01` (tready=0 intermitente) |
+| 6 | cocotb: depth vs `book.py` a ND=5 y `itch_chain -GND=3`; mutante de orden/truncado lo mata |
+| 7 | cocotb: `SEC-NSYM-01` (21 símbolos + muestreo del índice interno), `SEC-BP-01` (stall adaptativo que espera `tvalid`, retiene dos ciclos y libera) |
 | 8 | cocotb: recolector de ciclos por tipo → JSON; re-ejecución idéntica |
 | 9 | revisión + `verilator --lint-only`; documentación en writeup; la lectura registrada se audita por código |
 | 10 | tcl/constraints commiteados + informe del owner pegado en `synth/reports/` |
@@ -222,8 +225,9 @@ verde:
    mal transcrito al bus de salida). Guardarraíl: el oráculo ordena los
    niveles del golden, nunca el RTL.
 4. **Lecturas de tabla no registradas** (patrón de URAM roto sin que la
-   simulación lo note). Guardarraíl: revisión de código + documentación; el
-   synth del owner lo confirmaría con inferencia URAM.
+   simulación lo note). Guardarraíl: `synth_check.py` exige que la sonda lea
+   exclusivamente `rd_data` y prohíbe indexar `o_mem[pr_*]` de forma directa;
+   el informe Vivado del owner confirma además la inferencia física.
 5. **Latencia que «se ajusta» al peor caso** (medir solo el promedio).
    Guardarraíl: histograma completo por tipo con re-ejecución idéntica.
 
@@ -264,7 +268,7 @@ del backlog estacionario de la cola del parser:
    actualizado; `docs/writeup/revision-exhaustiva-2026-08-14.md` con el
    análisis completo (incl. los bloqueadores de síntesis B1/B2/B3 para el
    criterio 10).
-6. **Pendiente para el criterio 10 (externo)**: el book actual (registros
-   planos NSLOT=65.536 con sonda combinacional paralela) no es sintetizable;
-   la iteración URAM (lectura registrada serializada, `docs/writeup/uram.md`)
-   sigue pendiente de implementar en RTL.
+6. **Pendiente para el criterio 10 (externo)**: la iteración URAM ya está
+   implementada en RTL con lectura registrada, sonda serializada y pipeline de
+   niveles (`docs/writeup/uram.md`). Falta ejecutar Vivado y adjuntar WNS/TNS,
+   endpoints sin constraint y utilización para confirmar el cierre físico.
