@@ -6,12 +6,18 @@
 > anteriores permanece en Git; este documento contiene solo la evidencia que
 > puede considerarse vigente para el loop de `tkeep`.
 
+Fix Round 1 reejecutado el `2026-08-15T15:37:59+01:00` sobre
+`785675bfcaf35937cf060fe0d0c4fc3bc0d6c52b`; ANX, cadena ND=5/3 y Gate F se
+actualizaron con sus outputs nuevos.
+
 ## Veredicto
 
-**PASS funcional del delta de entrada y del Anexo A recortado. Fase 3/URAM NO
-CERRADA.** Parser, cadena con book URAM y layout recortado se reejecutaron con
-`s_axis_tkeep`; la campaña sigue abierta porque falta la evidencia física
-Vivado de timing e inferencia/utilización.
+**PASS funcional del delta de entrada, del Anexo A recortado y del depth real.
+Fase 3/URAM NO CERRADA.** Parser, cadena con book URAM y layout recortado se
+reejecutaron con `s_axis_tkeep`; CHAIN-01 compara 30.729 BBO y 30.729 depth
+para ND=5/3. La campaña sigue abierta por la medición line-rate real pendiente
+de REP-02 y por la ausencia de evidencia física Vivado de timing e
+inferencia/utilización.
 
 `synth_check.py` es un guardarraíl estático. No sustituye WNS/TNS ni demuestra
 que la memoria se haya inferido como URAM en el dispositivo objetivo.
@@ -20,13 +26,13 @@ que la memoria se haya inferido como URAM en el dispositivo objetivo.
 
 | Gate | Evidencia fresca del loop `tkeep` | Resultado |
 |---|---|---|
-| A — simulación | ANX 3/3; parser32 5/5; chain ND=5 4/4; chain ND=3 4/4; latencia 1/1; `FAIL=0 SKIP=0` | **PASS para el delta `tkeep`** |
+| A — simulación | ANX 3/3; parser DW64 31/31; chain ND=5 4/4; chain ND=3 4/4; `FAIL=0 SKIP=0`; BBO/depth real completos | **PASS en suites ejecutadas; REP-02 line-rate abierto** |
 | B — compilación | lint `--Wall` de parser DW32 y cadena DW32 con orderbook URAM, exit 0 y cero warnings | **PASS** |
 | C — estilo | `verible-verilog-lint` no instalado | **NO EJECUTADO** |
-| D — cobertura | ANX-01/02, CHAIN-01 y P32-01/02 con mapas literales; cobertura instrumental no configurada | **PASS nivel 1** |
+| D — cobertura | ANX-01/02 cubiertos; CHAIN-01 real exige no-vacío, longitudes y 30.729 palabras BBO/depth bit a bit para ND=5/3; REP-02 no aísla aún el tramo line-rate real | **PARCIAL por REP-02** |
 | E — mutación | frontera de entrada: 19/19 mutantes del parser compilables y muertos; mutación interna del orderbook no reejecutada en este brief | **PASS para el delta `tkeep`** |
-| F — completitud | IDs únicos y presentes en Gherkin/tests; espejo URAM ya declarado | **PASS** |
-| G — rigor/timing | golden independiente, datos fuera de Git y `synth_check.py` 22/22; sin Vivado WNS/TNS/utilización | **ABIERTO** |
+| F — completitud | checker versionado: 12 IDs/3 campañas, unicidad por campaña, spec/test/report y rutas; espejo externo URAM/CHAIN-01 explícito y probado | **PASS** |
+| G — rigor/timing | golden independiente, datos fuera de Git y `synth_check.py` 22/22; sin Vivado WNS/TNS/utilización y con line-rate real REP-02 pendiente | **ABIERTO** |
 
 El target `sim-uram` estructural no figura entre los comandos de esta tarea y
 no se reejecutó en este loop. Sus números históricos no se presentan como
@@ -63,9 +69,17 @@ cadena:
 ```text
 chain ND=5: TESTS=4 PASS=4 FAIL=0 SKIP=0
 chain ND=3: TESTS=4 PASS=4 FAIL=0 SKIP=0
-CHAIN-01: 31400 mensajes -> 30729 eventos bit a bit
+CHAIN-01 ND=5: 31400 mensajes -> 30729 BBO + 30729 depth bit a bit
+CHAIN-01 ND=3: 31400 mensajes -> 30729 BBO + 30729 depth bit a bit
 cross=0, anomaly=671, gaps=0
 ```
+
+El test obtiene `ND` de `depth_tdata`, llama al oráculo existente
+`run_book_depth(msgs, nd=ND)`, empaqueta cada evento con `pack_depth` y exige
+no-vacío y longitudes iguales antes de comparar todas las palabras. Un bit-flip
+controlado en el depth pasó con el test antiguo que descartaba esa salida; con
+la expectativa nueva falló en el evento 0. Restaurado el dato real, ND=5 y
+ND=3 pasaron 30.729/30.729 palabras.
 
 `test_chain_tkeep_datagramas_no_alineados_y_estabilidad` verificó además dos
 datagramas sintéticos parciales, dos handshakes `tlast`, backpressure real de
@@ -116,7 +130,7 @@ es un informe de implementación.
 |---|---|
 | ANX-01 | `test_anx_01_anexo_a_32_bits_recortado_es_bit_a_bit_contra_el_oraculo`, replay real ANX |
 | ANX-02 | `test_anx_02_el_peor_caso_sigue_a_1_palabra_por_ciclo_con_el_layout_recortado` |
-| CHAIN-01 | cadena ND=5 y ND=3, real + sintética + multi-datagrama `tkeep` |
+| CHAIN-01 | cadena real ND=5/3: 30.729 BBO + 30.729 depth, no-vacío, longitudes y contenido bit a bit; sintética/multi-datagrama separadas |
 | P32-01/02 | parser32, replay de 91 datagramas y régimen de stalls acotados |
 
 ```text
@@ -125,15 +139,25 @@ $ python3 scripts/verify/mutate_parser.py
 19/19 mutantes compilables y muertos. Gate E PASS.
 exit 0
 
-$ python3 - <<'PY'  # script literal del brief
-IDs ITCH/fase 3 únicos y mapas a tests completos
+$ python3 -m unittest -v scripts.verify.test_check_itch_gherkin
+4 tests: snapshot sano; spec/report omitidos + Gherkin duplicado;
+manifiesto vacío/ruta incoherente; espejo externo URAM/CHAIN-01
+OK
+
+$ python3 scripts/verify/check_itch_gherkin.py
+Gate F PASS: 12 IDs en 3 campañas; Gherkin único por campaña,
+spec/test/verify-report presentes y rutas del manifiesto existentes
+Espejo externo verificado: fase3-uram/CHAIN-01 ->
+verification/testbenches/phase3/test_chain32.py
 exit 0
 ```
 
-No se modificaron specs, Gherkin ni `specs/gherkin-espejos.json`: el script
-literal pasó a la primera. La mutación 19/19 acredita la frontera heredada
-del parser; no se recicla como una ejecución ficticia de los mutantes internos
-de la URAM/orderbook.
+No se modificaron specs, Gherkin ni `specs/gherkin-espejos.json`. El checker
+documenta la excepción deliberada: el CHAIN-01 de URAM reutiliza
+`verification/testbenches/phase3/test_chain32.py`, mientras los demás IDs se
+buscan en el directorio espejo del manifiesto. La mutación 19/19 no se
+reejecutó en el Fix Round 1 porque no cambiaron RTL ni runner; no se recicla
+como una ejecución ficticia de mutantes internos de URAM/orderbook.
 
 ## Bloqueador físico
 
@@ -144,6 +168,6 @@ No hay run Vivado vigente que aporte:
 - inferencia y utilización URAM, BRAM, LUT y FF;
 - DRC/metodología y adecuación de los delays I/O al wrapper real.
 
-Hasta que esos artefactos existan y satisfagan el contrato, **fase 3/URAM
-permanece NO CERRADA**, aunque `tkeep`, Anexo A y la latencia funcional de
-simulación estén verdes.
+Hasta que esos artefactos existan, satisfagan el contrato y se cierre la
+medición line-rate real de REP-02, **fase 3/URAM permanece NO CERRADA**, aunque
+`tkeep`, Anexo A, BBO/depth y la latencia funcional de simulación estén verdes.

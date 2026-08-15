@@ -6,14 +6,20 @@
 > iteración cuyo driver concatenaba datagramas y no representaba los bytes
 > válidos del último beat.
 
+Fix Round 1 reejecutado el `2026-08-15T15:37:59+01:00` sobre
+`785675bfcaf35937cf060fe0d0c4fc3bc0d6c52b`; las secciones de REP-02 y Gate F
+inferiores contienen sus outputs nuevos.
+
 ## Veredicto
 
-**PASS funcional del delta de framing `s_axis_tkeep`.** El driver vigente
+**PASS funcional del delta de framing `s_axis_tkeep`; fase 1 NO CERRADA.** El driver vigente
 presenta cada payload MoldUDP64 como un burst AXI independiente, conserva
 `(tdata,tkeep,tlast)` durante stalls y exige un handshake `tlast` por payload.
-La reapertura técnica de los criterios 4, 5, 7, 8 y 10 queda cubierta por la
-evidencia fresca inferior. La fase 1 no reclama cierre de timing físico: ese
-gate no aplica a esta campaña.
+La reapertura técnica de framing queda cubierta por la evidencia fresca
+inferior. Sin embargo, REP-02 aún no mide el umbral `<=24` sobre un tramo real
+de cuatro mensajes A/U back-to-back: el contador nuevo caracteriza el replay
+completo, pero ese agregado no es la ventana acotada del contrato. El gate de
+timing físico no aplica a esta campaña.
 
 No se usó una pasada sintética como sustituto del replay: el artefacto local
 `/tmp/real_subset.pcap` existía, contenía 91 datagramas no vacíos y REP-02 se
@@ -41,13 +47,13 @@ entorno.
 
 | Gate | Evidencia fresca | Resultado |
 |---|---|---|
-| A — simulación | golden `37/37`; parser desde `make clean`: `TESTS=31 PASS=31 FAIL=0 SKIP=0`; REP-02 real: 91 paquetes y 17.937 words de 64 bits bit a bit | **PASS** |
+| A — simulación | parser desde `make clean`: `TESTS=31 PASS=31 FAIL=0 SKIP=0`; REP-02 real: 91 paquetes, 17.937 words y 15.023 stalls agregados con downstream listo | **PARCIAL: line-rate real abierto** |
 | B — compilación | elaboración limpia de cocotb/Verilator y `verilator --lint-only --Wall --top-module itch_parser rtl/parser/itch_parser.sv`, exit 0, cero warnings | **PASS** |
 | C — estilo | `verible-verilog-lint` no está instalado | **NO EJECUTADO** |
-| D — cobertura | mapa literal de los criterios reabiertos a tests, incluido `SEC-FRM-04..08` y `REP-02`; cobertura instrumental no configurada | **PASS nivel 1** |
+| D — cobertura | `SEC-FRM-04..08` cubiertos; REP-02 cubre oráculo/`tlast` y caracteriza stalls, pero no selecciona ni juzga el tramo A/U real; cobertura instrumental no configurada | **PARCIAL** |
 | E — mutación | `mutate_parser.py`: 19/19 mutantes compilables y muertos; 0 supervivientes, 0 mutantes rotos | **PASS** |
-| F — completitud | script literal Gherkin↔tests: `IDs ITCH/fase 3 únicos y mapas a tests completos` | **PASS** |
-| G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; timing físico no aplica a fase 1 | **PASS** |
+| F — completitud | checker versionado: 12 IDs/3 campañas, unicidad Gherkin por campaña, presencia en spec/test/report y rutas del manifiesto; 4 negativos controlados | **PASS** |
+| G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; el total de stalls no se presenta como el tramo contractual | **PASS de rigor; no cierra REP-02** |
 
 ## Gate A — salida fresca
 
@@ -61,7 +67,8 @@ $ make -C verification/testbenches/parser clean
 exit 0
 
 $ make -C verification/testbenches/parser sim
-REP-02 OK: 91 paquetes, 17937 words byte a byte
+REP-02 OK: 91 paquetes, 17937 words byte a byte,
+stalls de entrada con m_axis_tready=1: 15023
 TESTS=31 PASS=31 FAIL=0 SKIP=0
 exit 0
 ```
@@ -70,7 +77,39 @@ El assert del driver es literal:
 `accepted_tlast == len(payloads)`. En REP-02 `len(payloads) == 91`; por tanto
 la pasada verde observó **91 handshakes de entrada con `tlast`**, uno por cada
 datagrama decapsulado. Los últimos beats se forman con un prefijo MSB contiguo
-en `tkeep`; los lanes no válidos no se incorporan al parser.
+en `tkeep`; los lanes no válidos no se incorporan al parser. El mismo driver
+contó **15.023 ciclos** con `s_axis_tvalid=1 && s_axis_tready=0` mientras
+`m_axis_tready=1` durante el replay completo.
+
+Ese valor no se compara con `<=24`: suma 91 datagramas y 3.000 mensajes,
+mientras LIN-01 fija una ventana de cuatro A/U. El cierre pendiente de REP-02
+debe localizar en orden de captura, mediante el propio pcap y sin un índice
+manual, un tramo de cuatro A/U consecutivos dentro de un payload; debe contar
+solo los stalls de los beats que cubren esa ventana y conservar el
+oráculo/`tlast`.
+
+Una caracterización por `iter_pcap_packets` encontró **0** ventanas naturales
+de cuatro A/U consecutivos en `/tmp/real_subset.pcap` (`tramos_AU4=0`, exit 0).
+Por ello este artefacto no puede cerrar ese requisito: hace falta un artefacto
+real local que contenga el tramo o una regla de extracción aprobada en el
+contrato y automatizada; un pcap presente sin la precondición no se convierte
+en SKIP ni en PASS.
+
+```text
+$ python3 - <<'PY'
+from scripts.binaryfile_to_pcap import iter_pcap_packets
+hits = []
+for packet_index, (_, messages, _) in enumerate(
+        iter_pcap_packets('/tmp/real_subset.pcap')):
+    for start in range(len(messages) - 3):
+        kinds = bytes(message[0] for message in messages[start:start + 4])
+        if all(kind in b'AU' for kind in kinds):
+            hits.append((packet_index, start, kinds.decode()))
+print(f'tramos_AU4={len(hits)} primero={hits[0] if hits else None}')
+PY
+tramos_AU4=0 primero=None
+exit 0
+```
 
 Además del replay, la suite cubre:
 
@@ -107,11 +146,31 @@ Gate C no se convierte en PASS por haber pasado `--Wall`.
 | SEC-FRM-08 | `test_sec_frm08_fuente_estable_bajo_backpressure_entrada` |
 | REP-02 | `test_rep02_replay_pcap_real_dia_local` |
 
-El script literal verificó unicidad en Gherkin y presencia normalizada en los
-tests. `specs/gherkin-espejos.json` ya era coherente; no se modificaron spec,
-Gherkin ni espejos.
+El checker versionado verificó cada ID exactamente una vez en el corpus
+Gherkin de su propia campaña, presencia en `spec.md`, función `test_*`
+explícita y `verify-report.md`, además de que el manifiesto no esté vacío y
+que todas sus rutas existan. `CHAIN-01` se comparte intencionalmente entre
+las dos campañas de fase 3; la excepción URAM apunta de forma explícita a
+`verification/testbenches/phase3/test_chain32.py`.
 
-## Gate E — salida fresca
+```text
+$ python3 -m unittest -v scripts.verify.test_check_itch_gherkin
+test_comprueba_el_espejo_externo_de_chain01_uram ... ok
+test_detecta_manifiesto_vacio_y_ruta_incoherente ... ok
+test_detecta_spec_y_report_omitidos_y_gherkin_duplicado ... ok
+test_snapshot_sano_pasa ... ok
+Ran 4 tests in 0.016s
+OK
+
+$ python3 scripts/verify/check_itch_gherkin.py
+Gate F PASS: 12 IDs en 3 campañas; Gherkin único por campaña,
+spec/test/verify-report presentes y rutas del manifiesto existentes
+Espejo externo verificado: fase3-uram/CHAIN-01 ->
+verification/testbenches/phase3/test_chain32.py
+exit 0
+```
+
+## Gate E — salida fresca de Tarea 6, no repetida en el fix
 
 ```text
 $ python3 scripts/verify/mutate_parser.py
@@ -131,6 +190,8 @@ su build; `git diff -- rtl/parser/itch_parser.sv` quedó vacío.
 
 - La evidencia de replay depende de un pcap local no versionado; si falta en
   otra máquina, el test será `SKIP`, no PASS.
+- REP-02 conserva oráculo y límites reales, pero su requisito de line-rate
+  real sigue **ABIERTO** hasta medir la ventana A/U derivada del pcap.
 - No se ejecutó cobertura instrumental ni Verible.
 - Esta campaña no mide WNS/TNS ni utilización y no pretende acreditar la
   frecuencia física de fase 3.

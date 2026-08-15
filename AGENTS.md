@@ -9,8 +9,10 @@
 `MoldUDP64 → parser ITCH → order book → BBO/top-N`
 
 - El objetivo de la variante de fase 3 es DW=32 a 322,265625 MHz sobre
-  UltraScale+. La corrección funcional está verificada en simulación; el cierre
-  de timing exige un informe Vivado con WNS/TNS y utilización.
+  UltraScale+. El framing `tkeep` y la salida BBO/top-N están verificados en
+  simulación. Sigue pendiente medir de forma reproducible el umbral de stalls
+  sobre un tramo A/U real; el cierre de timing exige además un informe Vivado
+  con WNS/TNS y utilización.
 - El book está dimensionado para el subset configurado de 20 símbolos, no para
   un libro completo de todo Nasdaq.
 - Los replays con datos reales requieren artefactos locales no versionados. Un
@@ -25,13 +27,16 @@ El documento maestro, el alcance por fase y los riesgos viven en
 | Fase | Estado verificable |
 |---|---|
 | 0 — golden ITCH | Cerrada. Golden Python, 22 tipos validados y evidencia de día real. |
-| 1 — parser RTL | **Reabierta en framing**: falta transportar y verificar los bytes válidos del último beat mediante `s_axis_tkeep`; la evidencia anterior de gaps, backpressure y oráculo se conserva como histórica. |
+| 1 — parser RTL | **No cerrada**: framing `s_axis_tkeep`, gaps, backpressure, 91/91 `tlast` y replay real bit a bit están verdes; REP-02 aún no mide `<=24` stalls en un tramo A/U real seleccionado de forma reproducible. |
 | 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
-| 3 — DW=32/URAM | **No cerrada**: la cadena hereda el framing `s_axis_tkeep` pendiente y falta adjuntar Vivado (WNS/TNS y recursos). |
+| 3 — DW=32/URAM | **No cerrada**: cadena BBO/depth real verde para ND=5/3, pero hereda el gate line-rate real pendiente de REP-02 y falta adjuntar Vivado (WNS/TNS y recursos). |
 | 4 — CME MDP3 | **Reabierta funcionalmente**: falta cerrar framing `s_axis_tkeep`; schema/version, límite de tamaño y backpressure de salida se tratarán en loops separados. Sin Vivado no se acredita timing. |
 
 No presentar las fases 1, 3 o 4 como cerradas mientras sus criterios reabiertos
-no tengan evidencia vigente en el `verify-report.md` correspondiente.
+no tengan evidencia vigente en el `verify-report.md` correspondiente. Para
+REP-02, el siguiente cierre debe seleccionar desde el pcap, sin índices
+manuales, un tramo real de cuatro A/U consecutivos y contar sus stalls con el
+downstream siempre listo; el total agregado del replay no sustituye esa medida.
 
 ## Fuentes de verdad
 

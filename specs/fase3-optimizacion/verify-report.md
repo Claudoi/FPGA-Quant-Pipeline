@@ -6,12 +6,18 @@
 > vigente las pasadas producidas antes de que el driver representara límites
 > de datagrama mediante `s_axis_tkeep`.
 
+Fix Round 1 reejecutado el `2026-08-15T15:37:59+01:00` sobre
+`785675bfcaf35937cf060fe0d0c4fc3bc0d6c52b`; parser DW64, cadena ND=5/3 y
+Gate F se actualizaron con sus outputs nuevos.
+
 ## Veredicto
 
-**PASS funcional del delta `tkeep` en parser y cadena DW=32. Fase 3 NO
-CERRADA.** La frontera de framing reabierta queda verificada; el gate físico
-continúa **ABIERTO** porque no existe un informe Vivado real con WNS, TNS,
-endpoints restringidos y utilización LUT/FF/BRAM/URAM.
+**PASS funcional del delta `tkeep` y de BBO/depth en la cadena DW=32. Fase 3
+NO CERRADA.** La cadena real compara ahora las 30.729 palabras BBO y las
+30.729 palabras depth para ND=5 y ND=3. Quedan dos bloqueadores: REP-02 aún no
+mide el umbral `<=24` sobre un tramo A/U real derivado reproduciblemente del
+pcap, y no existe un informe Vivado real con WNS, TNS, endpoints restringidos
+y utilización LUT/FF/BRAM/URAM.
 
 `synth_check.py` solo demuestra coherencia estática entre RTL, Tcl y XDC. La
 latencia de 44,318 ciclos es una medición de simulación; convertirla usando el
@@ -33,13 +39,13 @@ vivado: no instalado
 
 | Gate | Evidencia fresca del loop `tkeep` | Resultado |
 |---|---|---|
-| A — simulación | golden 37/37; parser32 5/5; chain ND=5 4/4; chain ND=3 4/4; latencia 1/1; todos con `FAIL=0 SKIP=0` | **PASS** |
+| A — simulación | parser DW64 31/31; chain ND=5 4/4; chain ND=3 4/4; ANX 3/3, todos con `FAIL=0 SKIP=0`; CHAIN real compara BBO y depth | **PASS en suites ejecutadas; REP-02 line-rate abierto** |
 | B — compilación | lint `--Wall` de parser DW32 y `itch_chain` DW32 con dependencias, exit 0 y cero warnings | **PASS** |
 | C — estilo | `verible-verilog-lint` no instalado | **NO EJECUTADO** |
-| D — cobertura | P32-01/02, CHAIN-01 y DP-01 cubiertos; frontera `tkeep` multi-datagrama en parser/cadena; cobertura instrumental no configurada | **PASS nivel 1** |
+| D — cobertura | CHAIN-01 real cubre BBO+depth completos con no-vacío y longitudes para ND=5/3; P32-01/02 y framing mantienen sus espejos; REP-02 no aísla aún el tramo line-rate real | **PARCIAL por REP-02** |
 | E — mutación | delta de entrada heredado del parser: 19/19 mutantes compilables y muertos; no se presenta la mutación histórica del order book como fresca | **PASS para el delta `tkeep`** |
-| F — completitud | script literal de unicidad/presencia de IDs y espejos, exit 0 | **PASS** |
-| G — rigor/timing | pcaps fuera de Git, golden independiente, `synth_check.py` 22/22 estático; sin Vivado WNS/TNS/utilización | **ABIERTO** |
+| F — completitud | checker versionado: 12 IDs/3 campañas, unicidad por campaña, spec/test/report y rutas; negativos controlados; excepción externa URAM/CHAIN-01 verificada | **PASS** |
+| G — rigor/timing | pcaps fuera de Git, golden independiente, `synth_check.py` 22/22 estático; sin Vivado WNS/TNS/utilización y con line-rate real REP-02 pendiente | **ABIERTO** |
 
 ## Gate A — salida fresca desde builds limpios
 
@@ -53,13 +59,15 @@ exit 0
 $ make -C verification/testbenches/phase3 clean-all
 $ make -C verification/testbenches/phase3 sim-chain
 CHAIN-01: 31400 msgs / 20 símbolos contra golden
-CHAIN-01 OK: 30729 eventos, cross=0, anomaly=671, gaps=0
+CHAIN-01 OK ND=5: 30729 BBO y 30729 depth bit a bit,
+cross=0, anomaly=671, gaps=0
 TESTS=4 PASS=4 FAIL=0 SKIP=0
 exit 0
 
 $ make -C verification/testbenches/phase3 clean-all
 $ make -C verification/testbenches/phase3 sim-chain-nd3
-CHAIN-01 OK: 30729 eventos, cross=0, anomaly=671, gaps=0
+CHAIN-01 OK ND=3: 30729 BBO y 30729 depth bit a bit,
+cross=0, anomaly=671, gaps=0
 TESTS=4 PASS=4 FAIL=0 SKIP=0
 exit 0
 
@@ -85,6 +93,11 @@ exit 0
 Esta separación evita convertir el replay filtrado de cadena en una evidencia
 que no produce: los límites reales los pinza P32-03; la integración
 multi-datagrama la pinza el adversarial de cadena.
+
+REP-02 DW64 añadió una caracterización de 15.023 stalls agregados sobre 91
+datagramas con `m_axis_tready=1`. No se compara con `<=24`, que pertenece a
+una ventana de cuatro A/U, ni cierra el tramo real pendiente. La selección
+futura debe derivarse del pcap en orden de captura, sin índices manuales.
 
 ### Latencia de simulación
 
@@ -127,7 +140,7 @@ ejecutan síntesis, place ni route.
 |---|---|
 | P32-01 | `test_p32_01_anexo_a_32_bits`, P32-03 real y validación `tkeep`/truncados |
 | P32-02 | `test_p32_02_peor_caso_una_palabra_ciclo` |
-| CHAIN-01 | `test_chain01_feed_real_bit_a_bit`, `test_chain02_sintetico_bit_a_bit` |
+| CHAIN-01 | `test_chain01_feed_real_bit_a_bit`: 30.729 BBO + 30.729 depth contra `run_book_depth(..., nd=ND)` y `pack_depth`, ND=5/3; sintético separado |
 | DP-01 | `test_dp01_nd_parametrizado_llega_al_book`, ejecutado con ND=5 y ND=3 |
 
 ```text
@@ -136,14 +149,24 @@ $ python3 scripts/verify/mutate_parser.py
 19/19 mutantes compilables y muertos. Gate E PASS.
 exit 0
 
-$ python3 - <<'PY'  # script literal del brief
-IDs ITCH/fase 3 únicos y mapas a tests completos
+$ python3 -m unittest -v scripts.verify.test_check_itch_gherkin
+4 tests: snapshot sano; spec/report omitidos + Gherkin duplicado;
+manifiesto vacío/ruta incoherente; espejo externo URAM/CHAIN-01
+OK
+
+$ python3 scripts/verify/check_itch_gherkin.py
+Gate F PASS: 12 IDs en 3 campañas; Gherkin único por campaña,
+spec/test/verify-report presentes y rutas del manifiesto existentes
+Espejo externo verificado: fase3-uram/CHAIN-01 ->
+verification/testbenches/phase3/test_chain32.py
 exit 0
 ```
 
-La mutación 19/19 cierra el delta compartido de framing. En este loop no se
-ejecutó `mutate_orderbook.py`; sus resultados anteriores no se etiquetan como
-frescos ni se usan para cerrar el gate físico.
+La mutación 19/19 cierra el delta compartido de framing. No se reejecutó en el
+Fix Round 1 porque no cambiaron el RTL ni `mutate_parser.py`; corresponde a la
+ejecución fresca del commit documental anterior. Tampoco se ejecutó
+`mutate_orderbook.py`; sus resultados históricos no se usan para cerrar el
+gate físico.
 
 ## Bloqueador físico
 
@@ -155,4 +178,5 @@ por un run vigente. Para cerrar fase 3 siguen siendo obligatorios, como mínimo:
 - utilización LUT/FF/BRAM/URAM e inferencia real de URAM;
 - confirmación de que los budgets I/O del XDC corresponden al wrapper/PHY.
 
-Hasta adjuntar esa evidencia, **fase 3 permanece NO CERRADA**.
+Hasta adjuntar esa evidencia y cerrar la medición line-rate real de REP-02,
+**fase 3 permanece NO CERRADA**.
