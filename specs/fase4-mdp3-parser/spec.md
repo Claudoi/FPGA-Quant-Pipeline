@@ -72,10 +72,12 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
 
 - **Familia/part objetivo:** UltraScale+ (misma familia que fases 1-3);
   frecuencia 322,265625 MHz (DW=32) y 156,25 MHz (DW=64) — mismo régimen.
-- **Line-rate:** el datapath acepta **1 palabra/ciclo en el peor caso**
-  (mensajes mínimos back-to-back) sin backpressure sostenida — igual régimen
-  que fase 1 (el framing por `msg_size` hace el peor caso dependiente del
-  tamaño mínimo de mensaje del subset, del schema).
+- **Régimen de entrada:** el datapath presenta una palabra por ciclo y solo
+  cuenta backpressure cuando `s_axis_tvalid && !s_axis_tready`. El vector
+  pactado M3-FRM-03 son 24 mensajes literales del template 47, cada uno con
+  una entry (64 B derivados del XML); la racha máxima admitida es 16 ciclos.
+  No se promete un feed infinito sin stalls: un record Anexo M MBOFD expande
+  64 B de mensaje a 72 B de salida.
 - **Schema = fuente única:** los offsets, blockLength, tipos compuestos y
   valores de enumeraciones del subset se derivan del schema XML
   (`templates_FixBinary.xml`, ftp.cmegroup.com) en el golden. **Ningún
@@ -105,7 +107,7 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
 |---|---|---|
 | `clk`, `rst_n` | 1 | reloj del datapath |
 | `s_axis_tdata/tvalid/tready/tlast` | DW/1/1/1 | payload UDP decapado (entrada) |
-| `m_axis_tdata/tvalid/tready/tlast` | DW/1/1/1 | Anexo M (salida) |
+| `m_axis_tdata/tvalid/tready/tlast` | 32/1/1/1 | words de 32 bits del Anexo M; DW solo parametriza la entrada |
 | `gap_detected` | 1 | pulso: MsgSeqNum != exp_seq (por canal) |
 | `error` | 1 | pulso: mensaje/paquete incoherente (msg_size < 10, desborde de paquete) |
 
@@ -231,32 +233,34 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 
 ## Criterios de aceptación (Definition of Done)
 
-1. [ ] **Golden MDP3**: loader del schema XML + decoder bit a bit + generator
+1. [x] **Golden MDP3**: loader del schema XML + decoder bit a bit + generator
      sintético con round-trip `decode(encode(m)) == m` para el subset y
      passthrough; tests Python espejo. El round-trip debe partir de vectores
      conocidos con valores no cero y demostrar campo a campo que se preservan
      root, composites —incluido `PRICE9.mantissa`— y grupos multi-entry; la
      igualdad de bytes tras re-encodear el propio decode no basta como oráculo.
      — Gherkin: `mdp3.feature` §M3-GEN-01, §M3-GEN-02
-2. [ ] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
+2. [x] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
      secuencia de Anexo M bit a bit vs golden; mensajes que cruzan límites
      de palabra. — §M3-FRM-01, §M3-FRM-02
-3. [ ] **Line-rate**: mensajes mínimos back-to-back aceptados a
-     1 palabra/ciclo sin backpressure sostenida. — §M3-FRM-03
-4. [ ] **Subset decodificado**: records de libro (27/30/32) bit a bit vs
+3. [x] **Régimen de entrada**: 24 mensajes literales template 47, de una
+     entry y 64 B cada uno, se presentan a 1 palabra/ciclo; stalls reales
+     (`tvalid && !tready`) con racha máxima <= 16. — §M3-FRM-03
+4. [x] **Subset decodificado**: records de libro (46/47/52/53) bit a bit vs
      golden, incluido el precio compuesto (mantissa+exponente) y grupos
      multi-entry. — §M3-SUB-01, §M3-SUB-02
-5. [ ] **Passthrough**: templates no-subset → w0/w1 + cuerpo crudo bit a bit,
+5. [x] **Passthrough**: templates no-subset → w0/w1 + cuerpo crudo bit a bit,
      sin abortar en schemaId/version desconocidos. — §M3-PASS-01
-6. [ ] **Gaps de secuencia**: `gap_detected` en saltos; reset al cambiar de
+6. [x] **Gaps de secuencia**: `gap_detected` en saltos; reset al cambiar de
      canal (secuencia reiniciada). — §M3-GAP-01
-7. [ ] **Robustez**: `msg_size` incoherente y grupos mal formados → `error`
+7. [x] **Robustez**: `msg_size` incoherente y grupos mal formados → `error`
      señalizado, sin cuelgue ni corrupción silenciosa; `tlast` de entrada
      truncado (paquete cortado) manejado. — §M3-INV-01/02/03
-8. [ ] **Regresión**: fases 1-3 verdes sin tocar (el RTL nuevo no se conecta
+8. [x] **Regresión**: fases 1-3 verdes sin tocar (el RTL nuevo no se conecta
      a nada existente); DW=64 del mdp3_parser en regresión. — §M3-REG-01
-9. [ ] Lint `--Wall` limpio sobre `mdp3_parser.sv` (+ verible si se
-     instala); espejos Gherkin 1:1. — Gates B/C/F.
+9. [x] Lint `--Wall` limpio sobre `mdp3_parser.sv` (+ verible si se
+     instala); checker XML↔localparams para IDs, offsets y blockLength del
+     subset; espejos Gherkin 1:1. — §M3-SCH-01, gates B/C/F.
 
 ## Verificación
 
@@ -264,13 +268,13 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 |---|---|
 | 1 | `python3 -m unittest` (área del golden MDP3, espejos) + round-trip |
 | 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido |
-| 3 | cocotb: paquete de mensajes mínimos back-to-back; medir palabra/ciclo sin `tready=0` sostenido |
-| 4 | cocotb: records de 27/30/32 vs golden; precio compuesto y multi-entry |
+| 3 | cocotb: 24 mensajes literales template 47 de 64 B; medir solo ciclos `tvalid && !tready`, racha <= 16 |
+| 4 | cocotb: records de 46/47/52/53 vs golden; precio compuesto y multi-entry |
 | 5 | cocotb: corpus de templates no-subset (d/f/otras X) crudo bit a bit |
 | 6 | cocotb: secuencia con salto y reinicio de canal → pulsos de gap correctos |
 | 7 | cocotb: `msg_size` inválido (0, 1..9, > paquete), numInGroup 0, paquete truncado por `tlast` |
 | 8 | `make sim` en `testbenches/{parser,orderbook,phase3}` sin cambios |
-| 9 | `verilator --lint-only -Wall` + `specs/gherkin-espejos.json` |
+| 9 | `verilator --lint-only -Wall` + checker schema v12↔RTL + `specs/gherkin-espejos.json` |
 
 Régimen completo: skill `verify` (gates A-G). Gate E: runner de mutación
 nuevo `scripts/verify/mutate_mdp3.py` (flips: template lookup off-by-one,

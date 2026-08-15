@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+import re
 
 from golden_model.mdp3 import (
     Corpus,
@@ -215,6 +216,75 @@ class TestM3Gen(unittest.TestCase):
         self.assertEqual(len(raw), 64)
         pm = next(iter_packet_messages(encode_packet(schema, 1, 2, [raw])))
         self.assertEqual(pm.msg_size, 64)
+
+    def test_m3sch01_los_localparams_rtl_coinciden_con_el_schema_v12(self):
+        schema = self.schema
+        rtl = Path("rtl/parser/mdp3_parser.sv").read_text()
+
+        def field_offset(fields, name):
+            return next(field.offset for field in fields if field.name == name)
+
+        m46, m47 = schema.messages[46], schema.messages[47]
+        m52, m53 = schema.messages[52], schema.messages[53]
+        g46_mbp, g46_oid = m46.groups
+        g47, g52, g53 = m47.groups[0], m52.groups[0], m53.groups[0]
+        expected = {
+            "MSG_PREFIX": 2 + schema.header_size,
+            "TPL_46": 46, "TPL_47": 47, "TPL_52": 52, "TPL_53": 53,
+            "O46_TS": field_offset(m46.fields, "TransactTime"),
+            "O46_MEI": field_offset(m46.fields, "MatchEventIndicator"),
+            "O46_DIM": m46.block_length,
+            "O46_ENT": m46.block_length + schema.group_dim_size(g46_mbp),
+            "O46_BL1": g46_mbp.block_length, "O46_BL2": g46_oid.block_length,
+            "O46_PX": field_offset(g46_mbp.fields, "MDEntryPx"),
+            "O46_SZ": field_offset(g46_mbp.fields, "MDEntrySize"),
+            "O46_SEC": field_offset(g46_mbp.fields, "SecurityID"),
+            "O46_RPT": field_offset(g46_mbp.fields, "RptSeq"),
+            "O46_NO": field_offset(g46_mbp.fields, "NumberOfOrders"),
+            "O46_LVL": field_offset(g46_mbp.fields, "MDPriceLevel"),
+            "O46_ACT": field_offset(g46_mbp.fields, "MDUpdateAction"),
+            "O46_TYP": field_offset(g46_mbp.fields, "MDEntryType"),
+            "O46_OID": field_offset(g46_oid.fields, "OrderID"),
+            "O46_PRI": field_offset(g46_oid.fields, "MDOrderPriority"),
+            "O46_DQ": field_offset(g46_oid.fields, "MDDisplayQty"),
+            "O46_REF": field_offset(g46_oid.fields, "ReferenceID"),
+            "O46_OA": field_offset(g46_oid.fields, "OrderUpdateAction"),
+            "O47_OID": field_offset(g47.fields, "OrderID"),
+            "O47_PRI": field_offset(g47.fields, "MDOrderPriority"),
+            "O47_PX": field_offset(g47.fields, "MDEntryPx"),
+            "O47_DQ": field_offset(g47.fields, "MDDisplayQty"),
+            "O47_SEC": field_offset(g47.fields, "SecurityID"),
+            "O47_ACT": field_offset(g47.fields, "MDUpdateAction"),
+            "O47_TYP": field_offset(g47.fields, "MDEntryType"),
+            "O47_BL": g47.block_length,
+            "O52_SEC": field_offset(m52.fields, "SecurityID"),
+            "O52_RPT": field_offset(m52.fields, "RptSeq"),
+            "O52_TS": field_offset(m52.fields, "TransactTime"),
+            "O52_DIM": m52.block_length,
+            "O52_ENT": m52.block_length + schema.group_dim_size(g52),
+            "O52_BL": g52.block_length,
+            "O52_PX": field_offset(g52.fields, "MDEntryPx"),
+            "O52_SZ": field_offset(g52.fields, "MDEntrySize"),
+            "O52_NO": field_offset(g52.fields, "NumberOfOrders"),
+            "O52_LVL": field_offset(g52.fields, "MDPriceLevel"),
+            "O52_TYP": field_offset(g52.fields, "MDEntryType"),
+            "O53_SEC": field_offset(m53.fields, "SecurityID"),
+            "O53_TS": field_offset(m53.fields, "TransactTime"),
+            "O53_DIM": m53.block_length,
+            "O53_ENT": m53.block_length + schema.group_dim_size(g53),
+            "O53_BL": g53.block_length,
+            "O53_OID": field_offset(g53.fields, "OrderID"),
+            "O53_PRI": field_offset(g53.fields, "MDOrderPriority"),
+            "O53_PX": field_offset(g53.fields, "MDEntryPx"),
+            "O53_DQ": field_offset(g53.fields, "MDDisplayQty"),
+            "O53_TYP": field_offset(g53.fields, "MDEntryType"),
+        }
+        for name, value in expected.items():
+            match = re.search(
+                rf"\b{re.escape(name)}\s*=\s*(?:(?:\d+)'d)?(\d+)\b", rtl)
+            self.assertIsNotNone(match, f"localparam RTL ausente: {name}")
+            self.assertEqual(int(match.group(1)), value,
+                             f"drift schema v12↔RTL en {name}")
 
 
 if __name__ == "__main__":

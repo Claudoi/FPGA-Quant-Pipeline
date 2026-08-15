@@ -78,7 +78,7 @@ class Corpus:
         if template == 46:
             n_mbp = self.rng.randrange(0, 4)
             mbp = [self._mbp_entry(self.rng.randrange(1, 1000)) for _ in range(n_mbp)]
-            n_oid = self.rng.randrange(0, 4)
+            n_oid = self.rng.randrange(0, 4) if n_mbp else 0
             oid = [self._mbofd_entry(self.rng.randrange(0, max(n_mbp, 1)))
                    for _ in range(n_oid)]
             return encode_message(self.schema, 46, {

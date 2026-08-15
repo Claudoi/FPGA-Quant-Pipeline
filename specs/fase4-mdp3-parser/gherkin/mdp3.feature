@@ -35,9 +35,9 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Entonces no se pierde ni se duplica ningún mensaje
 
   Escenario: M3-FRM-03 — peor caso a 1 palabra/ciclo sin backpressure
-    Dado un paquete de mensajes mínimos del subset back-to-back
-    Cuando el parser los procesa
-    Entonces no hay backpressure sostenida de entrada
+    Dado un paquete con 24 mensajes literales template 47 de una entry y 64 B
+    Cuando se presentan a una palabra válida por ciclo
+    Entonces la racha de ciclos valid sin ready es como máximo 16
     Y la secuencia de salida es bit a bit idéntica al golden
 
   Escenario: M3-SUB-01 — el subset de libro se decodifica campo a campo
@@ -82,6 +82,11 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Cuando el parser lo procesa
     Entonces señaliza error o emite record vacío según el contrato del golden
     Y no trunca silenciosamente los entries siguientes
+
+  Escenario: M3-SCH-01 — los localparams RTL coinciden con el schema v12
+    Dado el schema SBE XML oficial de CME y el RTL especializado
+    Cuando se contrastan IDs, offsets, dimensiones y blockLength del subset
+    Entonces cada literal estructural del RTL coincide con el valor del XML
 
   Escenario: M3-REG-01 — las fases 1-3 siguen verdes
     Dado el RTL nuevo añadido sin tocar lo existente

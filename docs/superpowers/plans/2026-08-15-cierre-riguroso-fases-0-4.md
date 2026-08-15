@@ -303,27 +303,27 @@ git commit -m "fix(fase3): cerrar parametrización y rigor de síntesis"
 - Consumes: paquetes CME MDP3 schema v12, DW32/DW64, AXI-Stream con tlast por paquete.
 - Produces: records Anexo M bit a bit, passthrough y señales gap/error según criterios 2-9.
 
-- [ ] **Step 1: Corregir la medición de stalls y construir el mínimo literal**
+- [x] **Step 1: Corregir la medición de stalls y construir el mínimo literal**
 
 Contar stall solo con `s_axis_tvalid && !s_axis_tready`. Construir el template 47 mínimo de manera literal, sin generador aleatorio, y añadir targets separados DW32/DW64.
 
-- [ ] **Step 2: Cerrar M3-FRM-01/02/03 por rojo→verde**
+- [x] **Step 2: Cerrar M3-FRM-01/02/03 por rojo→verde**
 
 Usar el primer byte divergente para localizar el handoff de `CS_BODY`/buffers ping-pong; corregir solo la contabilidad demostrada por el rojo. Exigir longitud y contenido completos, además de racha de stalls <=16 en el vector mínimo pactado.
 
-- [ ] **Step 3: Añadir y cerrar subset/passthrough**
+- [x] **Step 3: Añadir y cerrar subset/passthrough**
 
 Tests por template 46/47/52/53 con valores no cero y multi-entry; template conocido no-subset y template 777 desconocido deben preservar cuerpo crudo.
 
-- [ ] **Step 4: Añadir y cerrar gaps e inválidos**
+- [x] **Step 4: Añadir y cerrar gaps e inválidos**
 
 Vectores: salto de MsgSeqNum, reinicio de canal, `msg_size` 0/1/9/mayor que paquete, tlast truncado, `numInGroup` cuyo cuerpo excede `msg_size`, ReferenceID fuera de rango.
 
-- [ ] **Step 5: Checker schema v12**
+- [x] **Step 5: Checker schema v12**
 
 Añadir un test Python que lea los localparams de offsets/block lengths del RTL y los contraste contra `templates_FixBinary_v12.xml`; el RTL sigue especializado, pero el drift deja de ser silencioso.
 
-- [ ] **Step 6: Gates de fase 4 y regresión 0-3**
+- [x] **Step 6: Gates de fase 4 y regresión 0-3**
 
 ```bash
 PATH="$VENV_BIN:$PATH" make -C verification/testbenches/mdp3 sim
