@@ -33,7 +33,7 @@ async def _reset(dut):
     dut.rst_n.value = 1
 
 async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
-                      require_input_stall=False):
+                      require_input_stall=False, expected_errors=None):
     """Conduce datagramas MoldUDP64 independientes y recolecta BBO.
 
     Devuelve (bbo_events, depth_words, cross, anomaly, gaps)."""
@@ -50,6 +50,7 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
     held = None
     accepted_tlast = 0
     input_stalls = 0
+    errors = 0
     for _ in range(max_cycles):
         _present_beat(dut, beats, ci)
         dut.bbo_tready.value = 1
@@ -57,6 +58,7 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
         await RisingEdge(dut.clk)
         if int(dut.gap_detected.value) == 1:
             gaps += 1
+        errors += int(dut.error.value)
         if int(dut.bbo_tvalid.value) == 1 and int(dut.bbo_tready.value) == 1:
             assert int(dut.depth_tvalid.value) == 1, (
                 "CHAIN: depth_tvalid debe acompañar al BBO")
@@ -87,6 +89,9 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
         f"CHAIN: tlast aceptados={accepted_tlast}, esperados={len(payloads)}")
     if require_input_stall:
         assert input_stalls > 0, "CHAIN: el adversarial no forzó backpressure"
+    if expected_errors is not None:
+        assert errors == expected_errors, (
+            f"CHAIN: pulsos error={errors}, esperados={expected_errors}")
     return out, depth, cross, anomaly, gaps
 
 
@@ -102,7 +107,10 @@ async def test_chain01_feed_real_bit_a_bit(dut):
     regla que REPLAY-01), y la cadena completa lo procesa de principio a fin."""
     assert os.path.exists(REAL_PCAP), "CHAIN-01 OMITIDO: pcap local ausente"
     msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
+    assert msgs, "CHAIN-01: pcap presente sin mensajes del subset"
+    assert keep, "CHAIN-01: pcap presente sin símbolos del subset"
     expected, golden = run_book(msgs)
+    assert expected, "CHAIN-01: subset real sin eventos BBO observables"
     cocotb.log.info(
         f"CHAIN-01: {len(msgs)} msgs / {len(keep)} símbolos contra golden "
         f"(parser 32 -> book 32, stream reconstruido del subset)")
@@ -182,7 +190,7 @@ async def test_chain_tkeep_datagramas_no_alineados_y_estabilidad(dut):
     assert all(len(payload) % 4 for payload in payloads)
     expected, golden = run_book(first + second)
     got, _, cross, anomaly, gaps = await drive_chain(
-        dut, payloads, require_input_stall=True)
+        dut, payloads, require_input_stall=True, expected_errors=0)
     assert got == expected, f"AXI-KEEP cadena: got={got} exp={expected}"
     assert cross == golden.cross_events
     assert anomaly == golden.anomalies

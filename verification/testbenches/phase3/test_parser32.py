@@ -46,7 +46,8 @@ def run_oracle32(msgs):
 
 
 async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
-                      beats=None, expected_tlast=1, expected_errors=0):
+                      beats=None, expected_tlast=1, expected_errors=0,
+                      error_on_handshakes=()):
     """Conduce un datagrama en beats AXI de 4 B y devuelve (words, stalls)."""
     await _reset(dut)
     beats = packet_beats([payload], 4) if beats is None else beats
@@ -59,6 +60,8 @@ async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
     held = None
     accepted_tlast = 0
     errors = 0
+    error_handshakes_seen = set()
+    pending_error_handshake = None
     for _ in range(max_cycles):
         _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1 if (out_tready[tr_idx % len(out_tready)] == 1) else 0
@@ -69,9 +72,19 @@ async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
         held, took_last = _check_input_stability(dut, held)
         accepted_tlast += took_last
         errors += int(dut.error.value)
+        if pending_error_handshake is not None:
+            # `error` es registrado: se observa en este punto un ciclo después
+            # del handshake inválido que lo originó.
+            assert int(dut.error.value) == 1, (
+                f"beat inválido {pending_error_handshake} aceptado sin pulso "
+                "error asociado")
+            error_handshakes_seen.add(pending_error_handshake)
+            pending_error_handshake = None
         if tv == 1 and tr == 0:
             stalls += 1
         if tv == 1 and tr == 1:
+            if ci in error_on_handshakes:
+                pending_error_handshake = ci
             if ci < n:
                 ci += 1
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
@@ -85,6 +98,9 @@ async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
         f"tlast aceptados={accepted_tlast}, esperados={expected_tlast}")
     assert errors == expected_errors, (
         f"pulsos error={errors}, esperados={expected_errors}")
+    assert error_handshakes_seen == set(error_on_handshakes), (
+        f"handshakes inválidos observados={error_handshakes_seen}, "
+        f"esperados={set(error_on_handshakes)}")
     return out, stalls
 
 
@@ -189,20 +205,22 @@ async def test_p32_tkeep_invalido_y_truncados_recuperan(dut):
     recovery = corpus_all_types()[2]
     recovered = _packet_seq([recovery], 2)
     invalid = [
-        ("cero", 0b0000, 0, None),
-        ("hueco", 0b1010, 0, None),
+        ("cero", 0b0000, -1, None),
+        ("hueco", 0b1010, -1, None),
         ("lsb", 0b0011, -1, None),
         ("parcial_no_final", 0b1100, -1, False),
     ]
     for name, keep, index, last in invalid:
         bad_beats = packet_beats([malformed], 4)
+        invalid_index = index % len(bad_beats)
         data, _old_keep, old_last = bad_beats[index]
         bad_beats[index] = (data, keep, old_last if last is None else last)
         if last is False:
             bad_beats.append((0, 0b1111, True))
         got, _ = await drive_raw32(
             dut, malformed, beats=bad_beats + packet_beats([recovered], 4),
-            expected_tlast=2, expected_errors=1)
+            expected_tlast=2, expected_errors=1,
+            error_on_handshakes={invalid_index})
         assert got == run_oracle32([recovery]), f"{name}: got={got}"
 
     first = corpus_all_types()[2]
