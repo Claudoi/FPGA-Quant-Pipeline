@@ -109,7 +109,7 @@ git commit -m "fix(fase4-mdp3): preservar valores semánticos en el golden SBE"
 - Consumes: `run_golden` sobre `01302019.NASDAQ_ITCH50.gz`.
 - Produces: evidencia fechada del segundo día sin versionar datos ni outputs crudos.
 
-- [ ] **Step 1: Verificar el artefacto local y repetir la regresión si el resumen temporal no está disponible**
+- [x] **Step 1: Verificar el artefacto local y repetir la regresión si el resumen temporal no está disponible**
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 "$VENV_BIN/python" -m golden_model.scripts.run_golden \
@@ -118,11 +118,11 @@ PYTHONDONTWRITEBYTECODE=1 "$VENV_BIN/python" -m golden_model.scripts.run_golden 
 
 Expected: 368.366.634 mensajes, 8.713 símbolos, 0 anomalías, 63 `cross_events`.
 
-- [ ] **Step 2: Actualizar ambos informes sin declarar gates no ejecutados**
+- [x] **Step 2: Actualizar ambos informes sin declarar gates no ejecutados**
 
 Reemplazar la nota de fichero ausente por el comando, resumen y fecha reales. Mantener Gate C/cobertura/timing con su estado previo.
 
-- [ ] **Step 3: Reejecutar el golden completo de tests y commit**
+- [x] **Step 3: Reejecutar el golden completo de tests y commit**
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 "$VENV_BIN/python" -m unittest discover -s golden_model/tests -t .

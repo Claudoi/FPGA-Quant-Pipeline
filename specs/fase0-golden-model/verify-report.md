@@ -1,8 +1,8 @@
 # verify-report — fase0-golden-model (iteración 1)
 
 > Régimen de gates A-G (skill verify) sobre `specs/fase0-golden-model/spec.md`.
-> Un gate sin output pegado NO está pasado. Pendiente de completar: sección del
-> día real (criterios 6 y 9) — el run está en curso sobre el fichero descargado.
+> Un gate sin output pegado NO está pasado. Los dos días reales requeridos por
+> los criterios 6 y 9 están documentados; los ficheros permanecen fuera de Git.
 
 ## Meta del atacante/diseño
 
@@ -201,3 +201,52 @@ real  17m50.728s
   ```
 - Flag de cambio correcto en datos reales: mensajes consecutivos sobre el
   mismo símbolo con BBO idéntico llevan `changed=0` (msgs 241823/241831, TSLA).
+
+### Regresión independiente del segundo día — 01302019 (2026-08-15)
+
+Artefacto local ignorado:
+`data/itch_sample/01302019.NASDAQ_ITCH50.gz`, 4.764.426.091 bytes. La integridad
+del contenedor se volvió a comprobar antes de incorporar esta evidencia:
+
+```text
+$ time gzip -t data/itch_sample/01302019.NASDAQ_ITCH50.gz
+11.71s user 0.42s system 65% cpu 18.528 total
+```
+
+Ejecución completa realizada durante la auditoría del 2026-08-15:
+
+```text
+$ python3 -m golden_model.scripts.run_golden \
+    data/itch_sample/01302019.NASDAQ_ITCH50.gz --out /tmp/fpga-fase0-0130
+
+{
+  "anomalies": 0,
+  "by_type": {
+    "A": 162970455, "B": 116, "C": 158886, "D": 158273361,
+    "E": 8096995, "F": 1725898, "H": 8805, "I": 3684511,
+    "J": 62, "L": 193769, "P": 1326184, "Q": 17430,
+    "R": 8714, "S": 6, "U": 27222746, "V": 1,
+    "X": 4669874, "Y": 8821
+  },
+  "cross_events": 63,
+  "messages": 368366634,
+  "records": 0,
+  "symbols": 8713
+}
+22:15.77 total
+```
+
+Resultado: **368.366.634 mensajes**, 8.713 símbolos, cero referencias de orden
+anómalas y 63 estados cruzados/bloqueados transitorios contabilizados sin
+abortar. Es una segunda jornada completa, no una muestra sintética ni un
+replay parcial. Cierra el cabo del criterio 9 sin añadir el feed ni los CSV
+generados al repositorio. Duración 22m15s, con 1h37m44s de margen frente al
+umbral máximo de 2 horas.
+
+Regresión Python posterior en la rama de cierre:
+
+```text
+$ python3 -m unittest discover -s golden_model/tests -t .
+Ran 36 tests in 0.021s
+OK
+```

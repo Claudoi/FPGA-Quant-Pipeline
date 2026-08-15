@@ -52,7 +52,7 @@ datagrama terminado antes de completar el mensaje**.
 | 7 (longitud incoherente/truncado → error) | `test_sec_par03`, `test_sec_par03b`, `test_sec_frm01`, `test_sec_frm02` | **PASS (iteración 3)** |
 | 8 (replay real + vectores congelados) | `test_rep01`, `test_rep02` (pcap 12302019) | PASS |
 | 10/11 (lint y estilo) | gates B/C | B PASS, C NO EJECUTADO |
-| 9 (cabos fase 0: día 01302019) | — | NO EJECUTADO |
+| 9 (cabos fase 0: día 01302019) | `run_golden` completo, addendum inferior | PASS |
 
 ## Gate F — espejos Gherkin (título literal → test)
 
@@ -98,11 +98,10 @@ REP-02 17937 words byte a byte.
 1. Gate C (verible) y D nivel 2 (cobertura runner): NO EJECUTADOS (herramientas
    no disponibles/configuradas en el entorno; verible no está en brew ni pip
    como binario). Declarados, no ocultados.
-2. Criterio 9 (cabo fase 0): **pendiente de descarga de datos**, no de código.
-   El día de regresión `01302019` no está en el entorno (solo `12302019`);
-   descargarlo de emi.nasdaq.com ≈ 4,8 GB a ~350 KB/s (~4 h). El pipeline ya se
-   validó contra el día local `12302019` (fase 0 + REP-02). El cabo se cierra
-   descargando el día y ejecutando `run_golden.py` (pre-trabajo de fase 0).
+2. Criterio 9 (cabo fase 0): **CERRADO el 2026-08-15** con la jornada completa
+   `01302019`: 368.366.634 mensajes, 8.713 símbolos, 0 anomalías y 63
+   `cross_events`. Artefacto de 4.764.426.091 bytes ignorado por Git y
+   `gzip -t` verde; evidencia completa en el verify-report de fase 0.
 3. Line-rate mínimo infinito (criterio 2): **DECISIÓN DE SPEC TOMADA (edit
    2026-08-13)**: non-goal físico derivado del Anexo A (16 B overhead/mensaje →
    salida > entrada). Ver spec.md criterio 2.
@@ -115,6 +114,16 @@ REP-02 17937 words byte a byte.
 **Listo para /grade (iteración 3).** Criterio 7 cerrado con test reales que
 pinchan y un mutante TRUNC-EOP muerto. Criterio 2 cerrado por decisión de spec
 (non-goal físico). Gates A/B/E/F PASS; C/D-nivel2 declarados NO EJECUTADOS
-(entorno); G0/G1/G3 PASS; G timing NO APLICA (fase 1). Restan únicamente
-decisiones de datos/entorno de owner: descarga del día 01302019 (criterio 9,
-cabo de fase 0) e instalación de verible. **Campaña fase 1 cerrada para el RTL.**
+(entorno); G0/G1/G3 PASS; G timing NO APLICA (fase 1). El cabo de datos del día
+01302019 está cerrado; resta como limitación de entorno la instalación de
+verible. **Campaña fase 1 cerrada para el RTL según esta iteración histórica.**
+
+## Addendum de evidencia — segundo día real (2026-08-15)
+
+`python3 -m golden_model.scripts.run_golden
+data/itch_sample/01302019.NASDAQ_ITCH50.gz --out /tmp/fpga-fase0-0130` procesó
+368.366.634 mensajes completos con 0 anomalías, 8.713 símbolos y 63
+`cross_events` en 22m15s. `gzip -t` sobre los 4.764.426.091 bytes terminó con
+exit 0.
+El feed y sus derivados siguen fuera de Git. El detalle autoritativo está en
+`specs/fase0-golden-model/verify-report.md`.
