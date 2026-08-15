@@ -1,0 +1,8 @@
+# Verible lint config del repo (gate C). Buscado automáticamente por
+# `--rules_config_search` desde cada archivo analizado hacia arriba.
+#
+# Convención del proyecto: constantes/estados en SCREAMING_SNAKE (O46_PX,
+# CS_HDR, DS_IDLE, MAX_MSG). Verible las exige en CamelCase por defecto; se
+# fija el estilo a ALL_CAPS (regex [A-Z0-9_]+) sin renombrar cientos de
+# constantes de RTL ya verificado.
+parameter-name-style=localparam_style:ALL_CAPS;parameter_style:CamelCase|ALL_CAPS;localparam_style_regex:;parameter_style_regex:

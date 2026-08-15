@@ -219,5 +219,29 @@ off-by-one, numInGroup del 52, base del body del 46, y passthrough sin cuerpo.
 ```
 RTL restaurado tras la campaña (`git diff rtl/` vacío) y suite verde de nuevo.
 
+## Gate C — estilos `verible-verilog-lint` (criterio 9) — PASS
+
+Se instaló `verible-verilog-lint` (binario oficial de ChipsAlliance/Verible
+en `.venv/bin`, docs/DESARROLLO.md) y se creó la config del repo
+`./.rules.verible_lint` (formato `--print_rules_file`), que fija
+`parameter-name-style` a la convención SCREAMING_SNAKE del proyecto
+(`localparam_style:ALL_CAPS`) en lugar de renombrar cientos de constantes de
+RTL verificado. Sobre esa base se corrigieron los hallazgos **genuinos** de
+`mdp3_parser.sv`:
+- 18/18 constantes con `storage type` explícito (`localparam logic [..]`, `parameter int DW`).
+- 7/7 arrays unpacked `[0:N-1]` → `[N]` (`qbytes`, `mbuf0/1`, `occ`, `rrec`,
+  `f_mem`, `f_tl`).
+- 1/1 `case (p_n)` sin `default` en `DS_PASS` (añadido `default: dst <= DS_DONE`).
+
+**Evidencia (gate C):**
+```
+verible-verilog-lint --rules_config_search rtl/parser/mdp3_parser.sv
+  → 0 hallazgos (exit limpio)
+verilator --lint-only -Wall ... --top-module mdp3_parser → 0 warnings
+```
+Suite intacta tras el fix de estilo (framing 3/3 y robustez 7/7 a DW=32 y
+DW=64; golden 35/35). Los RTL de fases 1-3 (cerrados) conservan hallazgos de
+convención y no se tocan.
+
 
 

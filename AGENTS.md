@@ -28,7 +28,7 @@ El documento maestro, el alcance por fase y los riesgos viven en
 | 1 — parser RTL | Cerrada funcionalmente: framing MoldUDP64, gaps, backpressure y oráculo bit a bit. |
 | 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
 | 3 — DW=32/URAM | RTL y pruebas URAM terminados; **no cerrada** hasta adjuntar Vivado (WNS/TNS y recursos). |
-| 4 — CME MDP3 | En construcción. Golden schema-driven verde; RTL de framing verde (criterios 1-8) y gate E PASS; pendiente grade y gate C (verible). |
+| 4 — CME MDP3 | En construcción. Golden schema-driven verde; RTL de framing verde (criterios 1-8), gates C/E PASS; pendiente el veredicto de grade. |
 
 No presentar fase 3 como timing cerrado ni fase 4 como completada sin la
 evidencia correspondiente en su `verify-report.md`.
@@ -69,7 +69,7 @@ No hay comandos mágicos ni flujos ocultos: este archivo define el proceso.
 |---|---|
 | A — simulación | Cocotb/Verilator o unittest del área; cualquier fallo bloquea. |
 | B — compilación | `verilator --lint-only --Wall` sobre RTL tocado; Python compilable. |
-| C — estilo | `verible-verilog-lint` si está instalado; si no, declararlo NO EJECUTADO. |
+| C — estilo | `verible-verilog-lint --rules_config_search` sobre el RTL tocado (config del repo en `./.rules.verible_lint`, que alinea la nomenclatura del proyecto). Si no está instalado, declararlo NO EJECUTADO. |
 | D — cobertura | Mapa literal spec↔test y, si existe herramienta, cobertura funcional. |
 | E — mutación | Cada mutante compila y al menos un test lo mata; un mutante roto no cuenta. |
 | F — completitud | `specs/gherkin-espejos.json` y títulos de tests coherentes con Gherkin. |

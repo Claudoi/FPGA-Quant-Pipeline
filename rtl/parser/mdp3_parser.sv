@@ -39,7 +39,7 @@
 // entry MBP del mismo buffer. DW=32 en esta iteración (Anexo M definido en
 // words de 32 bits); DW=64 en regresión (iter 3+, con byte-enables).
 module mdp3_parser #(
-    parameter DW = 32
+    parameter int DW = 32
 ) (
     input  wire              clk,
     input  wire              rst_n,
@@ -55,32 +55,32 @@ module mdp3_parser #(
     output reg               error
 );
 
-localparam [3:0]  BYTES      = 4'(DW / 8);
-    localparam [8:0]  MAX_MSG    = 256;   // bytes por buffer (corpus <= ~250 B)
-    localparam [8:0]  FIFO_DEPTH = 256;   // words de salida (32 bits c/u)
-    localparam [7:0]  PKT_HDR    = 12;
-    localparam [7:0]  MSG_PREFIX = 10;
-    localparam [7:0]  EXP_BYTE   = 8'hF7; // PRICE9/PRICENULL9 exponent = -9
+localparam logic [3:0]  BYTES     = 4'(DW / 8);
+    localparam logic [8:0]  MAX_MSG    = 256;   // bytes por buffer (corpus <= ~250 B)
+    localparam logic [8:0]  FIFO_DEPTH = 256;   // words de salida (32 bits c/u)
+    localparam logic [7:0]  PKT_HDR    = 12;
+    localparam logic [7:0]  MSG_PREFIX = 10;
+    localparam logic [7:0]  EXP_BYTE   = 8'hF7; // PRICE9/PRICENULL9 exponent = -9
 
-    localparam [15:0] TPL_46 = 16'd46, TPL_47 = 16'd47, TPL_52 = 16'd52, TPL_53 = 16'd53;
+    localparam logic [15:0] TPL_46 = 16'd46, TPL_47 = 16'd47, TPL_52 = 16'd52, TPL_53 = 16'd53;
 
     // offsets dentro del cuerpo (desde byte 10 del mensaje), LE
-    localparam [31:0] O46_TS=0, O46_MEI=8, O46_DIM=11, O46_ENT=14, O46_BL1=32, O46_BL2=24;
-    localparam [31:0] O46_PX=0, O46_SZ=8, O46_SEC=12, O46_RPT=16, O46_NO=20, O46_LVL=24,
-                      O46_ACT=25, O46_TYP=26;
-    localparam [31:0] O46_OID=0, O46_PRI=8, O46_DQ=16, O46_REF=20, O46_OA=21;
-    localparam [31:0] O47_OID=0, O47_PRI=8, O47_PX=16, O47_DQ=24, O47_SEC=28,
-                      O47_ACT=32, O47_TYP=33, O47_BL=40;
-    localparam [31:0] O52_SEC=8, O52_RPT=12, O52_TS=16, O52_DIM=59, O52_ENT=62, O52_BL=22;
-    localparam [31:0] O52_PX=0, O52_SZ=8, O52_NO=12, O52_LVL=16, O52_TYP=21;
-    localparam [31:0] O53_SEC=8, O53_TS=20, O53_DIM=28, O53_ENT=31, O53_BL=29;
-    localparam [31:0] O53_OID=0, O53_PRI=8, O53_PX=16, O53_DQ=24, O53_TYP=28;
+    localparam logic [31:0] O46_TS=0, O46_MEI=8, O46_DIM=11, O46_ENT=14, O46_BL1=32, O46_BL2=24;
+    localparam logic [31:0] O46_PX=0, O46_SZ=8, O46_SEC=12, O46_RPT=16, O46_NO=20, O46_LVL=24,
+                           O46_ACT=25, O46_TYP=26;
+    localparam logic [31:0] O46_OID=0, O46_PRI=8, O46_DQ=16, O46_REF=20, O46_OA=21;
+    localparam logic [31:0] O47_OID=0, O47_PRI=8, O47_PX=16, O47_DQ=24, O47_SEC=28,
+                           O47_ACT=32, O47_TYP=33, O47_BL=40;
+    localparam logic [31:0] O52_SEC=8, O52_RPT=12, O52_TS=16, O52_DIM=59, O52_ENT=62, O52_BL=22;
+    localparam logic [31:0] O52_PX=0, O52_SZ=8, O52_NO=12, O52_LVL=16, O52_TYP=21;
+    localparam logic [31:0] O53_SEC=8, O53_TS=20, O53_DIM=28, O53_ENT=31, O53_BL=29;
+    localparam logic [31:0] O53_OID=0, O53_PRI=8, O53_PX=16, O53_DQ=24, O53_TYP=28;
 
     // ── cola de bytes de entrada (FIFO circular de MAX_MSG bytes) ──────────
     // qw = puntero de escritura, qh = puntero de lectura (mod MAX_MSG).
     // qavail = bytes ya escritos sin consumir; qbyte() lee del FIFO y, para
     // el word que entra en este ciclo (k >= qavail), directamente de tdata.
-    reg [7:0] qbytes [0:MAX_MSG-1];
+    reg [7:0] qbytes [MAX_MSG];
     reg [7:0] qw, qh;
 
     function automatic [7:0] qbyte;
@@ -96,9 +96,9 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
         16'(qavail) + (s_axis_tvalid && s_axis_tready ? 16'(BYTES) : 16'd0);
 
     // ── buffers de mensaje ping-pong ─────────────────────────────────────────
-    reg [7:0] mbuf0 [0:MAX_MSG-1];
-    reg [7:0] mbuf1 [0:MAX_MSG-1];
-    reg       occ [0:1];
+    reg [7:0] mbuf0 [MAX_MSG];
+    reg [7:0] mbuf1 [MAX_MSG];
+    reg       occ [2];
 
     function automatic [7:0] mrb;
         input [31:0] off;
@@ -132,7 +132,7 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
 
     // ── captura ──────────────────────────────────────────────────────────────
     reg [2:0]  cst;   // CS_WAIT=4 → 3 bits mínimo
-    localparam [2:0] CS_HDR=0, CS_SIZE=1, CS_BODY=2, CS_SKIP=3, CS_WAIT=4;
+    localparam logic [2:0] CS_HDR=0, CS_SIZE=1, CS_BODY=2, CS_SKIP=3, CS_WAIT=4;
     reg [7:0]  hdr_pos;
     reg        gap_check;
     reg        first_pkt;
@@ -144,7 +144,7 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
 
     // ── decodificación ───────────────────────────────────────────────────────
     reg [3:0]  dst;
-    localparam [3:0] DS_IDLE=0, DS_HDR=1, DS_ROOT=2, DS_G1=3, DS_G1_ENT=4, DS_PUSH=5,
+    localparam logic [3:0] DS_IDLE=0, DS_HDR=1, DS_ROOT=2, DS_G1=3, DS_G1_ENT=4, DS_PUSH=5,
                      DS_G2_DIM=6, DS_G2_ENT=7, DS_PASS=8, DS_DONE=9;
     reg        dec_sel;
     reg [15:0] d_tpl, d_size, d_sid, d_ver;
@@ -153,7 +153,7 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
     reg [31:0] d_sec, d_rpt;
     reg [15:0] g1_base, g2_base;
     reg [7:0]  g1_n, g2_n, g_idx;
-    reg [31:0] rrec [0:17];
+    reg [31:0] rrec [18];
     reg [4:0]  rlen, r_idx;
     reg        g1_mode;
     reg [1:0]  p_n;
@@ -162,8 +162,8 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
     reg [4:0]  p_cnt;
 
     // ── FIFO de salida (32 bits/palabra) ─────────────────────────────────────
-    reg [31:0] f_mem [0:FIFO_DEPTH-1];
-    reg        f_tl  [0:FIFO_DEPTH-1];
+    reg [31:0] f_mem [FIFO_DEPTH];
+    reg        f_tl  [FIFO_DEPTH];
     reg [8:0]  f_cnt;          // words ocupadas (push - pop, un solo escritor)
     reg [7:0]  f_head, f_tail; // punteros circulares (wrappean solos)
 
@@ -506,6 +506,7 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
                                 end
                             end
                             3: dst <= DS_DONE;
+                            default: dst <= DS_DONE;   // recuperación ante X
                         endcase
                     end
                 end
