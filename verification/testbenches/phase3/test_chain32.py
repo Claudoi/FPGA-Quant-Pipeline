@@ -9,18 +9,21 @@ sin gaps -> BBO bit a bit y gap_detected en 0 (la cadena no rompe framing).
 import cocotb
 import os
 from cocotb.clock import Clock
+from cocotb.handle import Immediate
 from cocotb.triggers import RisingEdge
 
 from test_orderbook import (A, E, X, D, U, S, H, run_book, run_book_depth,
                             pack_depth, _pcap_msgs_subset, REAL_PCAP)
-from test_itch_parser import _packet_seq
+from test_itch_parser import (_check_input_stability, _packet_seq,
+                              _present_beat, packet_beats)
 
 
 async def _reset(dut):
-    dut.clk.setimmediatevalue(0)
-    cocotb.start_soon(Clock(dut.clk, 5, units="ns").start())
+    dut.clk.value = Immediate(0)
+    cocotb.start_soon(Clock(dut.clk, 5, unit="ns").start())
     dut.rst_n.value = 0
     dut.s_axis_tdata.value = 0
+    dut.s_axis_tkeep.value = 0
     dut.s_axis_tvalid.value = 0
     dut.s_axis_tlast.value = 0
     dut.bbo_tready.value = 1
@@ -29,32 +32,14 @@ async def _reset(dut):
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
 
-
-def _chunks32(payload):
-    chunks = []
-    for i in range(0, len(payload), 4):
-        bite = payload[i:i + 4]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (4 - len(bite))))
-    return chunks
-
-
-async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000):
-    """Conduce payloads MoldUDP64 concatenados a la cadena y recolecta BBO.
+async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
+                      require_input_stall=False):
+    """Conduce datagramas MoldUDP64 independientes y recolecta BBO.
 
     Devuelve (bbo_events, depth_words, cross, anomaly, gaps)."""
     await _reset(dut)
-    concat = b"".join(payloads)
-    chunks = _chunks32(concat)
-    len_acc = 0
-    lastbyte = set()
-    for p in payloads:
-        len_acc += len(p)
-        lastbyte.add(len_acc - 1)
-    lasts = set()
-    for bi in range(len(concat)):
-        if bi in lastbyte:
-            lasts.add(bi // 4)
-    n = len(chunks)
+    beats = packet_beats(payloads, 4)
+    n = len(beats)
     out = []
     depth = []
     ci = 0
@@ -62,10 +47,11 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000):
     cross = 0
     anomaly = 0
     gaps = 0
+    held = None
+    accepted_tlast = 0
+    input_stalls = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < n else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < n else 0
-        dut.s_axis_tlast.value = 1 if ci in lasts else 0
+        _present_beat(dut, beats, ci)
         dut.bbo_tready.value = 1
         dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
@@ -83,6 +69,11 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000):
             quiet = 0
         elif ci >= n:
             quiet += 1
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
+        input_stalls += int(
+            int(dut.s_axis_tvalid.value) == 1 and
+            int(dut.s_axis_tready.value) == 0)
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
             if ci < n:
                 ci += 1
@@ -92,6 +83,10 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000):
             anomaly = int(dut.anomaly_count.value)
         if quiet > window:
             break
+    assert accepted_tlast == len(payloads), (
+        f"CHAIN: tlast aceptados={accepted_tlast}, esperados={len(payloads)}")
+    if require_input_stall:
+        assert input_stalls > 0, "CHAIN: el adversarial no forzó backpressure"
     return out, depth, cross, anomaly, gaps
 
 
@@ -169,3 +164,26 @@ async def test_dp01_nd_parametrizado_llega_al_book(dut):
     assert depth == [pack_depth(*event[1:]) for event in exp_depth], (
         f"DP-01 ND={nd}: depth no coincide con el golden")
     assert gaps == 0, f"DP-01 ND={nd}: {gaps} gaps"
+
+
+@cocotb.test()
+async def test_chain_tkeep_datagramas_no_alineados_y_estabilidad(dut):
+    """AXI-KEEP-05/11: dos datagramas parciales conservan límites y beats."""
+    AMZN = 393
+    first = [
+        S(AMZN, 1_000_000_000, ord("Q")),
+    ]
+    second = [
+        A(AMZN, 1_000_000_001, 1, b"B", 100, b"AMZN    ", 1_000_00),
+        A(AMZN, 1_000_000_002, 2, b"S", 50, b"AMZN    ", 1_005_00),
+        E(AMZN, 1_000_000_003, 1, 40, 1001),
+    ]
+    payloads = [_packet_seq(first, 1), _packet_seq(second, 2)]
+    assert all(len(payload) % 4 for payload in payloads)
+    expected, golden = run_book(first + second)
+    got, _, cross, anomaly, gaps = await drive_chain(
+        dut, payloads, require_input_stall=True)
+    assert got == expected, f"AXI-KEEP cadena: got={got} exp={expected}"
+    assert cross == golden.cross_events
+    assert anomaly == golden.anomalies
+    assert gaps == 0

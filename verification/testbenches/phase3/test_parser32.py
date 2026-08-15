@@ -16,10 +16,11 @@ fase 1, ahora a 32 bits) y replay del pcap real del día local (espejo REP-02).
 """
 import cocotb
 import os
-from cocotb.clock import Clock
+import struct
 from cocotb.triggers import RisingEdge
 
-from test_itch_parser import _packet_seq, corpus_all_types, _reset
+from test_itch_parser import (_check_input_stability, _packet_seq, _present_beat,
+                              corpus_all_types, packet_beats, _reset)
 from golden_model.src import message_oracle
 
 REAL_SUBSET_PCAP = "/tmp/real_subset.pcap"
@@ -44,28 +45,30 @@ def run_oracle32(msgs):
     return oracle_words32([(1, msgs, _packet_seq(msgs, 1))])
 
 
-async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000):
-    """Conduce un payload en chunks de 4 B y devuelve (words, stalls)."""
+async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
+                      beats=None, expected_tlast=1, expected_errors=0):
+    """Conduce un datagrama en beats AXI de 4 B y devuelve (words, stalls)."""
     await _reset(dut)
-    chunks = []
-    for i in range(0, len(payload), 4):
-        bite = payload[i:i + 4]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (4 - len(bite))))
-    n = len(chunks)
+    beats = packet_beats([payload], 4) if beats is None else beats
+    n = len(beats)
     out = []
     ci = 0
     stalls = 0
     quiet = 0
     tr_idx = 0
+    held = None
+    accepted_tlast = 0
+    errors = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < n else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < n else 0
-        dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1 if (out_tready[tr_idx % len(out_tready)] == 1) else 0
         tr_idx += 1
         await RisingEdge(dut.clk)
         tv = int(dut.s_axis_tvalid.value)
         tr = int(dut.s_axis_tready.value)
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
+        errors += int(dut.error.value)
         if tv == 1 and tr == 0:
             stalls += 1
         if tv == 1 and tr == 1:
@@ -78,6 +81,10 @@ async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000):
             quiet += 1
         if quiet > 80:
             break
+    assert accepted_tlast == expected_tlast, (
+        f"tlast aceptados={accepted_tlast}, esperados={expected_tlast}")
+    assert errors == expected_errors, (
+        f"pulsos error={errors}, esperados={expected_errors}")
     return out, stalls
 
 
@@ -122,40 +129,44 @@ async def test_inv_p32_01_backpressure_salida_sin_perdida(dut):
 # P32-03 (REP-02 a 32 bits): replay del pcap real del día local
 # ---------------------------------------------------------------------------
 async def drive_pcap32(dut, pcap_path, max_cycles=3_000_000):
-    """Decap del pcap (Ethernet/IPv4/UDP -> MoldUDP64) a chunks de 4 B -> RTL."""
+    """Decap del pcap (Ethernet/IPv4/UDP -> MoldUDP64) por datagrama -> RTL."""
     import sys
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     "..", "..", "..", "scripts"))
     from binaryfile_to_pcap import iter_pcap_packets
     packets = list(iter_pcap_packets(pcap_path))
-    concat = b"".join(payload for _seq, _msgs, payload in packets)
+    payloads = [payload for _seq, _msgs, payload in packets]
+    assert packets, "P32-03: pcap existente sin datagramas MoldUDP64"
+    assert all(payloads), "P32-03: pcap existente con payload MoldUDP64 vacío"
 
     await _reset(dut)
-    chunks = []
-    for i in range(0, len(concat), 4):
-        bite = concat[i:i + 4]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (4 - len(bite))))
+    beats = packet_beats(payloads, 4)
     ci = 0
     quiet = 0
     out = []
+    held = None
+    accepted_tlast = 0
     for _ in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < len(chunks) else 0
-        dut.s_axis_tdata.value = chunks[ci] if ci < len(chunks) else 0
-        dut.s_axis_tlast.value = 1 if ci == len(chunks) - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.m_axis_tvalid.value) == 1 and int(dut.m_axis_tready.value) == 1:
             out.append(int(dut.m_axis_tdata.value))
             quiet = 0
-        elif ci >= len(chunks):
+        elif ci >= len(beats):
             quiet += 1
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
-            if ci < len(chunks):
+            if ci < len(beats):
                 ci += 1
         if quiet > 8000:
             break
+    assert accepted_tlast == len(payloads), (
+        f"P32-03: tlast aceptados={accepted_tlast}, esperados={len(payloads)}")
     exp = oracle_words32(packets)
+    assert exp, "P32-03: pcap existente sin salida esperada del subset ITCH"
     return out, exp, len(packets)
 
 
@@ -169,3 +180,40 @@ async def test_p32_03_replay_pcap_real_32(dut):
         f"P32-03: got({len(out)}) exp({len(exp)}) sobre {npack} paquetes:\n"
         f" got={out}\n exp={exp}")
     cocotb.log.info(f"P32-03 OK: {npack} paquetes, {len(out)} words de 32 bits bit a bit")
+
+
+@cocotb.test()
+async def test_p32_tkeep_invalido_y_truncados_recuperan(dut):
+    """AXI-KEEP-04/10: máscaras inválidas y truncados 1..3 B recuperan."""
+    malformed = _packet_seq([], 1)
+    recovery = corpus_all_types()[2]
+    recovered = _packet_seq([recovery], 2)
+    invalid = [
+        ("cero", 0b0000, 0, None),
+        ("hueco", 0b1010, 0, None),
+        ("lsb", 0b0011, -1, None),
+        ("parcial_no_final", 0b1100, -1, False),
+    ]
+    for name, keep, index, last in invalid:
+        bad_beats = packet_beats([malformed], 4)
+        data, _old_keep, old_last = bad_beats[index]
+        bad_beats[index] = (data, keep, old_last if last is None else last)
+        if last is False:
+            bad_beats.append((0, 0b1111, True))
+        got, _ = await drive_raw32(
+            dut, malformed, beats=bad_beats + packet_beats([recovered], 4),
+            expected_tlast=2, expected_errors=1)
+        assert got == run_oracle32([recovery]), f"{name}: got={got}"
+
+    first = corpus_all_types()[2]
+    tail = corpus_all_types()[8]
+    for missing in range(1, 4):
+        truncated = (struct.pack(">10sQH", b"SIM0000001", 1, 2) +
+                     len(first).to_bytes(2, "big") + first +
+                     len(tail).to_bytes(2, "big") + tail[:-missing])
+        got, _ = await drive_raw32(
+            dut, truncated,
+            beats=packet_beats([truncated, recovered], 4),
+            expected_tlast=2, expected_errors=1)
+        assert got == run_oracle32([first, recovery]), (
+            f"truncado {missing} B: got={got}")

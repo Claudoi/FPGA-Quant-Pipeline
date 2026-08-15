@@ -25,6 +25,7 @@ module itch_chain #(
     input  wire              clk,
     input  wire              rst_n,
     input  wire [DW-1:0]     s_axis_tdata,
+    input  wire [DW/8-1:0]   s_axis_tkeep,
     input  wire              s_axis_tvalid,
     output wire              s_axis_tready,
     input  wire              s_axis_tlast,
@@ -48,7 +49,8 @@ module itch_chain #(
 
     itch_parser #(.DW(DW), .QB(QB)) u_parser (
         .clk(clk), .rst_n(rst_n),
-        .s_axis_tdata(s_axis_tdata), .s_axis_tvalid(s_axis_tvalid),
+        .s_axis_tdata(s_axis_tdata), .s_axis_tkeep(s_axis_tkeep),
+        .s_axis_tvalid(s_axis_tvalid),
         .s_axis_tready(s_axis_tready), .s_axis_tlast(s_axis_tlast),
         .m_axis_tdata(p_m_axis_tdata), .m_axis_tvalid(p_m_axis_tvalid),
         .m_axis_tready(p_m_axis_tready), .m_axis_tlast(p_m_axis_tlast),

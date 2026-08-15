@@ -14,10 +14,12 @@ import os
 
 import cocotb
 from cocotb.clock import Clock
+from cocotb.handle import Immediate
 from cocotb.triggers import RisingEdge
 
 from test_orderbook import run_book, _pcap_msgs_subset, _fields_from_body, iter_records
-from test_itch_parser import _packet_seq
+from test_itch_parser import (_check_input_stability, _packet_seq,
+                              _present_beat, packet_beats)
 from golden_model.src import book as book_golden
 from golden_model.src import message_oracle
 
@@ -31,10 +33,11 @@ INVAL_CYCLES = 65536 + 32
 
 
 async def _reset(dut):
-    dut.clk.setimmediatevalue(0)
-    cocotb.start_soon(Clock(dut.clk, 5, units="ns").start())
+    dut.clk.value = Immediate(0)
+    cocotb.start_soon(Clock(dut.clk, 5, unit="ns").start())
     dut.rst_n.value = 0
     dut.s_axis_tdata.value = 0
+    dut.s_axis_tkeep.value = 0
     dut.s_axis_tvalid.value = 0
     dut.s_axis_tlast.value = 0
     dut.bbo_tready.value = 1
@@ -42,15 +45,6 @@ async def _reset(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
-
-
-def _chunks32(payload):
-    chunks = []
-    for i in range(0, len(payload), 4):
-        bite = payload[i:i + 4]
-        chunks.append(int.from_bytes(bite, "big") << (8 * (4 - len(bite))))
-    return chunks
-
 
 def _msg_word_starts(messages):
     """Índice de word (en el stream troceado del payload MoldUDP64) de la word
@@ -96,12 +90,13 @@ async def drive_lat(dut, payload, starts, max_cycles=3_000_000, window=8000):
     for _ in range(INVAL_CYCLES):
         dut.s_axis_tvalid.value = 0
         dut.s_axis_tdata.value = 0
+        dut.s_axis_tkeep.value = 0
         dut.s_axis_tlast.value = 0
         dut.bbo_tready.value = 1
         dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
-    words = _chunks32(payload)
-    n = len(words)
+    beats = packet_beats([payload], 4)
+    n = len(beats)
     ci = 0
     out = []
     accepts = []
@@ -109,10 +104,10 @@ async def drive_lat(dut, payload, starts, max_cycles=3_000_000, window=8000):
     cross = 0
     anomaly = 0
     gaps = 0
+    held = None
+    accepted_tlast = 0
     for cycle in range(max_cycles):
-        dut.s_axis_tvalid.value = 1 if ci < n else 0
-        dut.s_axis_tdata.value = words[ci] if ci < n else 0
-        dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
+        _present_beat(dut, beats, ci)
         dut.bbo_tready.value = 1
         dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
@@ -124,6 +119,8 @@ async def drive_lat(dut, payload, starts, max_cycles=3_000_000, window=8000):
             quiet = 0
         elif ci >= n:
             quiet += 1
+        held, took_last = _check_input_stability(dut, held)
+        accepted_tlast += took_last
         if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
             if ci < n:
                 accepts.append(cycle)
@@ -134,6 +131,8 @@ async def drive_lat(dut, payload, starts, max_cycles=3_000_000, window=8000):
             anomaly = int(dut.anomaly_count.value)
         if quiet > window:
             break
+    assert accepted_tlast == 1, (
+        f"SEC-LAT-01: tlast aceptados={accepted_tlast}, esperado=1")
     return accepts, out, cross, anomaly, gaps
 
 
