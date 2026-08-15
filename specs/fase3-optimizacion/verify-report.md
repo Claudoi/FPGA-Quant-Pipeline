@@ -150,8 +150,9 @@ $ python3 scripts/verify/mutate_parser.py
 exit 0
 
 $ python3 -m unittest -v scripts.verify.test_check_itch_gherkin
-4 tests: snapshot sano; spec/report omitidos + Gherkin duplicado;
-manifiesto vacío/ruta incoherente; espejo externo URAM/CHAIN-01
+15 tests: 1 snapshot sano y 14 negativos separados para declaraciones Gherkin,
+AST de tests, spec/report, duplicado, rutas, manifiesto/mapping, coincidencia
+exacta y espejo externo URAM/CHAIN-01
 OK
 
 $ python3 scripts/verify/check_itch_gherkin.py

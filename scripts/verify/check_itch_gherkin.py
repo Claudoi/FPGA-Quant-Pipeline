@@ -2,6 +2,7 @@
 """Gate F reproducible para el subconjunto ITCH/tkeep de la Tarea 6."""
 
 import argparse
+import ast
 import json
 import re
 from pathlib import Path
@@ -39,17 +40,40 @@ def _contains_id(text, case):
     return re.search(rf"(?<![A-Z0-9-]){token}(?![A-Z0-9-])", text, re.I)
 
 
+SCENARIO = re.compile(
+    r"^\s*(?:Escenario|Scenario)\s*:\s*"
+    r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)(?=\s|$)",
+    re.I,
+)
+
+
+def _scenario_ids(path):
+    ids = []
+    for file in sorted(path.rglob("*.feature")):
+        for line in file.read_text(encoding="utf-8").splitlines():
+            match = SCENARIO.match(line)
+            if match:
+                ids.append(match.group(1).upper())
+    return ids
+
+
 def _test_names(path):
     files = [path] if path.is_file() else sorted(path.rglob("*.py"))
     names = []
     for file in files:
-        text = file.read_text(encoding="utf-8")
-        names.extend(re.findall(r"(?:async\s+)?def\s+(test_[A-Za-z0-9_]+)", text))
+        tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+        names.extend(
+            node.name for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name.startswith("test_")
+        )
     return names
 
 
-def _norm(value):
-    return re.sub(r"[^a-z0-9]", "", value.lower())
+def _matches_test(case, name):
+    parts = (re.escape(part) for part in case.lower().split("-"))
+    pattern = r"^test_?" + r"_?".join(parts) + r"(?:_|$)"
+    return re.match(pattern, name.lower()) is not None
 
 
 def check_repo(root):
@@ -84,21 +108,14 @@ def check_repo(root):
                 f"esperado {expected_tests}")
 
         feature_dir = root / gherkin_rel
-        feature_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in sorted(feature_dir.glob("*.feature"))
-        ) if feature_dir.is_dir() else ""
+        scenario_ids = _scenario_ids(feature_dir) if feature_dir.is_dir() else []
         spec_path = root / f"specs/{campaign}/spec.md"
         report_path = root / f"specs/{campaign}/verify-report.md"
         spec_text = spec_path.read_text(encoding="utf-8") if spec_path.is_file() else ""
         report_text = report_path.read_text(encoding="utf-8") if report_path.is_file() else ""
 
         for case in contract["ids"]:
-            count = len(re.findall(
-                rf"(?<![A-Z0-9-]){re.escape(case)}(?![A-Z0-9-])",
-                feature_text,
-                re.I,
-            ))
+            count = scenario_ids.count(case)
             if count != 1:
                 errors.append(
                     f"{campaign}/{case}: aparece {count} veces en su corpus Gherkin")
@@ -110,7 +127,7 @@ def check_repo(root):
             test_rel = EXTERNAL_TESTS.get((campaign, case), expected_tests)
             test_path = root / test_rel
             names = _test_names(test_path) if test_path.exists() else []
-            if not any(_norm(case) in _norm(name) for name in names):
+            if not any(_matches_test(case, name) for name in names):
                 errors.append(
                     f"{campaign}/{case}: sin test espejo explícito en {test_rel}")
     return errors

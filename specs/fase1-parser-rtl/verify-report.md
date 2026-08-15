@@ -52,7 +52,7 @@ entorno.
 | C — estilo | `verible-verilog-lint` no está instalado | **NO EJECUTADO** |
 | D — cobertura | `SEC-FRM-04..08` cubiertos; REP-02 cubre oráculo/`tlast` y caracteriza stalls, pero no selecciona ni juzga el tramo A/U real; cobertura instrumental no configurada | **PARCIAL** |
 | E — mutación | `mutate_parser.py`: 19/19 mutantes compilables y muertos; 0 supervivientes, 0 mutantes rotos | **PASS** |
-| F — completitud | checker versionado: 12 IDs/3 campañas, unicidad Gherkin por campaña, presencia en spec/test/report y rutas del manifiesto; 4 negativos controlados | **PASS** |
+| F — completitud | checker versionado: 12 IDs/3 campañas, unicidad de declaraciones Gherkin por campaña, presencia en spec/test AST/report y rutas del manifiesto; 14 negativos controlados | **PASS** |
 | G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; el total de stalls no se presenta como el tramo contractual | **PASS de rigor; no cierra REP-02** |
 
 ## Gate A — salida fresca
@@ -146,20 +146,32 @@ Gate C no se convierte en PASS por haber pasado `--Wall`.
 | SEC-FRM-08 | `test_sec_frm08_fuente_estable_bajo_backpressure_entrada` |
 | REP-02 | `test_rep02_replay_pcap_real_dia_local` |
 
-El checker versionado verificó cada ID exactamente una vez en el corpus
-Gherkin de su propia campaña, presencia en `spec.md`, función `test_*`
-explícita y `verify-report.md`, además de que el manifiesto no esté vacío y
-que todas sus rutas existan. `CHAIN-01` se comparte intencionalmente entre
-las dos campañas de fase 3; la excepción URAM apunta de forma explícita a
-`verification/testbenches/phase3/test_chain32.py`.
+El checker versionado verificó cada ID exactamente una vez en una declaración
+real `Escenario:`/`Scenario:` de su propia campaña, presencia en `spec.md`,
+función `test_*` ejecutable obtenida del AST y `verify-report.md`, además de
+que el manifiesto no esté vacío y que todas sus rutas existan. Comentarios,
+strings y nombres con el ID embebido no cuentan. `CHAIN-01` se comparte
+intencionalmente entre las dos campañas de fase 3; la excepción URAM apunta
+de forma explícita a `verification/testbenches/phase3/test_chain32.py`.
 
 ```text
 $ python3 -m unittest -v scripts.verify.test_check_itch_gherkin
 test_comprueba_el_espejo_externo_de_chain01_uram ... ok
-test_detecta_manifiesto_vacio_y_ruta_incoherente ... ok
-test_detecta_spec_y_report_omitidos_y_gherkin_duplicado ... ok
+test_detecta_ausencia_de_test_ordinario ... ok
+test_detecta_cero_escenarios_para_un_id ... ok
+test_detecta_id_ausente_de_spec ... ok
+test_detecta_id_ausente_de_verify_report ... ok
+test_detecta_id_gherkin_duplicado_en_su_campana ... ok
+test_detecta_manifiesto_vacio ... ok
+test_detecta_mapping_de_campana_incoherente ... ok
+test_detecta_ruta_espejo_inexistente ... ok
+test_detecta_ruta_gherkin_inexistente ... ok
+test_ignora_async_test_comentado ... ok
+test_ignora_id_solo_en_comentario_gherkin ... ok
+test_ignora_string_que_parece_def_test ... ok
+test_no_acepta_id_embebido_en_nombre_de_test ... ok
 test_snapshot_sano_pasa ... ok
-Ran 4 tests in 0.016s
+Ran 15 tests in 0.052s
 OK
 
 $ python3 scripts/verify/check_itch_gherkin.py
