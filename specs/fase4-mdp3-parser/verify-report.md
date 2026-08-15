@@ -74,3 +74,58 @@ correctos; los del reuso, no.
 (la tready de 1 ciclo deja `qc=0` tras leer el tamaño; `CS_BODY` debe leer la
 word retenida vía `qc_eff` en el consumo, no desde `tdata` ya avanzada) y dejar
 los 3 espejos en verde, luego correlación con corpus completo y commit.
+
+## Iteración 3 — causa raíz del byte huérfano + gating del exponente (criterios 2-3)
+
+**Rojo diagnosticado con dump de buffer.** Instrumenté el RTL (`M3_DBG`,
+dump de `mbuf` en `DS_DONE`) y correlacioné los dumps contra los bytes de
+cada mensaje reconstruidos del paquete (caminando desde el header de 12 B).
+Resultado: **todos** los mensajes corruptos tenían exactamente **un byte
+huérfano en `mbuf[10]`** (el primer byte del cuerpo, tras el prefijo de
+10 B), que quedaba stale del uso previo del buffer ping-pong.
+
+**Causa raíz (bug real, distinto del descrito en iter 2):** las ramas de
+`CS_BODY` (parcial y completa) escribían en el buffer a lo sumo `2*BYTES`
+(8) bytes por ciclo — el lazo `for (k=0; k<2*BYTES; k++)` — pero avanzaban
+`cap_len`/`qh` por `qavail_eff` (o `cap_size-cap_len`), que puede superar 8
+cuando la cola acumuló bytes. El byte sobrante (el 9º, `mbuf[10]`) nunca se
+escribía. Se reescribió `CS_BODY` para consumir/avanzar **exactamente lo que
+escribe**: `cnt = min(restante, qavail_eff, 2*BYTES)`, y ambas ramas quedan
+unificadas en una sola.
+
+**Hallazgo concatenado (contrato #5 — ReferenceID fuera de rango):** tras
+cerrar el byte huérfano quedaron 7 bytes distintos en 7 records `tpl=46`
+MBOFD: el golden pone `w15` (exponente) a `0` en el fallback
+`src=None` (`ReferenceID >= NoMDEntries`, mensajes con `NoMD=0`), pero el
+RTL hardcodeaba `EXP_BYTE=0xF7` en `rrec[15]`. El schema fija el exponente
+constante `-9` (PRICENULL9/PRICE9), así que `0xF7` es correcto cuando la
+referencia es válida; solo faltaba **gatearlo** por `rref < g1_n`, igual
+que `rrec[5]/6/13/14`. Corregido.
+
+**Verde (criterio 2 — framing bit a bit):**
+```
+** test_mdp3_framing.test_m3frm01_..._bit_a_bit_vs_el_golden   PASS
+** test_mdp3_framing.test_m3frm02_mensajes_que_cruzan_limites  PASS
+** test_mdp3_framing.test_m3frm03_peor_caso_a_1_palabra...      FAIL (backpressure 139 > 16)
+** TESTS=3 PASS=2 FAIL=1
+```
+**Gate B/C:** `verilator --lint-only -Wall -Wno-DECLFILENAME
+-Wno-PINCONNECTEMPTY --top-module mdp3_parser rtl/parser/mdp3_parser.sv`
+→ **0 warnings**, exit 0.
+
+**Régimen de `M3-FRM-03` (criterio 3, line-rate) — limitación inherente, no
+bug:** el test arma un paquete de 24 mensajes `tpl=47` back-to-back que
+decodifica en **56 records MBOFD = 1008 words de salida** frente a ~707
+words de entrada (ratio **1.43**, expansión del Anexo M: cada record MBOFD
+emite 72 B por ~43 B de entrada). A DW=32 el parser no puede sostener 1
+palabra/ciclo de entrada si la salida crece más que la entrada: la FIFO se
+llena y la captura bloquea (backpressure real, ya admitida en el comentario
+de cabecera del RTL: *"limitación inherente al Anexo M, igual que LIN-01 de
+fase 1"*). Un `max_stall <= 16` es inalcanzable para entradas MBOFD-dominadas
+sin rediseño del régimen de captura/emisión. **Queda documentado como límite
+inherente pendiente de decisión de spec** (si el line-rate del criterio 3 debe
+medirse sobre el subset con expansión contenida, no sobre MBOFD puro).
+
+**Regresión (criterio 8):** golden `35/35`; `make sim` en
+`testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**.
+

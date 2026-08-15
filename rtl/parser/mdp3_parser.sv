@@ -290,51 +290,54 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
                 end
 
                 CS_BODY: begin
-                    if (32'(qavail_eff) >= 32'(cap_size) - 32'(cap_len)) begin
-                        // mensaje completo
+                    // Consume en este ciclo la cantidad de bytes que realmente
+                    // escribe: la menor entre lo que queda del mensaje
+                    // (cap_size-cap_len), lo disponible (qavail_eff) y el ancho
+                    // de captura por ciclo (2*BYTES). Hacerlo distinto (p. ej.
+                    // avanzar cap_len/qh por qavail_eff escribiendo solo
+                    // 2*BYTES) deja bytes del mensaje huérfanos en el buffer.
+                    if (32'(qavail_eff) != 32'd0) begin
+                        integer cnt;
+                        cnt = (32'(cap_size) - 32'(cap_len) < 32'(qavail_eff)) ?
+                              (32'(cap_size) - 32'(cap_len)) : 32'(qavail_eff);
+                        if (cnt > 32'(2*BYTES)) cnt = 32'(2*BYTES);
                         for (integer k = 0; k < 2*BYTES; k = k + 1)
-                            if (k < 32'(cap_size) - 32'(cap_len))
+                            if (k < cnt)
                                 if (cap_sel)
                                     mbuf1[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
                                 else
                                     mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
-                        occ[cap_sel] <= 1;
-                        if (s_axis_tlast) begin
-                            // paquete termina en el borde del mensaje: descartar
-                            // el padding residual (burst a alinear a palabra) y
-                            // el header de 12 B del siguiente paquete se lee
-                            // desde un burst nuevo (colas reset ad hoc)
-                            qh <= 0; qw <= 0;
-                            hdr_pos <= 0;
-                            if (occ[~cap_sel] == 0) begin
-                                cap_sel <= ~cap_sel;
-                                wait_hdr <= 0;
-                                cst <= CS_HDR;
+                        cap_len <= cap_len + cnt[15:0];
+                        qh <= 8'((32'(qh) + cnt) % 32'(MAX_MSG));
+                        if (32'(cap_len) + cnt >= 32'(cap_size)) begin
+                            // mensaje completo
+                            occ[cap_sel] <= 1;
+                            if (s_axis_tlast) begin
+                                // paquete termina en el borde del mensaje: descartar
+                                // el padding residual (burst a alinear a palabra) y
+                                // el header de 12 B del siguiente paquete se lee
+                                // desde un burst nuevo (colas reset ad hoc)
+                                qh <= 0; qw <= 0;
+                                hdr_pos <= 0;
+                                if (occ[~cap_sel] == 0) begin
+                                    cap_sel <= ~cap_sel;
+                                    wait_hdr <= 0;
+                                    cst <= CS_HDR;
+                                end else begin
+                                    wait_hdr <= 1;
+                                    cst <= CS_WAIT;
+                                end
                             end else begin
-                                wait_hdr <= 1;
-                                cst <= CS_WAIT;
+                                if (occ[~cap_sel] == 0) begin
+                                    cap_sel <= ~cap_sel;
+                                    wait_hdr <= 0;
+                                    cst <= CS_SIZE;
+                                end else begin
+                                    wait_hdr <= 0;
+                                    cst <= CS_WAIT;
+                                end
                             end
-                        end else begin
-                            qh <= 8'((32'(qh) + 32'(cap_size) - 32'(cap_len)) % 32'(MAX_MSG));
-                            if (occ[~cap_sel] == 0) begin
-                                cap_sel <= ~cap_sel;
-                                wait_hdr <= 0;
-                                cst <= CS_SIZE;
-                            end else begin
-                                wait_hdr <= 0;
-                                cst <= CS_WAIT;
-                            end
-                        end
-                    end else if (qavail_eff != 16'd0) begin
-                        for (integer k = 0; k < 2*BYTES; k = k + 1)
-                            if (k < 32'(qavail_eff))
-                                if (cap_sel)
-                                    mbuf1[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
-                                else
-                                    mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
-                        cap_len <= cap_len + qavail_eff;
-                        qh <= 8'((32'(qh) + 32'(qavail_eff)) % 32'(MAX_MSG));
-                        if (s_axis_tlast) begin
+                        end else if (s_axis_tlast) begin
                             error <= 1;   // mensaje truncado por tlast
                             hdr_pos <= 0;
                             cst <= CS_HDR;
@@ -489,8 +492,11 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
                                     p_off  <= p_off + 1;
                                     p_cnt  <= p_cnt + 1;
                                     if (p_cnt == 5'd3 || p_off + 16'd1 == d_size) begin
-                                        f_mem[f_tail] <= (p_word << 8) |
-                                                          32'(mrb(p_off, dec_sel));
+                                        // alinear a la izquierda la palabra final
+                                        // parcial (data al tope, ceros al final)
+                                        f_mem[f_tail] <= ((p_word << 8) |
+                                                          32'(mrb(p_off, dec_sel)))
+                                                         << (8 * (3 - p_cnt));
                                         f_tl[f_tail]  <= (p_off + 16'd1 == d_size);
                                         f_tail <= f_tail + 1;
                                         p_word <= 0;
@@ -650,7 +656,7 @@ localparam [3:0]  BYTES      = 4'(DW / 8);
                         rrec[12] <= {rref, 24'h0};
                         rrec[13] <= (rref < g1_n) ? mru32(src + O46_PX, dec_sel) : 32'd0;
                         rrec[14] <= (rref < g1_n) ? mru32(src + O46_PX + 4, dec_sel) : 32'd0;
-                        rrec[15] <= {EXP_BYTE, 24'h0};
+                        rrec[15] <= (rref < g1_n) ? {EXP_BYTE, 24'h0} : 32'd0;
                         rrec[16] <= mru32(eb + O46_DQ, dec_sel);
                         rrec[17] <= 0;
                         if (rref >= g1_n) error <= 1;   // contrato #5
