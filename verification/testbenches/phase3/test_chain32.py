@@ -109,25 +109,49 @@ async def test_chain01_feed_real_bit_a_bit(dut):
     msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
     assert msgs, "CHAIN-01: pcap presente sin mensajes del subset"
     assert keep, "CHAIN-01: pcap presente sin símbolos del subset"
-    expected, golden = run_book(msgs)
+    nd = len(dut.depth_tdata) // 128
+    expected, expected_depth, golden = run_book_depth(msgs, nd=nd)
+    expected_depth_words = [pack_depth(*event[1:]) for event in expected_depth]
     assert expected, "CHAIN-01: subset real sin eventos BBO observables"
+    assert expected_depth_words, "CHAIN-01: subset real sin eventos depth observables"
+    assert len(expected) == len(expected_depth_words), (
+        f"CHAIN-01 ND={nd}: golden BBO={len(expected)}, "
+        f"depth={len(expected_depth_words)}")
     cocotb.log.info(
         f"CHAIN-01: {len(msgs)} msgs / {len(keep)} símbolos contra golden "
         f"(parser 32 -> book 32, stream reconstruido del subset)")
-    got, _, cross, anomaly, gaps = await drive_chain(dut, [_packet_seq(msgs, 1)])
+    got, depth, cross, anomaly, gaps = await drive_chain(
+        dut, [_packet_seq(msgs, 1)])
+    assert len(got) == len(depth), (
+        f"CHAIN-01 ND={nd}: RTL BBO={len(got)}, depth={len(depth)}")
+    assert len(got) == len(expected), (
+        f"CHAIN-01 ND={nd}: BBO RTL={len(got)}, golden={len(expected)}")
+    assert len(depth) == len(expected_depth_words), (
+        f"CHAIN-01 ND={nd}: depth RTL={len(depth)}, "
+        f"golden={len(expected_depth_words)}")
     if got != expected:
         first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
         raise AssertionError(
             f"CHAIN-01: got({len(got)}) exp({len(expected)}); primer desajuste "
             f"en evento {first}:\n got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
+    if depth != expected_depth_words:
+        first = next(
+            i for i, (got_word, exp_word) in
+            enumerate(zip(depth, expected_depth_words))
+            if got_word != exp_word)
+        raise AssertionError(
+            f"CHAIN-01 ND={nd}: depth got({len(depth)}) "
+            f"exp({len(expected_depth_words)}); primer desajuste en evento "
+            f"{first}: got=0x{depth[first]:x}, "
+            f"exp=0x{expected_depth_words[first]:x}")
     assert cross == golden.cross_events, (
         f"CHAIN-01 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"CHAIN-01 anomaly: got={anomaly} exp={golden.anomalies}")
     assert gaps == 0, f"CHAIN-01: {gaps} gaps en el stream del subset"
     cocotb.log.info(
-        f"CHAIN-01 OK: {len(got)} eventos bit a bit por la cadena de 32 bits, "
-        f"cross={cross}, anomaly={anomaly}, gaps={gaps}")
+        f"CHAIN-01 OK ND={nd}: {len(got)} BBO y {len(depth)} depth bit a bit "
+        f"por la cadena de 32 bits, cross={cross}, anomaly={anomaly}, gaps={gaps}")
 
 
 @cocotb.test()

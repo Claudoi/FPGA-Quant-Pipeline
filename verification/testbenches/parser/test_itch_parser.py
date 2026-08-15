@@ -1102,6 +1102,7 @@ async def drive_pcap(dut, pcap_path, max_cycles=2_000_000):
     out = []
     held = None
     accepted_tlast = 0
+    input_stalls = 0
     for _ in range(max_cycles):
         _present_beat(dut, beats, ci)
         dut.m_axis_tready.value = 1
@@ -1113,7 +1114,10 @@ async def drive_pcap(dut, pcap_path, max_cycles=2_000_000):
             quiet += 1
         held, took_last = _check_input_stability(dut, held)
         accepted_tlast += took_last
-        if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
+        input_valid = int(dut.s_axis_tvalid.value)
+        input_ready = int(dut.s_axis_tready.value)
+        input_stalls += int(input_valid == 1 and input_ready == 0)
+        if input_valid == 1 and input_ready == 1:
             if ci < len(beats):
                 ci += 1
         # drenaje completo: feed consumido y cola vacía (sin salida tras 8000 ciclos)
@@ -1128,18 +1132,21 @@ async def drive_pcap(dut, pcap_path, max_cycles=2_000_000):
     assert exp, "REP-02: pcap sin salida esperada del subset ITCH"
     assert accepted_tlast == len(payloads), (
         f"REP-02: tlast aceptados {accepted_tlast}, esperado {len(payloads)}")
-    return out, exp, len(packets)
+    return out, exp, len(packets), input_stalls
 
 
 @cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_rep02_replay_pcap_real_dia_local(dut):
     """Espejo §REP-02: el RTL sobre un pcap del día real coincide byte a byte.
     (pcap local no commiteado; el decorador declara la omisión si no existe)."""
-    out, exp, npack = await drive_pcap(dut, REAL_PCAP)
+    out, exp, npack, input_stalls = await drive_pcap(dut, REAL_PCAP)
     assert out == exp, (
         f"REP-02: got({len(out)}) exp({len(exp)}) sobre {npack} paquetes:\n"
         f" got={out}\n exp={exp}")
-    cocotb.log.info(f"REP-02 OK: {npack} paquetes, {len(out)} words byte a byte")
+    assert input_stalls >= 0, "REP-02: contador de stalls de entrada inválido"
+    cocotb.log.info(
+        f"REP-02 OK: {npack} paquetes, {len(out)} words byte a byte, "
+        f"stalls de entrada con m_axis_tready=1: {input_stalls}")
 
 
 # ---------------------------------------------------------------------------
