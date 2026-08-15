@@ -25,13 +25,13 @@ El documento maestro, el alcance por fase y los riesgos viven en
 | Fase | Estado verificable |
 |---|---|
 | 0 — golden ITCH | Cerrada. Golden Python, 22 tipos validados y evidencia de día real. |
-| 1 — parser RTL | Cerrada funcionalmente: framing MoldUDP64, gaps, backpressure y oráculo bit a bit. |
+| 1 — parser RTL | **Reabierta en framing**: falta transportar y verificar los bytes válidos del último beat mediante `s_axis_tkeep`; la evidencia anterior de gaps, backpressure y oráculo se conserva como histórica. |
 | 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
-| 3 — DW=32/URAM | RTL y pruebas URAM terminados; **no cerrada** hasta adjuntar Vivado (WNS/TNS y recursos). |
-| 4 — CME MDP3 | Parser cerrado funcionalmente en DW=32/64: golden schema-driven, subset 46/47/52/53, passthrough, gaps, robustez y mutación. Sin Vivado no se acredita timing. |
+| 3 — DW=32/URAM | **No cerrada**: la cadena hereda el framing `s_axis_tkeep` pendiente y falta adjuntar Vivado (WNS/TNS y recursos). |
+| 4 — CME MDP3 | **Reabierta funcionalmente**: falta cerrar framing `s_axis_tkeep`; schema/version, límite de tamaño y backpressure de salida se tratarán en loops separados. Sin Vivado no se acredita timing. |
 
-No presentar fase 3 como timing cerrado ni fase 4 como timing-closed sin la
-evidencia correspondiente en su `verify-report.md`.
+No presentar las fases 1, 3 o 4 como cerradas mientras sus criterios reabiertos
+no tengan evidencia vigente en el `verify-report.md` correspondiente.
 
 ## Fuentes de verdad
 

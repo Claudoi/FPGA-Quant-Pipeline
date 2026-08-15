@@ -19,7 +19,8 @@ para el silicio con timing cerrado a 10G».
 - **Parametrización DW=32 del parser** (`rtl/parser/itch_parser.sv` ya tiene
   `parameter DW=64`): la variante 32-bit debe cumplir los criterios de fase 1
   (registro Anexo A bit a bit, line-rate 1 palabra/ciclo, framing/gaps/sesión,
-  backpressure, truncado) y la variante 64-bit queda en regresión verde.
+  backpressure, truncado y bytes válidos por `tkeep`) y la variante 64-bit queda
+  en regresión verde.
 - **Parametrización DW=32 del book** (`rtl/orderbook/orderbook.sv` ya tiene
   `parameter DW=64`): Anexo A de 32 bits (w0={type,locate,len}, w1=msg_idx,
   w2..=cuerpo MSB-first — **layout recortado por la campaña fase3-uram,
@@ -86,10 +87,14 @@ renombra: solo se añaden parámetros/puertos nuevos y se parametriza lo existen
   de salida.
 - **Endianness:** cuerpo big-endian del wire; offsets exactos de
   `golden_model/itch/messages.py` (fuente única, regla fases 0/1).
+- **Framing de entrada:** `itch_chain` expone `s_axis_tkeep[DW/8-1:0]` y hereda
+  literalmente el contrato de bytes válidos de fase 1. La interfaz interna
+  parser→book no cambia.
 
 ## Superficie y amenazas
 
-**Puertos nuevos del book (top `orderbook`):**
+**Puerto nuevo del top de cadena:** `s_axis_tkeep[DW/8-1:0]`, conectado solo a
+`itch_parser`. Puertos nuevos del book (top `orderbook`):
 
 | Señal | Ancho | Descripción |
 |---|---|---|

@@ -84,6 +84,13 @@ renombra ni mueve nada existente. `verification/testbenches/` y
 - Determinismo: mismo pcap de entrada → mismos registros de salida bit a bit;
   si aparece un gap de secuencia, el parsing continúa (no aborta), lo señaliza
   y lo cuenta.
+- **Bytes válidos AXI:** la entrada incluye `s_axis_tkeep[DW/8-1:0]` con
+  semántica AXI estándar. Todo beat no final tiene todos sus lanes válidos; el
+  último usa un prefijo MSB contiguo de unos. Los lanes con `tkeep=0` no entran
+  en la cola. Máscaras con huecos, `tkeep=0` o una palabra parcial sin `tlast`
+  pulsan `error` y descartan el datagrama, drenándolo hasta `tlast` si el beat
+  inválido no era final. Contrato completo:
+  `docs/superpowers/specs/2026-08-15-axis-tkeep-framing-design.md`.
 
 ## Superficie y amenazas
 
@@ -94,6 +101,7 @@ renombra ni mueve nada existente. `verification/testbenches/` y
 | `clk` | 1 | 156,25 MHz |
 | `rst_n` | 1 | reset activo bajo, síncrono |
 | `s_axis_tdata` | 64 | palabra del payload MoldUDP64 (ya decapado de IP/UDP) |
+| `s_axis_tkeep` | 8 | byte válido por lane AXI; prefijo MSB en el beat final |
 | `s_axis_tvalid` | 1 | hay palabra válida |
 | `s_axis_tready` | 1 | el parser acepta la palabra |
 | `s_axis_tlast` | 1 | última palabra del payload UDP (fin de paquete) |
@@ -116,6 +124,10 @@ es la lista literal que el barrido de `/verify` ataca.
 
 - **Gap de secuencia MoldUDP64** (`seq_actual > esperado`) — SEC-GAP-01.
 - **Mensaje que cruza límite de palabra de 8 B** — SEC-ALN-01.
+- **Dos datagramas no alineados consecutivos**: cada payload es un burst AXI
+  independiente y el padding nunca precede al header posterior. — SEC-FRM-05.
+- **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
+  `error`, descarte y recuperación en el paquete siguiente. — SEC-FRM-06.
 - **Mensaje que cruza límite de paquete** (tlast en medio de un mensaje:
   en MoldUDP64 un mensaje nunca se parte entre paquetes, pero el RTL debe
   gestionarlo con firmeza: count inconsistente con el último paquete) —
@@ -178,12 +190,14 @@ real del feed (decisión Q8/Q9).
    de un mensaje dentro de la palabra de 64-bit, incluidos mensajes que
    cruzan el límite de palabra.
    — Gherkin: `datapath.feature` §ALN-01
-4. [x] **Framing MoldUDP64:** sesión, seq y count parseados; seq esperado =
+4. [ ] **Framing MoldUDP64:** sesión, seq y count parseados; seq esperado =
    prev_seq + prev_count; un **gap** se señaliza (`gap_detected`), se cuenta y
    el parsing continúa; seq == esperado (sin gap) no señaliza; cambio de
-   sesión resetea el seq esperado; count=0 es válido.
+   sesión resetea el seq esperado; count=0 es válido. Cada payload se presenta
+   como burst independiente con `tkeep`; dos paquetes no alineados no comparten
+   beat ni contaminan cabeceras.
    — Gherkin: `framing.feature` §FRM-01, §FRM-02, §SEC-GAP-01, §SEC-GAP-02,
-   §SEC-FRM-03, §SEC-FRM-04
+   §SEC-FRM-03, §SEC-FRM-04, §SEC-FRM-05, §SEC-FRM-06
 5. [x] **AXI-Stream con backpressure:** con `tready` bajo intermite el parser
    retiene el stream sin perder ni duplicar ningún registro (oráculo byte a
    byte); la secuencia `tvalid/tready/tlast` respeta el handshake.
@@ -195,14 +209,16 @@ real del feed (decisión Q8/Q9).
    pulsa `error` y se descarta. No se añade un banco de contadores por tipo:
    nunca formó parte de los puertos y ningún consumidor del pipeline lo usa.
    — Gherkin: `parser.feature` §SEC-PAR-04
-7. [x] Longitud incoherente / frame truncado cancelan el mensaje con `error`,
+7. [ ] Longitud incoherente / frame truncado cancelan el mensaje con `error`,
    descartan el resto del datagrama inválido y continúan desde la cabecera del
-   siguiente paquete íntegro (sin abortar el stream, fail con señal).
+   siguiente paquete íntegro (sin abortar el stream, fail con señal). Los bytes
+   con `tkeep=0` nunca completan una longitud declarada.
    — Gherkin: `parser.feature` §SEC-PAR-03, §SEC-FRM-01, §SEC-FRM-02
-8. [x] **Replay real de fase 1 (hybrid oracle):** el RTL procesa los registros
+8. [ ] **Replay real de fase 1 (hybrid oracle):** el RTL procesa los registros
    de los mensajes del subset de un pcap local del día real/replay, y su
    salida es byte a byte idéntica al oráculo `--emit-messages` sobre ese mismo
-   pcap. Además, un par de **vectores congelados** pequeños se commitean en
+   pcap, emitiendo un burst y un `tlast` por payload UDP. Además, un par de
+   **vectores congelados** pequeños se commitean en
    `verification/vectors/messages/` y el RTL los reproduce.
    — Gherkin: `replay.feature` §REP-01, §REP-02
 9. [x] **Cabos de fase 0** (decisión pendiente #2, cerrados ANTES del RTL):
@@ -225,11 +241,11 @@ real del feed (decisión Q8/Q9).
 | 1 | cocotb `test_*` espejo de `parser.feature`/`output.feature` sobre vectores sintéticos (oráculo messages.py + `--emit-messages`) |
 | 2 | cocotb: cuatro A/U back-to-back con QB=64, salida bit a bit y stalls `<=24` con tready=1 |
 | 3 | cocotb: barrido de las 8 alineaciones (escenario ALN-01 con Esquema) |
-| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0) |
+| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0), dos datagramas no alineados y máscaras `tkeep` válidas/inválidas |
 | 5 | cocotb: tready aleatorio/pérdida controlada, comparar salida vs oráculo sin pérdida/dup |
 | 6 | cocotb: H canónico/longitud H incorrecta entre mensajes A; chequear validación, avance de `msg_idx` y no-registro |
-| 7 | cocotb: longitudes rotas / frames truncados → `error`, continuación |
-| 8 | cocotb: replay de pcap del día real (local, `data/itch_sample/`) + vectores congelados commiteados |
+| 7 | cocotb: longitudes rotas / frames truncados, incluidos bordes sub-word según `tkeep` → `error`, continuación |
+| 8 | cocotb: replay de pcap del día real como bursts independientes + conteo de `tlast` + vectores congelados commiteados |
 | 9 | `python3 -m golden_model.scripts.run_golden data/itch_sample/01302019.NASDAQ_ITCH50.gz …` (sin anomalías) + vectores sintéticos commiteados |
 | 10 | `verilator --lint-only -Wall --top-module itch_parser rtl/parser/<files>.sv` |
 | 11 | `verible-verilog-lint rtl/parser/<files>.sv` |

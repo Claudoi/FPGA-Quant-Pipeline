@@ -91,8 +91,10 @@ en esta campaña).
 
 ## Superficie y amenazas
 
-**Sin puertos nuevos en el top** (`itch_chain`/`orderbook`): el contrato AXI
-de entrada/salida (bbo_*, depth_*, cross/anomaly/error) es el de fase 3.
+**Un puerto nuevo de framing en `itch_chain`:** `s_axis_tkeep[DW/8-1:0]`,
+heredado de fase 1 para marcar los bytes válidos del payload UDP. `orderbook`
+no cambia de puertos; el contrato de salida
+(`bbo_*`, `depth_*`, `cross/anomaly/error`) sigue siendo el de fase 3.
 
 **Casos de abuso del dominio** (cada uno con escenario en Gherkin):
 
@@ -130,8 +132,8 @@ por el alargamiento del apply multi-ciclo.
   conservados (SLOT=16, PROBE=8, ND=5, K=19, P=32, NSYM=20).
 - `rtl/parser/itch_parser.sv` — se **edita** solo en ST_TS (recorte); el resto
   del datapath y la cola intactos.
-- `rtl/itch_chain.sv` — sin cambios salvo alineación de parámetros si hiciera
-  falta (verificar el gotcha del parámetro efectivo antes de medir).
+- `rtl/itch_chain.sv` — propaga `s_axis_tkeep` al parser; el enlace normalizado
+  parser→book y los parámetros efectivos no cambian.
 - `golden_model/src/book.py` / `golden_model/itch/messages.py` — oráculos
   únicos; el layout recortado se define desde el oráculo, NUNCA con offsets a
   mano nuevos en RTL.

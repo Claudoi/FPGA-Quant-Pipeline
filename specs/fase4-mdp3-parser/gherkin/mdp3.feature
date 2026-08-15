@@ -31,6 +31,7 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
 
   Escenario: M3-FRM-02 — mensajes que cruzan límites de palabra
     Dado un corpus cuyos mensajes terminan y empiezan en cualquier byte
+    Y cada payload UDP se presenta como un burst con tkeep y tlast propios
     Cuando el parser los procesa a DW=32 y DW=64
     Entonces no se pierde ni se duplica ningún mensaje
 
@@ -72,7 +73,7 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Y no se cuelga ni corrompe el resto del stream
 
   Escenario: M3-INV-02 — paquete truncado por tlast manejado
-    Dado un payload UDP que termina en medio de un mensaje
+    Dado un payload UDP al que le faltan entre 1 y DW/8 menos 1 bytes de un mensaje
     Cuando el parser recibe tlast de entrada
     Entonces señaliza error si el mensaje declarado no está completo
     Y espera el siguiente paquete sin estado corrupto
@@ -82,6 +83,12 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Cuando el parser lo procesa
     Entonces señaliza error o emite record vacío según el contrato del golden
     Y no trunca silenciosamente los entries siguientes
+
+  Escenario: M3-INV-04 — una máscara tkeep inválida se descarta con señal
+    Dado un beat con tkeep cero, con huecos o parcial sin tlast
+    Cuando el parser lo acepta y después recibe un paquete íntegro
+    Entonces señaliza error y descarta el paquete inválido
+    Y procesa el paquete posterior sin pérdida ni estado corrupto
 
   Escenario: M3-SCH-01 — los localparams RTL coinciden con el schema v12
     Dado el schema SBE XML oficial de CME y el RTL especializado

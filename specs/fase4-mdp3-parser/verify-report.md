@@ -1,8 +1,14 @@
 # verify-report — fase4-mdp3-parser
 
+> **Estado vigente: REABIERTA (2026-08-15).** La evidencia previa no representa
+> últimos beats con un número parcial de bytes válidos. Los resultados se
+> conservan como evidencia histórica, pero los criterios 2, 7 y 8 vuelven a
+> estar abiertos hasta implementar y verificar `s_axis_tkeep`. Los restantes
+> hallazgos de schema/version, tamaño y backpressure se resolverán por separado.
+
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
-> Estado: **cerrada funcionalmente (2026-08-15)**. Los criterios 1-9 pasan
+> Estado histórico: **se declaró cerrada funcionalmente (2026-08-15)**. Los criterios 1-9 pasaban
 > en DW=32 y DW=64; el objetivo de frecuencia no se presenta como timing
 > cerrado porque Vivado no está disponible en este entorno.
 
@@ -215,14 +221,16 @@ fase3 Anexo A/URAM           TESTS=2  PASS=2  FAIL=0
 fase3 URAM                   TESTS=4  PASS=4  FAIL=0
 ```
 
-## Veredicto
+## Veredicto histórico — sustituido por la reapertura
 
-El parser CME MDP3 queda **cerrado en su alcance funcional**: golden
+El parser CME MDP3 se declaró **cerrado en su alcance funcional**: golden
 schema-driven, framing multi-mensaje y packet-end en dos anchuras, subset
 46/47/52/53, passthrough, gaps, inválidos, mutación y regresión completa. No
-se incluyen datos DataMine ni se afirma evidencia real que no existe.
+se incluyen datos DataMine ni se afirma evidencia real que no existe. Este
+veredicto ya no representa el estado actual por los hallazgos descritos al
+inicio del informe.
 
 La frecuencia objetivo de 322,265625 MHz (DW=32) / 156,25 MHz (DW=64) sigue
 siendo una **propiedad física no acreditada**: no hay Vivado en el entorno ni
 WNS/TNS/utilización del `mdp3_parser`. Este límite no invalida el cierre
-funcional, pero prohíbe describir la fase como timing-closed.
+funcional histórico, pero prohíbe describir la fase como timing-closed.

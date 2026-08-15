@@ -18,10 +18,10 @@ MoldUDP64 → parser ITCH → order book (URAM) → BBO/top-N
 | Fase | Contenido | Estado |
 |---|---|---|
 | **0** | Golden model Python (parser ITCH + order book + vectores y tooling) | **Cerrada**; 22 tipos y replay de día real |
-| **1** | Parser RTL MoldUDP64/ITCH contra golden | **Cerrada funcionalmente**; 20/20 tests, 12/12 mutantes |
+| **1** | Parser RTL MoldUDP64/ITCH contra golden | **Reabierta en framing**; pendiente `s_axis_tkeep` y nueva evidencia adversarial |
 | **2** | Order book RTL del subset de 20 símbolos | **Cerrada funcionalmente**; 14/14 tests y replay real |
-| **3** | Variante DW=32, top-N y arquitectura URAM | **Abierta en timing**; RTL/simulación cerrados, falta Vivado WNS/TNS/recursos |
-| **4** | Parser CME MDP3/SBE | **Cerrada funcionalmente** en DW=32/64; timing no acreditado |
+| **3** | Variante DW=32, top-N y arquitectura URAM | **Abierta**; hereda el framing pendiente y falta Vivado WNS/TNS/recursos |
+| **4** | Parser CME MDP3/SBE | **Reabierta funcionalmente**; framing y otros hallazgos pendientes; timing no acreditado |
 
 ### Evidencia de la fase 0 (día Nasdaq 2019-12-30, 3,5 GB reales)
 

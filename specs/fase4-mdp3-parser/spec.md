@@ -92,6 +92,13 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
   golden los respeta tal cual).
 - **Determinismo:** mismo stream → misma secuencia de Anexo M, bit a bit;
   sin pérdida ni doble cuenta, con y sin backpressure de salida.
+- **Bytes válidos AXI:** la entrada incluye `s_axis_tkeep[DW/8-1:0]` con
+  semántica AXI estándar. Todo beat no final usa todos los lanes; el último usa
+  un prefijo MSB contiguo. Los lanes con `tkeep=0` no cuentan para `msg_size`.
+  Máscaras con huecos, cero o parciales sin `tlast` pulsan `error` y descartan
+  el paquete, drenándolo hasta `tlast` si el beat inválido no era final.
+  Contrato completo:
+  `docs/superpowers/specs/2026-08-15-axis-tkeep-framing-design.md`.
 - **Framing confirmado:** paquete = MsgSeqNum(u32) + SendingTime(u64, ns
   desde epoch) = 12 B; cada mensaje = **MessageSize(u16) que INCLUYE los
   10 B de prefijo** (MessageSize + cabecera SBE de 8 B: blockLength/
@@ -106,7 +113,7 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
 | Señal | Ancho | Descripción |
 |---|---|---|
 | `clk`, `rst_n` | 1 | reloj del datapath |
-| `s_axis_tdata/tvalid/tready/tlast` | DW/1/1/1 | payload UDP decapado (entrada) |
+| `s_axis_tdata/tkeep/tvalid/tready/tlast` | DW/(DW/8)/1/1/1 | payload UDP decapado; `tkeep` marca bytes válidos del beat |
 | `m_axis_tdata/tvalid/tready/tlast` | 32/1/1/1 | words de 32 bits del Anexo M; DW solo parametriza la entrada |
 | `gap_detected` | 1 | pulso: MsgSeqNum != exp_seq (por canal) |
 | `error` | 1 | pulso: mensaje/paquete incoherente (msg_size < 10, desborde de paquete) |
@@ -202,6 +209,10 @@ golden y el RTL la aplican, y el bit a bit la verifica):
 - **Mensaje que cruza límites de palabra y de paquete** (payload UDP
   termina en medio de un mensaje SBE) → alineación y reanudación correctas,
   sin pérdida. — M3-FRM-02, M3-INV-02.
+- **Truncado sub-word**: faltan entre 1 y `DW/8-1` bytes antes de `tlast`; los
+  lanes inválidos no pueden completar `msg_size`. — M3-INV-02.
+- **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
+  `error`, descarte y recuperación. — M3-INV-04.
 - **Gap de secuencia** (MsgSeqNum salta) → `gap_detected` sin abortar;
   canal nuevo (seq reiniciado) → reset del esperado. — M3-GAP-01.
 - **`msg_size` incoherente** (menor que la cabecera SBE o desborda el
@@ -240,9 +251,10 @@ de DataMine) y el **line-rate** del datapath parametrizado.
      root, composites —incluido `PRICE9.mantissa`— y grupos multi-entry; la
      igualdad de bytes tras re-encodear el propio decode no basta como oráculo.
      — Gherkin: `mdp3.feature` §M3-GEN-01, §M3-GEN-02
-2. [x] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
+2. [ ] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
      secuencia de Anexo M bit a bit vs golden; mensajes que cruzan límites
-     de palabra. — §M3-FRM-01, §M3-FRM-02
+     de palabra; un burst AXI independiente por payload con `tkeep` correcto.
+     — §M3-FRM-01, §M3-FRM-02
 3. [x] **Régimen de entrada**: 24 mensajes literales template 47, de una
      entry y 64 B cada uno, se presentan a 1 palabra/ciclo; stalls reales
      (`tvalid && !tready`) con racha máxima <= 16. — §M3-FRM-03
@@ -253,11 +265,12 @@ de DataMine) y el **line-rate** del datapath parametrizado.
      sin abortar en schemaId/version desconocidos. — §M3-PASS-01
 6. [x] **Gaps de secuencia**: `gap_detected` en saltos; reset al cambiar de
      canal (secuencia reiniciada). — §M3-GAP-01
-7. [x] **Robustez**: `msg_size` incoherente y grupos mal formados → `error`
+7. [ ] **Robustez**: `msg_size` incoherente y grupos mal formados → `error`
      señalizado, sin cuelgue ni corrupción silenciosa; `tlast` de entrada
-     truncado (paquete cortado) manejado. — §M3-INV-01/02/03
-8. [x] **Regresión**: fases 1-3 verdes sin tocar (el RTL nuevo no se conecta
-     a nada existente); DW=64 del mdp3_parser en regresión. — §M3-REG-01
+     truncado (incluidos 1..`DW/8-1` bytes ausentes) y máscaras `tkeep`
+     inválidas manejados. — §M3-INV-01/02/03/04
+8. [ ] **Regresión**: fases 1-3 verdes tras propagar `tkeep` por la entrada de
+     `itch_chain`; DW=64 del mdp3_parser en regresión. — §M3-REG-01
 9. [x] Lint `--Wall` limpio sobre `mdp3_parser.sv` (+ verible si se
      instala); checker XML↔localparams para IDs, offsets y blockLength del
      subset; espejos Gherkin 1:1. — §M3-SCH-01, gates B/C/F.
@@ -267,13 +280,13 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 | Criterio | Cómo se prueba |
 |---|---|
 | 1 | `python3 -m unittest` (área del golden MDP3, espejos) + round-trip |
-| 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido |
+| 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido y un burst por paquete |
 | 3 | cocotb: 24 mensajes literales template 47 de 64 B; medir solo ciclos `tvalid && !tready`, racha <= 16 |
 | 4 | cocotb: records de 46/47/52/53 vs golden; precio compuesto y multi-entry |
 | 5 | cocotb: corpus de templates no-subset (d/f/otras X) crudo bit a bit |
 | 6 | cocotb: secuencia con salto y reinicio de canal → pulsos de gap correctos |
-| 7 | cocotb: `msg_size` inválido (0, 1..9, > paquete), numInGroup 0, paquete truncado por `tlast` |
-| 8 | `make sim` en `testbenches/{parser,orderbook,phase3}` sin cambios |
+| 7 | cocotb: `msg_size` inválido, numInGroup 0, truncados por 1..`DW/8-1` bytes y `tkeep` inválido con recuperación |
+| 8 | `make sim` en `testbenches/{parser,orderbook,phase3}` con el contrato `tkeep` propagado |
 | 9 | `verilator --lint-only -Wall` + checker schema v12↔RTL + `specs/gherkin-espejos.json` |
 
 Régimen completo: skill `verify` (gates A-G). Gate E: runner de mutación

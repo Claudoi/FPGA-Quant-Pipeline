@@ -1,5 +1,10 @@
 # verify-report — fase3-uram
 
+> **Estado vigente: REABIERTA en la frontera de entrada (2026-08-15).** Esta
+> variante hereda de `itch_chain` el contrato `s_axis_tkeep` aún pendiente. Los
+> resultados siguientes se conservan como evidencia histórica; tampoco existe
+> aún evidencia Vivado de WNS/TNS y utilización.
+
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
 

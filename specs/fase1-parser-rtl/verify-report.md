@@ -1,5 +1,11 @@
 # verify-report — fase1-parser-rtl (iteración 4)
 
+> **Estado vigente: REABIERTA (2026-08-15).** La revisión adversarial demostró
+> que el driver concatenaba datagramas antes de formar beats y no modelaba qué
+> bytes del último beat eran válidos. Los outputs de la iteración 4 permanecen
+> como evidencia histórica, pero los criterios 4, 7 y 8 vuelven a estar abiertos
+> hasta implementar y verificar `s_axis_tkeep` por datagrama.
+
 > Régimen de gates de Atenea re-mapeado al flujo HDL. El owner no lee HDL/Python:
 > esta evidencia (outputs reales) es lo que `/grade` re-ejecutará.
 > Fecha de verificación vigente: 2026-08-15. Área: `rtl/parser/` +
@@ -122,13 +128,15 @@ REP-02 17937 words byte a byte.
 4. El runner restaura el RTL en un `finally` por mutante y hace `make clean` al
    final; una interrupción no deja el DUT mutado ni objetos reutilizables.
 
-## Veredicto
+## Veredicto histórico de la iteración 4 — sustituido por la reapertura
 
-**Cerrada funcionalmente (iteración 4).** Gates A/B/E/F PASS; C y cobertura
+**Se declaró cerrada funcionalmente en la iteración 4.** Gates A/B/E/F PASS; C y cobertura
 nivel 2 declarados NO EJECUTADOS por herramienta ausente; G0/G1/G3 PASS y
 timing NO APLICA en fase 1. Quedan probados los 22 tipos, ocho offsets, sesión
 nueva con count=0, recuperación tras truncado, replay real y mutación 12/12.
-No se presenta el non-goal de mensajes mínimos infinitos como line-rate.
+No se presenta el non-goal de mensajes mínimos infinitos como line-rate. Este
+veredicto ya no representa el estado actual por el defecto de framing descrito
+al inicio del informe.
 
 ## Addendum de evidencia — segundo día real (2026-08-15)
 

@@ -44,6 +44,22 @@ Escenario: SEC-FRM-03 — un cambio de sesión resetea el seq esperado
 #language: es
 Escenario: SEC-FRM-04 — un paquete con count igual a cero es válido
   Dado una sesión nueva con seq 100 y cuenta de mensajes cero
-  Cuando el siguiente paquete de la misma sesión llega también con seq 100
+  Y el payload de 20 bytes termina con cuatro lanes válidos en su último beat
+  Cuando el siguiente paquete de la misma sesión llega en un burst nuevo también con seq 100
   Entonces no emite ningún registro y no señaliza error
   Y no señaliza gap porque el seq esperado avanzó por cero
+
+#language: es
+Escenario: SEC-FRM-05 — datagramas no alineados no comparten una palabra AXI
+  Dado dos payloads MoldUDP64 consecutivos cuyas longitudes no son múltiplos de ocho
+  Y cada payload usa su propio tlast y tkeep en la última palabra
+  Cuando el RTL procesa ambos bursts
+  Entonces extrae ambas cabeceras sin incorporar padding entre ellas
+  Y la salida completa coincide byte a byte con el golden
+
+#language: es
+Escenario: SEC-FRM-06 — una máscara tkeep inválida se descarta con señal
+  Dado un beat con tkeep cero, con huecos o parcial sin tlast
+  Cuando el RTL acepta el beat y después recibe un paquete íntegro
+  Entonces pulsa error y descarta el datagrama inválido
+  Y procesa el paquete posterior sin estado ni cabecera corruptos
