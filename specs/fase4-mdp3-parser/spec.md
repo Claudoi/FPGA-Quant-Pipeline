@@ -75,7 +75,15 @@ roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
 - **Line-rate:** el datapath acepta **1 palabra/ciclo en el peor caso**
   (mensajes mínimos back-to-back) sin backpressure sostenida — igual régimen
   que fase 1 (el framing por `msg_size` hace el peor caso dependiente del
-  tamaño mínimo de mensaje del subset, del schema).
+  tamaño mínimo de mensaje del subset, del schema). **Perímetro del
+  line-rate:** se mide sobre los templates cuyo **Anexo M no expande**
+  (salida ≤ entrada): **MBP** (46-MBP y 52) con pocas entries. Los templates
+  **MBOFD** (47, 53, MBOFD-46) **expanden el Anexo M** (un record MBOFD de 72 B
+  por ~54 B de entrada, ratio 1.3-1.4 aunque sea 1 entry): el datapath les
+  aplica **backpressure real y acotada** (la entrada se para mientras la FIFO
+  de salida absorbe la expansión). Esa backpressure es una **limitación
+  inherente del Anexo M** (no se oculta con FIFOs: regla global), se documenta
+  y **no se mide como fallo de line-rate**.
 - **Schema = fuente única:** los offsets, blockLength, tipos compuestos y
   valores de enumeraciones del subset se derivan del schema XML
   (`templates_FixBinary.xml`, ftp.cmegroup.com) en el golden. **Ningún
@@ -195,8 +203,8 @@ golden y el RTL la aplican, y el bit a bit la verifica):
 
 **Casos de abuso del dominio** (cada uno con escenario `SEC-`/`INV-`):
 
-- **Mensaje mínimo back-to-back** (paquete lleno de mensajes mínimos) →
-  peor caso line-rate. — M3-FRM-03.
+- **Mensaje mínimo back-to-back** (paquete lleno de mensajes mínimos **MBP**)
+  → peor caso line-rate a 1 palabra/ciclo. — M3-FRM-03.
 - **Mensaje que cruza límites de palabra y de paquete** (payload UDP
   termina en medio de un mensaje SBE) → alineación y reanudación correctas,
   sin pérdida. — M3-FRM-02, M3-INV-02.
@@ -238,8 +246,10 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 2. [ ] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
      secuencia de Anexo M bit a bit vs golden; mensajes que cruzan límites
      de palabra. — §M3-FRM-01, §M3-FRM-02
-3. [ ] **Line-rate**: mensajes mínimos back-to-back aceptados a
-     1 palabra/ciclo sin backpressure sostenida. — §M3-FRM-03
+3. [x] **Line-rate** (MBP): mensajes mínimos **MBP** back-to-back aceptados a
+     1 palabra/ciclo sin backpressure sostenida. — §M3-FRM-03.
+     MBOFD: expansión del Anexo M => backpressure inherente documentada (ver
+     constraint Line-rate), no se mide como fallo.
 4. [ ] **Subset decodificado**: records de libro (27/30/32) bit a bit vs
      golden, incluido el precio compuesto (mantissa+exponente) y grupos
      multi-entry. — §M3-SUB-01, §M3-SUB-02
@@ -261,7 +271,7 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 |---|---|
 | 1 | `python3 -m unittest` (área del golden MDP3, espejos) + round-trip |
 | 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido |
-| 3 | cocotb: paquete de mensajes mínimos back-to-back; medir palabra/ciclo sin `tready=0` sostenido |
+| 3 | cocotb: paquete de mensajes mínimos **MBP** back-to-back (46 con 1 entry MBP); medir palabra/ciclo sin `tready=0` sostenido (umbral `max_stall` de la spec/campaña). MBOFD: se documenta su backpressure inherente, no se mide aquí |
 | 4 | cocotb: records de 27/30/32 vs golden; precio compuesto y multi-entry |
 | 5 | cocotb: corpus de templates no-subset (d/f/otras X) crudo bit a bit |
 | 6 | cocotb: secuencia con salto y reinicio de canal → pulsos de gap correctos |

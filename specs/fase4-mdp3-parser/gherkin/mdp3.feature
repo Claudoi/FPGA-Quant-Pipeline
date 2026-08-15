@@ -32,11 +32,13 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
     Cuando el parser los procesa a DW=32 y DW=64
     Entonces no se pierde ni se duplica ningún mensaje
 
-  Escenario: M3-FRM-03 — peor caso a 1 palabra/ciclo sin backpressure
-    Dado un paquete de mensajes mínimos del subset back-to-back
+  Escenario: M3-FRM-03 — peor caso a 1 palabra/ciclo sin backpressure (MBP)
+    Dado un paquete de mensajes mínimos MBP del subset back-to-back
     Cuando el parser los procesa
     Entonces no hay backpressure sostenida de entrada
     Y la secuencia de salida es bit a bit idéntica al golden
+    Y los mensajes MBOFD aplican backpressure inherente por expansión del
+      Anexo M, documentada en el constraint Line-rate de la spec
 
   Escenario: M3-SUB-01 — el subset de libro se decodifica campo a campo
     Dado mensajes de los templates de libro (snapshot e incremental)

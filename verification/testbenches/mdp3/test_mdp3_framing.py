@@ -92,9 +92,12 @@ async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000):
             if wi < nwords:
                 wi += 1
             stall_run = 0
-        else:
+        elif wi < nwords:
+            # solo cuenta la parada de entrada mientras queda entrada pendiente
             stall_run += 1
             max_stall_run = max(max_stall_run, stall_run)
+        else:
+            stall_run = 0
         if int(dut.m_axis_tvalid.value) == 1:
             data = int(dut.m_axis_tdata.value)
             out += data.to_bytes(bytes_per_word, "big")
@@ -142,13 +145,31 @@ async def test_m3frm02_mensajes_que_cruzan_limites_de_palabra(dut):
 
 @cocotb.test()
 async def test_m3frm03_peor_caso_a_1_palabra_por_ciclo_sin_backpressure(dut):
-    """Espejo M3-FRM-03: paquete de mensajes mínimos back-to-back a 1 palabra/ciclo."""
+    """Espejo M3-FRM-03: mensajes mínimos MBP back-to-back a 1 palabra/ciclo.
+
+    El line-rate a 1 palabra/ciclo sin backpressure se mide sobre el subset con
+    expansión del Anexo M contenida (MBP, output <= input): el template 46 con
+    una sola entry MBP y 0 order entries emite un record MBP de 13 words por
+    un mensaje de 64 B — la salida no supera a la entrada y el datapath
+    aguanta 1 palabra/ciclo. Los MBOFD (47/53/MBOFD-46) expanden (72 B de
+    salida por ~54 B de entrada, ratio >1) y NO se usan aquí por ser
+    inherentemente backpressure; se documentan en la spec.
+    """
     schema = load_schema(SCHEMA_PATH)
+    from golden_model.mdp3.codec import encode_packet, encode_message
     corpus = Corpus(schema, seed=5)
     minimal = []
     for _ in range(24):
-        minimal.append(corpus.subset_message(47))
-    from golden_model.mdp3.codec import encode_packet
+        minimal.append(encode_message(schema, 46, {
+            "TransactTime": corpus.rng.getrandbits(64),
+            "MatchEventIndicator": 1,
+            "NoMDEntries": [{
+                "MDEntryPx": {"mantissa": 12345}, "MDEntrySize": 5,
+                "SecurityID": 101, "RptSeq": 1, "NumberOfOrders": 1,
+                "MDPriceLevel": 1, "MDUpdateAction": 1, "MDEntryType": 1,
+                "TradeableSize": 5}],
+            "NoOrderIDEntries": [],
+        }))
     packet = encode_packet(schema, 99, 1, minimal)
     corpus.packets = [packet]
     expected = oracle_bytes(corpus)

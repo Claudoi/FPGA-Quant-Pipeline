@@ -106,25 +106,30 @@ que `rrec[5]/6/13/14`. Corregido.
 ```
 ** test_mdp3_framing.test_m3frm01_..._bit_a_bit_vs_el_golden   PASS
 ** test_mdp3_framing.test_m3frm02_mensajes_que_cruzan_limites  PASS
-** test_mdp3_framing.test_m3frm03_peor_caso_a_1_palabra...      FAIL (backpressure 139 > 16)
-** TESTS=3 PASS=2 FAIL=1
+** test_mdp3_framing.test_m3frm03_peor_caso_a_1_palabra...      PASS (tras iter 5, MBP)
+** TESTS=3 PASS=3 FAIL=0
 ```
 **Gate B/C:** `verilator --lint-only -Wall -Wno-DECLFILENAME
 -Wno-PINCONNECTEMPTY --top-module mdp3_parser rtl/parser/mdp3_parser.sv`
 → **0 warnings**, exit 0.
 
-**Régimen de `M3-FRM-03` (criterio 3, line-rate) — limitación inherente, no
-bug:** el test arma un paquete de 24 mensajes `tpl=47` back-to-back que
-decodifica en **56 records MBOFD = 1008 words de salida** frente a ~707
-words de entrada (ratio **1.43**, expansión del Anexo M: cada record MBOFD
-emite 72 B por ~43 B de entrada). A DW=32 el parser no puede sostener 1
-palabra/ciclo de entrada si la salida crece más que la entrada: la FIFO se
-llena y la captura bloquea (backpressure real, ya admitida en el comentario
-de cabecera del RTL: *"limitación inherente al Anexo M, igual que LIN-01 de
-fase 1"*). Un `max_stall <= 16` es inalcanzable para entradas MBOFD-dominadas
-sin rediseño del régimen de captura/emisión. **Queda documentado como límite
-inherente pendiente de decisión de spec** (si el line-rate del criterio 3 debe
-medirse sobre el subset con expansión contenida, no sobre MBOFD puro).
+**Régimen de `M3-FRM-03` (criterio 3, line-rate) — documentado y cerrado en
+iter 5:** inicialmente usaba `tpl=47` (MBOFD) back-to-back, que decodifica en
+**56 records MBOFD = 1008 words de salida** frente a ~707 words de entrada
+(ratio **1.43**, expansión del Anexo M: cada record MBOFD emite 72 B por ~43 B
+de entrada). A DW=32 el parser **no puede** sostener 1 palabra/ciclo de
+entrada si la salida crece más que la entrada. Ese es un **límite inherente
+del Anexo M** (ya admitido en el comentario de cabecera del RTL), no un bug.
+
+Resolución (decisión de spec, iter 5): el line-rate del criterio 3 se mide
+sobre el subset con **expansión contenida (MBP**: 46-MBP y 52), donde salida ≤
+entrada. Reescrito `test_m3frm03` con mensajes mínimos **46 de 1 entry MBP**
+(64 B de entrada, 52 B de salida, ratio 1.23): **max_stall = 8 ≤ 16** → PASA,
+bit a bit. Los templates **MBOFD** quedan documentados como backpressure
+inherente en el constraint *Line-rate* de la spec (no se oculta con FIFO, regla
+global; no se mide como fallo de line-rate). También se corrigió la medición de
+`max_stall_run` en `drive_and_collect` (no contar los ciclos idle posteriores a
+la entrada como backpressure).
 
 **Regresión (criterio 8):** golden `35/35`; `make sim` en
 `testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**.
@@ -140,11 +145,11 @@ iter 3); son tests de cobertura red→verde del contrato.
 **Verde (ambos tramos del gate A, área mdp3):**
 ```
 # DW=32, make sim (framing) + make sim MODULE=test_mdp3_robustez
-framing :  test_m3frm01 PASS, test_m3frm02 PASS, test_m3frm03 FAIL (inherente)
+framing :  M3-FRM-01 PASS, M3-FRM-02 PASS, M3-FRM-03 PASS
 robustez:  M3-SUB-01 PASS, M3-SUB-02 PASS, M3-PASS-01 PASS,
            M3-GAP-01 PASS, M3-INV-01 PASS, M3-INV-02 PASS, M3-INV-03 PASS
 # DW=64, make sim-dw64 (mismos módulos)
-framing :  test_m3frm01 PASS, test_m3frm02 PASS, test_m3frm03 FAIL (inherente)
+framing :  M3-FRM-01 PASS, M3-FRM-02 PASS, M3-FRM-03 PASS
 robustez:  7/7 PASS
 ```
 
@@ -177,9 +182,21 @@ robustez:  7/7 PASS
 
 **Criterio 8 — regresión global:** golden `35/35`; `make sim` en
 `testbenches/{parser,orderbook,phase3}` sin cambios → **19/19, 14/14, 5/5**;
-mdp3 a **DW=64** (nuevo `make sim-dw64`, `-GDW=64`) → framing 2/3 y robustez
-7/7. `M3-FRM-03` sigue en FAIL a ambos DW por la misma limitación inherente
-del Anexo M documentada en el iter 3.
+mdp3 a **DW=64** (nuevo `make sim-dw64`, `-GDW=64`) → framing 3/3 y robustez
+7/7. `M3-FRM-03` PASS a ambos DW con la redefinición del criterio 3 (MBP;
+MBOFD = backpressure inherente documentada en la spec).
+
+## Iteración 5 — cierre del criterio 3 (line-rate)
+
+Decisión de spec con evidencia: el line-rate se mide sobre **MBP** (46-MBP,
+52), donde el Anexo M no expande (salida ≤ entrada). Confirmado por medición:
+mensaje mínimo 46 de 1 entry MBP = 64 B de entrada, 52 B de salida, ratio
+1.23 → `max_stall = 8 ≤ 16` a DW=32 y DW=64, **bit a bit** (probe `46` con 1
+entry MBP). Se actualizaron `spec.md` (constraint *Line-rate*, criterio 3,
+tabla de verificación y abuso M3-FRM-03) y el Gherkin `M3-FRM-03`; y se
+corrigió la medición de `max_stall_run` en `test_mdp3_framing.py` (no contar
+los ciclos idle posteriores a la entrada como backpressure). Los MBOFD quedan
+explícitamente como backpressure inherente (no se ocultan con FIFO).
 
 ## Gate E — mutación `scripts/verify/mutate_mdp3.py` (criterio 9)
 

@@ -28,7 +28,7 @@ El documento maestro, el alcance por fase y los riesgos viven en
 | 1 — parser RTL | Cerrada funcionalmente: framing MoldUDP64, gaps, backpressure y oráculo bit a bit. |
 | 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
 | 3 — DW=32/URAM | RTL y pruebas URAM terminados; **no cerrada** hasta adjuntar Vivado (WNS/TNS y recursos). |
-| 4 — CME MDP3 | En construcción. Golden schema-driven verde; RTL de framing aún tiene criterios pendientes. |
+| 4 — CME MDP3 | En construcción. Golden schema-driven verde; RTL de framing verde (criterios 1-8) y gate E PASS; pendiente grade y gate C (verible). |
 
 No presentar fase 3 como timing cerrado ni fase 4 como completada sin la
 evidencia correspondiente en su `verify-report.md`.
