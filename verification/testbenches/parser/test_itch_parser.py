@@ -695,14 +695,15 @@ async def test_sec_frm06_registro_capturado_termina_antes_de_recuperar(dut):
 
         out_valid = int(dut.m_axis_tvalid.value)
         out_ready = int(dut.m_axis_tready.value)
-        out_beat = (int(dut.m_axis_tdata.value), int(dut.m_axis_tlast.value))
+        out_beat = (out_valid, int(dut.m_axis_tdata.value),
+                    int(dut.m_axis_tlast.value))
         if held_out is not None:
             assert out_beat == held_out, (
                 f"SEC-FRM-06 salida cambió bajo stall: {held_out} -> {out_beat}")
         if out_valid and not out_ready:
             held_out = out_beat
         elif out_valid and out_ready:
-            out.append(out_beat)
+            out.append(out_beat[1:])
             held_out = None
 
         if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
