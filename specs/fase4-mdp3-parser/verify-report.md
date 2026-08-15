@@ -2,7 +2,8 @@
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
-> Estado: **spec commiteada (2026-08-14), pendiente de /build (iteración 1)**.
+> Estado: **en construcción; golden semántico reparado y RTL en rojo 0/3
+> (2026-08-15)**.
 
 ## Iteración 1 — golden MDP3 (criterio 1: loader schema + decoder + generator)
 
@@ -19,15 +20,18 @@ arrancar el verde:
 - `decode_message` decodificaba cualquier template conocido del schema (48
   etc.); ahora solo el subset 46/47/52/53; el resto es passthrough.
 
-**Verde final (gate A, golden):** `python3 -m unittest discover -s
-golden_model/tests -t .` → **35 tests OK** (32 de fases 0-3 sin cambios + 3
-nuevos). Espejos del criterio 1 (M3-GEN-01/02) en
+**Verde histórico (gate A, golden; evidencia insuficiente):** `python3 -m
+unittest discover -s golden_model/tests -t .` → **35 tests OK** (32 de fases
+0-3 sin cambios + 3 nuevos). Espejos del criterio 1 (M3-GEN-01/02) en
 `golden_model/tests/test_mdp3.py` (área de golden, precedente fase 0).
 
-**Stress del round-trip (evidencia extra):** 4.000 mensajes del subset
+**Stress histórico del round-trip (invalidado como evidencia semántica):**
+4.000 mensajes del subset
 (46/47/52/53, 50 seeds) con `decode(encode(m))` re-encodeado byte a byte
 idéntico; corpus sintético de 30 paquetes → 206 records Anexo M de oráculo
-(media 14 words/record).
+(media 14 words/record). Esa igualdad solo demostraba autoconsistencia de los
+bytes: tanto el primer encode como el re-encode escribían ceros y, por tanto,
+podían coincidir sin conservar los valores de entrada.
 
 **Schema pinned:** `data/mdp3/templates_FixBinary_v12.xml` (2021-03-10,
 id=1 version=12, byteOrder=littleEndian, md5
@@ -46,11 +50,45 @@ derivación por template (ReferenceID del 46 resuelto por índice).
 | Test | Espejo |
 |---|---|
 | `test_m3gen01_el_golden_hace_roundtrip_decode_encode_m_es_m` | M3-GEN-01 |
+| `test_m3gen01_el_encoder_preserva_valores_no_cero_del_subset` | M3-GEN-01 (oráculo semántico) |
 | `test_m3gen01_el_passthrough_preserva_el_cuerpo_crudo` | M3-GEN-01 (2ª parte) |
 | `test_m3gen02_el_loader_deriva_los_tamanos_esperados_desde_el_xml` | M3-GEN-02 |
 
-Pendiente: iter 2 (RTL `mdp3_parser.sv`: framing + Anexo M bit a bit vs
-golden, criterios 2-3).
+## Iteración 1b — reparación del falso verde del encoder (2026-08-15)
+
+**Rojo semántico:**
+
+```text
+test_m3gen01_el_encoder_preserva_valores_no_cero_del_subset ... FAIL
+AssertionError: 0 != 72623859790382856
+```
+
+El encoder pasaba `root[f.offset:]` y `e[gf.offset:]` a `_encode_value`.
+Esos slices de `bytearray` son copias, de modo que los valores root y de grupo
+no llegaban al mensaje original. Se corrigieron ambas rutas en el punto común:
+codificar el valor y copiar los bytes resultantes al rango del buffer destino.
+
+**Verde semántico (gate A):** el test literal compara todos los valores
+provistos de 46/47/52/53, incluido precio signed, IDs y los dos grupos
+multi-entry de 46. Resultado:
+
+```text
+golden_model.tests.test_mdp3 ... Ran 4 tests ... OK
+golden_model/tests completo     ... Ran 36 tests ... OK
+```
+
+**Rebaselining RTL contra el golden reparado:**
+
+```text
+M3-FRM-01 FAIL: byte 116: got 0x00 exp 0x9f
+M3-FRM-02 FAIL: bytes distintos (cruces de límite mal alineados)
+M3-FRM-03 FAIL: backpressure sostenida: 139 ciclos
+TESTS=3 PASS=0 FAIL=3 SKIP=0
+```
+
+La fase 4 permanece abierta. Este rojo sustituye como baseline vigente la
+longitud histórica `6056 != 9664`; no se atribuye PASS al RTL.
+
 ## Iteración 2 — RTL `mdp3_parser.sv` (criterios 2-3: framing + Anexo M bit a bit)
 
 **Progreso frente al baseline** con la corrección estructural de captura

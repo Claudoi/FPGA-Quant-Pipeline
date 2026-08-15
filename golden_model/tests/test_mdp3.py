@@ -53,6 +53,121 @@ class TestM3Gen(unittest.TestCase):
                 self.assertEqual(re_encoded, raw,
                                  f"round-trip byte a byte del template {template_id}")
 
+    def test_m3gen01_el_encoder_preserva_valores_no_cero_del_subset(self):
+        schema = self.schema
+
+        def assert_preserved(expected, actual, path=""):
+            if isinstance(expected, dict):
+                for key, value in expected.items():
+                    self.assertIn(key, actual, f"campo ausente: {path}{key}")
+                    assert_preserved(value, actual[key], f"{path}{key}.")
+            elif isinstance(expected, list):
+                self.assertEqual(len(actual), len(expected), path.rstrip("."))
+                for index, value in enumerate(expected):
+                    assert_preserved(value, actual[index], f"{path}{index}.")
+            elif isinstance(expected, int) and isinstance(actual, bytes):
+                self.assertEqual(actual, bytes([expected]), path.rstrip("."))
+            else:
+                self.assertEqual(actual, expected, path.rstrip("."))
+
+        def decoded(template_id, values):
+            raw = encode_message(schema, template_id, values)
+            packet = encode_packet(schema, 17, 23, [raw])
+            result = decode_message(schema, next(iter_packet_messages(packet)))
+            assert_preserved(values, result)
+            return result
+
+        m46 = decoded(46, {
+            "TransactTime": 0x0102030405060708,
+            "MatchEventIndicator": 0x81,
+            "NoMDEntries": [
+                {"MDEntryPx": {"mantissa": 101_250_000_000},
+                 "MDEntrySize": 7, "SecurityID": 101, "RptSeq": 11,
+                 "NumberOfOrders": 2, "MDPriceLevel": 1,
+                 "MDUpdateAction": 0, "MDEntryType": 0,
+                 "TradeableSize": 5},
+                {"MDEntryPx": {"mantissa": -101_125_000_000},
+                 "MDEntrySize": 9, "SecurityID": 202, "RptSeq": 12,
+                 "NumberOfOrders": 3, "MDPriceLevel": 2,
+                 "MDUpdateAction": 1, "MDEntryType": 1,
+                 "TradeableSize": 6},
+            ],
+            "NoOrderIDEntries": [
+                {"OrderID": 0x1112131415161718,
+                 "MDOrderPriority": 0x2122232425262728,
+                 "MDDisplayQty": 13, "ReferenceID": 0,
+                 "OrderUpdateAction": 1},
+                {"OrderID": 0x3132333435363738,
+                 "MDOrderPriority": 0x4142434445464748,
+                 "MDDisplayQty": 14, "ReferenceID": 1,
+                 "OrderUpdateAction": 2},
+            ],
+        })
+        self.assertEqual(m46["TransactTime"], 0x0102030405060708)
+        self.assertEqual(m46["NoMDEntries"][1]["MDEntryPx"]["mantissa"],
+                         -101_125_000_000)
+        self.assertEqual(m46["NoOrderIDEntries"][1]["OrderID"],
+                         0x3132333435363738)
+        self.assertEqual(m46["NoOrderIDEntries"][1]["ReferenceID"], 1)
+
+        m47 = decoded(47, {
+            "TransactTime": 0x5152535455565758,
+            "MatchEventIndicator": 0x82,
+            "NoMDEntries": [{
+                "OrderID": 0x6162636465666768,
+                "MDOrderPriority": 0x7172737475767778,
+                "MDEntryPx": {"mantissa": 99_875_000_000},
+                "MDDisplayQty": 21, "SecurityID": 303,
+                "MDUpdateAction": 2, "MDEntryType": 1,
+            }],
+        })
+        self.assertEqual(m47["TransactTime"], 0x5152535455565758)
+        self.assertEqual(m47["NoMDEntries"][0]["OrderID"],
+                         0x6162636465666768)
+        self.assertEqual(m47["NoMDEntries"][0]["MDDisplayQty"], 21)
+        self.assertEqual(m47["NoMDEntries"][0]["MDUpdateAction"], 2)
+
+        m52 = decoded(52, {
+            "LastMsgSeqNumProcessed": 31, "TotNumReports": 32,
+            "SecurityID": 404, "RptSeq": 33,
+            "TransactTime": 0x8182838485868788,
+            "LastUpdateTime": 0x9192939495969798, "TradeDate": 19_001,
+            "MDSecurityTradingStatus": 3,
+            "HighLimitPrice": {"mantissa": 110_000_000_000},
+            "LowLimitPrice": {"mantissa": 90_000_000_000},
+            "MaxPriceVariation": {"mantissa": 20_000_000_000},
+            "NoMDEntries": [{
+                "MDEntryPx": {"mantissa": 100_500_000_000},
+                "MDEntrySize": 41, "NumberOfOrders": 4,
+                "MDPriceLevel": 2, "TradingReferenceDate": 19_002,
+                "OpenCloseSettlFlag": 1, "SettlPriceType": 5,
+                "MDEntryType": 1,
+            }],
+        })
+        self.assertEqual(m52["SecurityID"], 404)
+        self.assertEqual(m52["RptSeq"], 33)
+        self.assertEqual(m52["NoMDEntries"][0]["MDEntryPx"]["mantissa"],
+                         100_500_000_000)
+        self.assertEqual(m52["NoMDEntries"][0]["MDEntrySize"], 41)
+
+        m53 = decoded(53, {
+            "LastMsgSeqNumProcessed": 51, "TotNumReports": 52,
+            "SecurityID": 505, "NoChunks": 3, "CurrentChunk": 2,
+            "TransactTime": 0xA1A2A3A4A5A6A7A8,
+            "NoMDEntries": [{
+                "OrderID": 0xB1B2B3B4B5B6B7B8,
+                "MDOrderPriority": 0xC1C2C3C4C5C6C7C8,
+                "MDEntryPx": {"mantissa": 102_000_000_000},
+                "MDDisplayQty": 61, "MDEntryType": 1,
+            }],
+        })
+        self.assertEqual(m53["SecurityID"], 505)
+        self.assertEqual(m53["NoMDEntries"][0]["OrderID"],
+                         0xB1B2B3B4B5B6B7B8)
+        self.assertEqual(m53["NoMDEntries"][0]["MDEntryPx"]["mantissa"],
+                         102_000_000_000)
+        self.assertEqual(m53["NoMDEntries"][0]["MDDisplayQty"], 61)
+
     def test_m3gen01_el_passthrough_preserva_el_cuerpo_crudo(self):
         schema = self.schema
         corpus = Corpus(schema, seed=7)

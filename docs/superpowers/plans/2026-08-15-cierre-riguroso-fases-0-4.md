@@ -36,15 +36,15 @@
 - Consumes: `encode_message(schema, template_id, values) -> bytes` y `decode_message(schema, PacketMessage) -> dict`.
 - Produces: codificación que conserva valores root, composites y grupos para templates 46/47/52/53.
 
-- [ ] **Step 1: Endurecer spec y Gherkin antes del código**
+- [x] **Step 1: Endurecer spec y Gherkin antes del código**
 
 Añadir a M3-GEN-01 que los vectores conocidos contienen valores no cero y que `decode(encode(values))` conserva campo por campo los valores observables, incluido `PRICE9.mantissa` y grupos multi-entry.
 
-- [ ] **Step 2: Escribir los tests semánticos que fallen**
+- [x] **Step 2: Escribir los tests semánticos que fallen**
 
 Construir mensajes literales 46/47/52/53; para cada uno, parsear el paquete y asertar valores como `TransactTime`, `SecurityID`, `OrderID`, `MDEntryPx.mantissa`, `MDDisplayQty` y `MDUpdateAction`, no solo presencia de claves.
 
-- [ ] **Step 3: Ejecutar el rojo específico**
+- [x] **Step 3: Ejecutar el rojo específico**
 
 Run:
 
@@ -55,7 +55,7 @@ PYTHONDONTWRITEBYTECODE=1 "$VENV_BIN/python" -m unittest \
 
 Expected: FAIL porque al menos `TransactTime`, `OrderID` o `SecurityID` decodifica como cero.
 
-- [ ] **Step 4: Implementar la escritura mínima sobre el buffer original**
+- [x] **Step 4: Implementar la escritura mínima sobre el buffer original**
 
 Añadir en `codec.py` un helper privado que codifique en un `bytearray` temporal y copie sus bytes al rango exacto del destino:
 
@@ -68,7 +68,7 @@ def _put_value(schema: Schema, type_name: str, value, target: bytearray, offset:
 
 Usarlo para root y fields de grupos; no añadir dependencias ni cambiar el formato público.
 
-- [ ] **Step 5: Ejecutar verde específico y regresión Python**
+- [x] **Step 5: Ejecutar verde específico y regresión Python**
 
 Run:
 
@@ -79,7 +79,7 @@ PYTHONDONTWRITEBYTECODE=1 "$VENV_BIN/python" -m unittest discover -s golden_mode
 
 Expected: todos los tests pasan y los valores no cero se conservan.
 
-- [ ] **Step 6: Rebaselinar RTL MDP3 contra el golden corregido**
+- [x] **Step 6: Rebaselinar RTL MDP3 contra el golden corregido**
 
 Run:
 
@@ -90,7 +90,7 @@ PATH="$VENV_BIN:$PATH" PYTHONDONTWRITEBYTECODE=1 \
 
 Expected inicial: rojo honesto; registrar primer desajuste, longitud y racha de backpressure sin suavizarlos.
 
-- [ ] **Step 7: Actualizar verify-report y commit de sección**
+- [x] **Step 7: Actualizar verify-report y commit de sección**
 
 Documentar que la evidencia anterior de 4.000 round-trips era insuficiente y pegar rojo→verde real.
 

@@ -233,7 +233,10 @@ de DataMine) y el **line-rate** del datapath parametrizado.
 
 1. [ ] **Golden MDP3**: loader del schema XML + decoder bit a bit + generator
      sintético con round-trip `decode(encode(m)) == m` para el subset y
-     passthrough; tests Python espejo.
+     passthrough; tests Python espejo. El round-trip debe partir de vectores
+     conocidos con valores no cero y demostrar campo a campo que se preservan
+     root, composites —incluido `PRICE9.mantissa`— y grupos multi-entry; la
+     igualdad de bytes tras re-encodear el propio decode no basta como oráculo.
      — Gherkin: `mdp3.feature` §M3-GEN-01, §M3-GEN-02
 2. [ ] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
      secuencia de Anexo M bit a bit vs golden; mensajes que cruzan límites
@@ -284,7 +287,7 @@ verde:
    cuerpo?): **resuelto por evidencia** — roq-cme `parser.cpp`:
    `length = message_size.length - (2 + MessageHeader::encodedLength())`
    ⇒ msg_size incluye los 10 B de prefijo. El M3-GEN-01 lo pincha con el
-   round-trip contra el corpus.
+   round-trip semántico de vectores conocidos y el tamaño literal esperado.
 2. **Alineación root a 8 B**: el RTL consume `msg_size` y no re-deriva la
    alineación (no le importa); el golden la aplica al generar (los blockLength
    de los templates de libro vienen del XML: 11/11/59/28). Si el golden la

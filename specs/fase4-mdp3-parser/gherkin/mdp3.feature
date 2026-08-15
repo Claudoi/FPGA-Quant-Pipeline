@@ -12,8 +12,10 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
 
   Escenario: M3-GEN-01 — el golden hace round-trip decode(encode(m)) == m
     Dado el schema SBE XML oficial de CME cargado
-    Cuando el generator produce un mensaje del subset y el decoder lo lee
-    Entonces los campos decodificados coinciden bit a bit con los generados
+    Y vectores conocidos del subset con root, precios y grupos de valores no cero
+    Cuando el encoder produce cada mensaje y el decoder lo lee
+    Entonces cada campo observable decodificado coincide con su valor conocido
+    Y PRICE9.mantissa y todos los entries de grupos multi-entry se preservan
     Y el passthrough de un template no-subset preserva el cuerpo crudo
 
   Escenario: M3-GEN-02 — el loader deriva los tamaños esperados desde el XML
