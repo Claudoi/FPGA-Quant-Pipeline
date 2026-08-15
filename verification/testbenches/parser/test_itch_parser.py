@@ -632,6 +632,29 @@ async def test_sec_frm07_count_tlast_cierre_exacto(dut):
 
 
 @cocotb.test()
+async def test_sec_frm07_count_exacto_sin_tlast_da_error(dut):
+    """Count agotado y cola vacía no cierran el datagrama sin tlast."""
+    payload = _packet_seq([canonical_message("L")], 1)
+    assert len(payload) == 48
+    beats = packet_beats([payload], 8)
+    data, keep, _last = beats[-1]
+    beats[-1] = (data, keep, False)
+
+    await _reset(dut)
+    ci = 0
+    errors = 0
+    for _ in range(200):
+        _present_beat(dut, beats, ci)
+        await RisingEdge(dut.clk)
+        errors += int(dut.error.value)
+        if int(dut.s_axis_tvalid.value) and int(dut.s_axis_tready.value):
+            ci += 1
+
+    assert ci == len(beats), f"SEC-FRM-07 beats aceptados={ci}/{len(beats)}"
+    assert errors == 1, f"SEC-FRM-07 count sin tlast: errores={errors}"
+
+
+@cocotb.test()
 async def test_sec_frm06_tkeep_invalido_descarta_y_recupera(dut):
     """Espejo §SEC-FRM-06: tkeep inválido da un pulso y drena hasta tlast.
 
@@ -776,6 +799,23 @@ async def test_sec_frm06_tkeep_invalido_no_depende_de_capacidad(dut):
 
 
 @cocotb.test()
+async def test_sec_frm06_tkeep_parcial_no_final_falla_al_aceptar(dut):
+    """Un beat parcial sin tlast pulsa error en el mismo handshake."""
+    await _reset(dut)
+    dut.s_axis_tvalid.value = 1
+    dut.s_axis_tdata.value = 0
+    dut.s_axis_tkeep.value = 0b11110000
+    dut.s_axis_tlast.value = 0
+
+    await RisingEdge(dut.clk)
+    assert int(dut.s_axis_tready.value) == 1, (
+        "SEC-FRM-06 beat parcial no final no fue aceptado")
+    await ReadOnly()
+    assert int(dut.error.value) == 1, (
+        "SEC-FRM-06 beat parcial no final no pulsó error al aceptarse")
+
+
+@cocotb.test()
 async def test_sec_frm08_fuente_estable_bajo_backpressure_entrada(dut):
     """Espejo §SEC-FRM-08: el productor retiene data, keep y last en stall.
 
@@ -887,6 +927,8 @@ async def drive_bursts(dut, payload):
                 bursts.append(cur)
                 cur = []
             quiet = 0
+        elif cur:
+            assert False, "OUT-01: tvalid bajó antes de tlast con tready alto"
         elif ci >= len(beats):
             quiet += 1
         held, took_last = _check_input_stability(dut, held)
