@@ -15,11 +15,11 @@ Escenario: BBO-01 — una secuencia de add/execute/cancel/delete produce el BBO 
   Entonces el BBO emitido por símbolo es bit a bit idéntico al golden book.py
   Y la señal changed coincide con el evento del golden
 
-Escenario: BBO-02 — el libro parte vacío y un lado vacío emite (0,0)
-  Dado un símbolo sin ninguna orden
-  Cuando el book procesa un mensaje de otro símbolo
-  Entonces el BBO de ese símbolo es (0,0,0,0)
-  Y no se emite evento de cambio para él
+Escenario: BBO-02 — un símbolo vacío queda aislado y un lado vacío emite (0,0)
+  Dado un símbolo sin ninguna orden y otro símbolo con una orden bid
+  Cuando el book procesa únicamente el mensaje del segundo símbolo
+  Entonces el ask vacío del símbolo activo es (0,0)
+  Y no se emite ningún evento para el símbolo que permanece vacío
 
 Escenario: SEC-U-01 — el replace U es atómico sin ventana de inconsistencia
   Dado un símbolo con una orden viva y un BBO no vacío
@@ -47,9 +47,10 @@ Escenario: SEC-DC-01 — execute/cancel/delete no descuentan dos veces
 
 Escenario: SEC-OV-01 — desbordamiento de cantidades se señaliza con error
   Dado un mensaje que reduciría una orden por debajo de su cantidad viva
-  Cuando el book lo aplica
-  Entonces señaliza error (invariante de cantidad no positiva)
-  Y no produce un BBO incorrecto ni envuelve silenciosamente
+  Cuando el book lo aplica y después recibe un add válido
+  Entonces señaliza error durante al menos un ciclo
+  Y no produce un BBO para la operación inválida ni envuelve silenciosamente
+  Y procesa el add válido posterior
 
 Escenario: SEC-AN-01 — operación sobre ref desconocida cuenta anomalía sin abortar
   Dado un execute/cancel/delete/replace cuya order_ref no está en el libro

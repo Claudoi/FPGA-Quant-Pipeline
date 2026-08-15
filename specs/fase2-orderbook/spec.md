@@ -7,8 +7,9 @@ que consume el registro normalizado del Anexo A emitido por el parser de fase 1
 (AXI-Stream de mensajes decodificados) y mantiene, por símbolo, el estado del
 libro: **tabla de órdenes vivas** (order_ref → símbolo/lado/precio/cantidad),
 **niveles de precio agregados** y el **BBO** (best bid & offer) actualizado con
-latencia determinista. Es la etapa que cierra el pipeline
-`10G MAC → decap → framing → parser → order book → BBO` del documento maestro.
+latencia determinista. Es la etapa que cierra, desde el límite implementado del
+repositorio, el pipeline `MoldUDP64 → parser → order book → BBO` del
+documento maestro. MAC 10G y Ethernet/IP/UDP quedan fuera de este repositorio.
 
 La corrección se verifica **bit a bit contra el golden model de fase 0**
 (`golden_model/src/book.py`), que ya fue validado contra días completos de
@@ -137,11 +138,14 @@ words 2..N cuerpo.
 - **Doble cuenta:** execute/cancel/delete no descuentan dos veces la cantidad
   de la orden ni del nivel. — SEC-DC-01.
 - **Overflow:** qty de nivel/orden, contador de refs, y niveles > `P` se
-  señalizan, nunca envuelven silenciosamente. — SEC-OV-01.
+  señalizan, nunca envuelven silenciosamente. La operación inválida no emite un
+  BBO y el siguiente mensaje válido se acepta. — SEC-OV-01.
 - **Ref desconocida** en E/X/D/U → anomalía contada, no aborta, el stream
   continúa. — SEC-AN-01.
 - **Bid ≥ ask en trading continuo** → `cross_events` cuenta, no aborta. — SEC-CR-01.
-- **Símbolo vacío** (sin órdenes) → BBO (0,0,0,0). — SEC-EM-01.
+- **Símbolo vacío**: un locate sin órdenes permanece aislado mientras se opera
+  otro locate y no emite un evento espurio; en el símbolo activo, cualquier
+  lado vacío se representa como (0,0). — BBO-02/SEC-EM-01.
 
 **Qué se arriesga del maestro:** la **latencia determinista** y la **corrección
 estricta del estado** (doble cuenta/hazard = BBO incorrecto = el peor fallo de
@@ -182,7 +186,9 @@ red.
      nivel y la orden quedan consistentes con el golden.
      — Gherkin: `orderbook.feature` §SEC-DC-01
 5. [ ] **Overflow**: qty de orden/nivel, número de niveles > `P` y contadores
-     se señalizan con `error`, nunca envuelven en silencio.
+     se señalizan con `error`, nunca envuelven en silencio ni producen BBO para
+     la operación inválida; el mensaje válido inmediatamente posterior se
+     procesa con normalidad.
      — Gherkin: `orderbook.feature` §SEC-OV-01
 6. [ ] **Anomalías y cruzados**: ref desconocida cuenta en `anomaly_count`
      (no aborta); bid ≥ ask en trading continuo cuenta en `cross_events`
@@ -212,7 +218,7 @@ red.
 | 2 | cocotb: `U` con BBO previo no vacío → el evento emitido es el final (no intermedio); mutante de no-atomicidad lo mata |
 | 3 | cocotb: pares adyacentes add→execute, add→cancel, replace→execute sobre la misma ref; comparar contra golden |
 | 4 | cocotb: ejecutar/cancel/delete y verificar orden+nivel con `check_deep()` del golden (o conteo de qty) |
-| 5 | cocotb: inyectar overflow de qty/niveles → `error` alto, sin wrap |
+| 5 | cocotb: inyectar overflow de qty/niveles → muestrear `error`, sin wrap ni BBO inválido, y aceptar el mensaje válido posterior |
 | 6 | cocotb: ref desconocida → `anomaly_count` incrementa; cross → `cross_events` incrementa; flujo continúa |
 | 7 | cocotb: mensajes intercalados de 2+ símbolos; BBO independiente por locate |
 | 8 | cocotb: replay del día local encadenado parser→book; comparar vs golden; vectores congelados commiteados |

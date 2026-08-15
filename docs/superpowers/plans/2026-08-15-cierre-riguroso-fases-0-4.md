@@ -202,19 +202,21 @@ git commit -m "fix(fase1): cerrar validación y recuperación del framing ITCH"
 - Consumes: records Anexo A DW64.
 - Produces: suite oficial `--Wall` limpia, overflow observable y libro vacío realmente probado.
 
-- [ ] **Step 1: Escribir/fortalecer rojos**
+- [x] **Step 1: Escribir/fortalecer rojos**
 
 `SEC-OV-01` debe muestrear al menos un pulso `error`, no emitir el cancel inválido y aceptar un mensaje válido posterior. `BBO-02` debe mantener un segundo locate vacío mientras opera el primero y demostrar ausencia de contaminación.
 
-- [ ] **Step 2: Verificar rojos**
+- [x] **Step 2: Verificar rojos**
 
 Ejecutar ambos tests por filtro; el primero debe fallar porque el helper actual no devuelve errores y el segundo porque el vector actual no contiene un símbolo vacío.
 
-- [ ] **Step 3: Arreglar el warning sin silenciarlo**
+- [x] **Step 3: Arreglar el warning sin silenciarlo**
 
 En `swap_next`, sustituir la rama DW64 `nx_bi >= 4'd0 && lt(nx_type)` por `lt(nx_type)`.
 
-- [ ] **Step 4: Verde completo y mutación**
+- [ ] **Step 4: Verde completo y mutación** — simulación/lint y mutantes de
+  fase 2 en verde (9/9); el runner integral compartido detectó tres
+  supervivientes de fase 3, trasladados al loop de Task 5 antes de marcarlo.
 
 ```bash
 PATH="$VENV_BIN:$PATH" make -C verification/testbenches/orderbook sim

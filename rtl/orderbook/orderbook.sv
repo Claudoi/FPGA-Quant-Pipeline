@@ -815,7 +815,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         reg will_arm_old, will_arm_new, will_probe;
         begin
             will_arm_old = (DW == 32) ? (nx_bi >= 4'd1 && lt(nx_type))
-                                      : (nx_bi >= 4'd0 && lt(nx_type));
+                                      : lt(nx_type);
             will_arm_new = (DW == 32) ? (nx_bi >= 4'd3 && nx_type == 8'h55)
                                       : (nx_bi >= 4'd1 && nx_type == 8'h55);
             // la sonda del mensaje entrante estará en vuelo: pending previos,
