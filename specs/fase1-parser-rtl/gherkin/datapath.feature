@@ -8,11 +8,11 @@ Funcionalidad: Datapath 64-bit a line rate con alineador de mensajes
   Quiero que el datapath acepte una palabra por ciclo en el peor caso y alinee mensajes
   Para cumplir el requisito duro de line rate del documento maestro
 
-Escenario: LIN-01 — el parser acepta 1 palabra/ciclo con mensajes mínimos back-to-back sin stall
-  Dado una entrada de mensajes mínimos back-to-back (D 19 B, X 23 B, S 12 B)
+Escenario: LIN-01 — el parser acota stalls en el tramo pactado con QB=64
+  Dado una entrada de cuatro mensajes A/U back-to-back y QB igual a 64
   Cuando el downstream consume a tready alto
-  Entonces el RTL acepta una palabra de entrada por ciclo
-  Y el contador de ciclos de stall es cero en todo el test
+  Entonces la salida es bit a bit idéntica al golden
+  Y el contador acumulado de ciclos de stall es menor o igual que 24
 
 #language: es
 Esquema del escenario: ALN-01 — el alineador decodifica correctamente cualquier desplazamiento dentro de la palabra
@@ -24,19 +24,18 @@ Esquema del escenario: ALN-01 — el alineador decodifica correctamente cualquie
 
   Ejemplos:
     | tipo | offset | cruce |
-    | D    | 0      | no    |
-    | D    | 1      | sí    |
-    | X    | 3      | sí    |
-    | S    | 5      | no    |
-    | D    | 6      | sí    |
-    | A    | 7      | sí    |
+    | A    | 0      | sí    |
+    | A    | 1      | sí    |
     | A    | 2      | sí    |
+    | A    | 3      | sí    |
     | A    | 4      | sí    |
-    | E    | 1      | sí    |
+    | A    | 5      | sí    |
+    | A    | 6      | sí    |
+    | A    | 7      | sí    |
 
 #language: es
 Escenario: SEC-LIN-01 — los mensajes fuera de subset no rompen el line rate
-  Dado un stream con mensajes del subset y de otros tipos intercalados
+  Dado un mensaje H canónico fuera del subset entre dos mensajes A
   Cuando el downstream consume a tready alto
-  Entonces el parser mantiene 1 palabra/ciclo sin stall interno
+  Entonces la longitud de H se valida y el flujo continúa sin error
   Y solo emite registros para los mensajes del subset

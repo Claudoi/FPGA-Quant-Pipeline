@@ -1,10 +1,10 @@
-# verify-report — fase1-parser-rtl (iteración 3)
+# verify-report — fase1-parser-rtl (iteración 4)
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. El owner no lee HDL/Python:
 > esta evidencia (outputs reales) es lo que `/grade` re-ejecutará.
-> Fecha: 2026-08-13. Área: `rtl/parser/` + `verification/testbenches/parser/`.
-> Iteración 3: cierra el criterio 7 (frame truncado) que grade marcó FAIL en la
-> iteración 2 (tests placeholder `or True` + RTL sin detección de truncado).
+> Fecha de verificación vigente: 2026-08-15. Área: `rtl/parser/` +
+> `verification/testbenches/parser/`. Iteración 4: valida los 22 tipos, recupera
+> el paquete posterior a un truncado y cubre las ocho alineaciones literales.
 
 ## Meta del atacante/diseño (1-2 frases)
 
@@ -18,25 +18,37 @@ datagrama terminado antes de completar el mensaje**.
 
 ## Cambios de iteración 3 (criterio 7)
 
-- RTL: flag `eop_seen` latchea `tlast`; en `ST_LEN` un mensaje incompleto con
-  `eop_seen` → `error` + salto a `ST_HDR` (descarta el truncado, sigue con el
-  siguiente datagrama). Se limpia al capturar un mensaje completo o al leer un
-  header nuevo (salvo que el tlast coincida, para no enmascarar el propio
-  truncado).
+- RTL histórico: la iteración 3 introdujo `eop_seen` y el salto a `ST_HDR`,
+  pero limpiaba el latch al capturar un mensaje anterior y no vaciaba la cola;
+  la iteración 4 demuestra y corrige esos dos huecos.
 - Tests `test_sec_frm01` / `test_sec_frm02` reescritos con asserts reales
   (antes `or True`): verificar `errores > 0` y que el parser continúa / no
   emite registro parcial.
+
+## Cambios de iteración 4
+
+- `explen` cubre los 22 tipos de `MESSAGE_LENGTHS`; toda longitud canónica
+  incorrecta pulsa `error`, también fuera del subset. Un H válido no emite,
+  pero avanza el `msg_idx` observable del A posterior.
+- `tlast` se latchea solo con handshake. Tras aceptarlo, la entrada se bloquea
+  hasta cerrar o descartar el datagrama, evitando mezclar dos paquetes en una
+  cola que no contiene marcadores internos. En truncado se vacía la cola y se
+  prueba el A de un paquete íntegro posterior.
+- En sesión nueva con `count=0`, `exp_seq` toma el `seq` del header actual; se
+  elimina la carrera entre dos asignaciones no bloqueantes.
+- LIN-01 queda reconciliado con QB=64: cuatro A/U, salida bit a bit y stalls
+  `<=24`. ALN-01 recorre offsets 0–7, no tres muestras parciales.
 
 ## Tabla de gates
 
 | Gate | Comando / evidencia | Resultado |
 |---|---|---|
-| **A. Simulación** | `make sim` (cocotb+Verilator) tras `make clean` (la mutación deja sim_build sucio) | 19/19 PASS, 0 FAIL — **PASS** |
-| **B. Compilación/lint sintaxis** | `verilator --lint-only -Wall -Wno-EOFNEWLINE --top-module itch_parser` | 0 warnings — **PASS** |
+| **A. Simulación** | `make -C verification/testbenches/parser sim` desde build limpio | 20/20 PASS, 0 FAIL; REP-02 91 paquetes/17.937 words — **PASS** |
+| **B. Compilación/lint sintaxis** | `verilator --lint-only --Wall --top-module itch_parser rtl/parser/itch_parser.sv` | 0 warnings — **PASS** |
 | **C. Estilo** | `verible-verilog-lint` **NO EJECUTADO** (herramienta no instalada; sustituto `--Wall` + revisión manual) | **NO EJECUTADO** |
 | **D. Cobertura + mapeo** | Tabla spec↔tests abajo; cobertura funcional runner **NO EJECUTADO** (no configurado) | Nivel 1 **PASS** |
-| **E. Mutación HDL** | `python3 scripts/verify/mutate_parser.py` | **10/10 muertos, 0 sobreviven** — **PASS** |
-| **F. Completitud Gherkin** | 19 escenarios ↔ 19 tests espejo (tabla abajo) | **PASS** |
+| **E. Mutación HDL** | `python3 scripts/verify/mutate_parser.py` | **12/12 muertos, 0 sobreviven** — **PASS** |
+| **F. Completitud Gherkin** | conteo reproducible | 20 escenarios ↔ 20 tests espejo — **PASS** |
 | **G. Rigor + timing** | G0/G1/G3 checklist; G timing NO APLICA (fase 1) | **PASS** |
 
 ## Gate D nivel 1 — cruce spec ↔ tests
@@ -48,17 +60,17 @@ datagrama terminado antes de completar el mensaje**.
 | 3 (alineador, 8 desplazamientos) | `test_aln01` | PASS |
 | 4 (framing/gaps/sesión/count=0) | `test_frm01`, `test_sec_gap01/02`, `test_sec_frm03/04` | PASS |
 | 5 (AXI-Stream con backpressure) | `test_out02`, `test_out03` | PASS |
-| 6 (no-subset: validar y contar, sin registro) | `test_sec_par04` | PASS |
-| 7 (longitud incoherente/truncado → error) | `test_sec_par03`, `test_sec_par03b`, `test_sec_frm01`, `test_sec_frm02` | **PASS (iteración 3)** |
+| 6 (22 longitudes; no-subset avanza índice, sin registro) | `test_sec_par04`, `test_sec_par05` | PASS |
+| 7 (longitud incoherente/truncado → error + recuperación) | `test_sec_par03`, `test_sec_par03b`, `test_sec_par05`, `test_sec_frm01`, `test_sec_frm02` | **PASS (iteración 4)** |
 | 8 (replay real + vectores congelados) | `test_rep01`, `test_rep02` (pcap 12302019) | PASS |
 | 10/11 (lint y estilo) | gates B/C | B PASS, C NO EJECUTADO |
 | 9 (cabos fase 0: día 01302019) | `run_golden` completo, addendum inferior | PASS |
 
 ## Gate F — espejos Gherkin (título literal → test)
 
-Todos los escenarios de los 5 `.feature` tienen test espejo (19/19). Ver tabla
-de la iteración 2 — sin cambios estructurales, solo se reforzaron
-`test_sec_frm01` y `test_sec_frm02`.
+Los cinco `.feature` contienen 20 escenarios/esquemas y el módulo cocotb tiene
+20 tests. SEC-PAR-05 añade el espejo de validación de tipos conocidos; ALN-01
+recorre internamente los ocho ejemplos de su esquema.
 
 ## Gate E — mutación HDL (evidencia resumida)
 
@@ -66,16 +78,18 @@ Runner: `scripts/verify/mutate_parser.py` (aplica cada flip, corre la suite,
 restaura, y limpia sim_build al final).
 
 ```
-[MATADO] ALN-OFFBYONE: FAIL=16   # off-by-one del offset de cuerpo
-[MATADO] ALN-PAD-FILL: FAIL=16   # relleno del cuerpo en lugar de cero
-[MATADO] SEQ-GAP-NOGAP: FAIL=3   # flip != a == en detección de gap
-[MATADO] SEQ-GAP-SESSION: FAIL=1 # flip != a == en cambio de sesión
-[MATADO] NEXT-OFFBYONE: FAIL=4   # off-by-one pack_left >1 → >0
-[MATADO] LEN-BODY_W: FAIL=16     # ceil incorrecto de words de cuerpo
-[MATADO] CAP-SUBSET: FAIL=1      # emite aunque no sea subset
-[MATADO] OUT-FREE: FAIL=16       # heap sin out_take (duplica/pierde)
-[MATADO] LEN-CAPT-ERR: FAIL=1    # umbral len<11 → <=11 (borde, test par03b)
-[MATADO] TRUNC-EOP: FAIL=1       # ignora el latch de truncado (FRM-01/02)
+[MATADO] ALN-OFFBYONE: FAIL=18
+[MATADO] ALN-PAD-FILL: FAIL=18
+[MATADO] SEQ-GAP-NOGAP: FAIL=3
+[MATADO] SEQ-GAP-SESSION: FAIL=2
+[MATADO] NEXT-OFFBYONE: FAIL=7
+[MATADO] LEN-BODY_W: FAIL=6
+[MATADO] CAP-SUBSET: FAIL=6
+[MATADO] OUT-FREE: FAIL=18
+[MATADO] LEN-CAPT-ERR: FAIL=1
+[MATADO] LEN-H: FAIL=2
+[MATADO] SEQ-ZERO-SESSION: FAIL=1
+[MATADO] TRUNC-EOP: FAIL=2
 TODOS LOS MUTANTES MUERTOS. Gate E PASS.
 ```
 
@@ -105,18 +119,16 @@ REP-02 17937 words byte a byte.
 3. Line-rate mínimo infinito (criterio 2): **DECISIÓN DE SPEC TOMADA (edit
    2026-08-13)**: non-goal físico derivado del Anexo A (16 B overhead/mensaje →
    salida > entrada). Ver spec.md criterio 2.
-4. La mutación deja `sim_build` sucio (los objetos no se recompilan al restaurar
-   el RTL); el runner ahora hace `make clean` al final. `make sim` en verde exige
-   ese clean o compilación fresca.
+4. El runner restaura el RTL en un `finally` por mutante y hace `make clean` al
+   final; una interrupción no deja el DUT mutado ni objetos reutilizables.
 
 ## Veredicto
 
-**Listo para /grade (iteración 3).** Criterio 7 cerrado con test reales que
-pinchan y un mutante TRUNC-EOP muerto. Criterio 2 cerrado por decisión de spec
-(non-goal físico). Gates A/B/E/F PASS; C/D-nivel2 declarados NO EJECUTADOS
-(entorno); G0/G1/G3 PASS; G timing NO APLICA (fase 1). El cabo de datos del día
-01302019 está cerrado; resta como limitación de entorno la instalación de
-verible. **Campaña fase 1 cerrada para el RTL según esta iteración histórica.**
+**Cerrada funcionalmente (iteración 4).** Gates A/B/E/F PASS; C y cobertura
+nivel 2 declarados NO EJECUTADOS por herramienta ausente; G0/G1/G3 PASS y
+timing NO APLICA en fase 1. Quedan probados los 22 tipos, ocho offsets, sesión
+nueva con count=0, recuperación tras truncado, replay real y mutación 12/12.
+No se presenta el non-goal de mensajes mínimos infinitos como line-rate.
 
 ## Addendum de evidencia — segundo día real (2026-08-15)
 

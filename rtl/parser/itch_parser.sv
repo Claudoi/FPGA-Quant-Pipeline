@@ -68,7 +68,7 @@ module itch_parser #(
     reg [2:0] st;
 
     reg  [QQ-1:0] q;
-    reg  [7:0]    qn;      // 8 bits: QB=128 requiere qn+8 <= 128 (qn llega a 128)
+    reg  [7:0]    qn;      // 8 bits cubren el QB máximo soportado de 128 bytes
 
     reg  [31:0]   msg_idx;
     reg  [63:0]   exp_seq;
@@ -116,12 +116,20 @@ module itch_parser #(
                    (t == 8'h55) || (t == 8'h50);   // S R A F E C X D U P
     endfunction
 
-    // longitud total esperada del mensaje por tipo (subset; fuente: messages.py).
-    // 0 => tipo fuera del subset (no se valida longitud contra tabla).
+    // Longitud total esperada de los 22 tipos canónicos (fuente: messages.py).
+    // 0 => tipo desconocido; se consume sin decodificar ni validar por tabla.
     function automatic logic [7:0] explen(input [7:0] t);
         case (t)
             8'h53: explen = 8'd12;   // S
             8'h52: explen = 8'd39;   // R
+            8'h48: explen = 8'd25;   // H
+            8'h59: explen = 8'd20;   // Y
+            8'h4c: explen = 8'd26;   // L
+            8'h56: explen = 8'd35;   // V
+            8'h57: explen = 8'd12;   // W
+            8'h4b: explen = 8'd28;   // K
+            8'h4a: explen = 8'd35;   // J
+            8'h4f: explen = 8'd21;   // O
             8'h41: explen = 8'd36;   // A
             8'h46: explen = 8'd40;   // F
             8'h45: explen = 8'd31;   // E
@@ -130,6 +138,10 @@ module itch_parser #(
             8'h44: explen = 8'd19;   // D
             8'h55: explen = 8'd35;   // U
             8'h50: explen = 8'd44;   // P
+            8'h51: explen = 8'd40;   // Q
+            8'h42: explen = 8'd19;   // B
+            8'h49: explen = 8'd50;   // I
+            8'h4e: explen = 8'd20;   // N
             default: explen = 8'd0;
         endcase
     endfunction
@@ -169,9 +181,14 @@ module itch_parser #(
     // tready combinacional: hay sitio y no drenamos este ciclo (el drain se
     // consume en el flanco con la palabra que ya estaba en la cola).
     wire drain_active = (drain_int > 0) && (qn >= drain_int);
-    wire can_aug = s_axis_tvalid && !drain_active && (qn + 8'(BYTES) <= QB);
-    wire can_da  = s_axis_tvalid && drain_active && (8'(qn) - 8'(drain_int) + 8'(BYTES) <= QB);
+    // Tras aceptar tlast no se prefetchea el datagrama siguiente hasta cerrar
+    // o descartar el actual: la cola no guarda marcadores de frontera internos.
+    wire can_aug = s_axis_tvalid && !eop_seen && !drain_active &&
+                   (qn + 8'(BYTES) <= QB);
+    wire can_da  = s_axis_tvalid && !eop_seen && drain_active &&
+                   (8'(qn) - 8'(drain_int) + 8'(BYTES) <= QB);
     assign s_axis_tready = can_aug || can_da;
+    wire in_take = s_axis_tvalid && s_axis_tready;
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
@@ -187,8 +204,8 @@ module itch_parser #(
             gap_detected <= 1'b0;
             error <= 1'b0;
             // latch de fin de datagrama: se fija cuando el stream marca tlast
-            // (SEC-FRM-01/02) y se limpia al capturar un mensaje o un header.
-            if (s_axis_tlast) eop_seen <= 1'b1;
+            // (SEC-FRM-01/02) y se limpia al cerrar o descartar el datagrama.
+            if (in_take && s_axis_tlast) eop_seen <= 1'b1;
 
             // ------------------------------------------------------------
             // cola: drena drain_int y acepta entrada en paralelo si cabe
@@ -233,8 +250,12 @@ module itch_parser #(
                         // count=0 (SEC-FRM-04): paquete sin mensajes, avanza y
                         // sigue esperando el siguiente header sin emitir nada.
                         // exp_seq avanza por 0 => queda = seq del header actual.
+                        // Se usa el header, no el valor previo de exp_seq: en una
+                        // sesión nueva ambas asignaciones ocurren en este flanco.
                         if ({pbyte(q,18), pbyte(q,19)} == 16'h0) begin
-                            exp_seq <= exp_seq + 64'({pbyte(q,18), pbyte(q,19)});
+                            exp_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
+                                        pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
+                            eop_seen <= 1'b0;
                             st <= ST_HDR;
                         end else begin
                             st <= ST_LEN;
@@ -258,23 +279,34 @@ ST_LEN: begin
                                     8'(BYTES-1)) >> L2B) : 7'd0;
                             bi <= 0;
                             msg_reg <= q[(QB-2)*8 - 1 -: 352];
-                            // longitud incoherente (SEC-PAR-03): para un tipo del
-                            // subset la longitud declarada debe ser la de messages.py
-                            len_ok <= !issubset(pbyte(q,2)) ||
-                                      (explen(pbyte(q,2)) == 8'({pbyte(q,0), pbyte(q,1)})) ||
-                                      (8'({pbyte(q,0), pbyte(q,1)}) < 11);
-                            if (8'({pbyte(q,0), pbyte(q,1)}) < 11) error <= 1'b1;
-                            eop_seen <= 1'b0;
+                            // Todo tipo canónico se valida, aunque no emita registro.
+                            // Un tipo desconocido (explen=0) sigue como passthrough.
+                            len_ok <= (explen(pbyte(q,2)) == 0) ||
+                                      (explen(pbyte(q,2)) ==
+                                       8'({pbyte(q,0), pbyte(q,1)}));
+                            if ((8'({pbyte(q,0), pbyte(q,1)}) < 11) ||
+                                ((explen(pbyte(q,2)) != 0) &&
+                                 (explen(pbyte(q,2)) !=
+                                  8'({pbyte(q,0), pbyte(q,1)}))))
+                                error <= 1'b1;
                             st <= ST_CAP;
                         end else if (eop_seen) begin
                             // frame truncado (SEC-FRM-01): el datagrama ya terminó
                             // (tlast) y el mensaje declarado no está completo.
                             error <= 1'b1;
+                            q <= 0;
+                            qn <= 0;
+                            eop_seen <= 1'b0;
+                            pack_left <= 0;
                             st <= ST_HDR;
                         end
                     end else if (eop_seen) begin
                         // ni siquiera el campo len completo (SEC-FRM-02)
                         error <= 1'b1;
+                        q <= 0;
+                        qn <= 0;
+                        eop_seen <= 1'b0;
+                        pack_left <= 0;
                         st <= ST_HDR;
                     end
                 end
@@ -353,6 +385,7 @@ ST_LEN: begin
                             st <= ST_LEN;
                         end else begin
                             exp_seq <= this_seq + 64'(pack_count);
+                            eop_seen <= 1'b0;
                             st <= ST_HDR;
                         end
                     end

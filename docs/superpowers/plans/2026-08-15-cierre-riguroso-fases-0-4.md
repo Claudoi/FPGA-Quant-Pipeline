@@ -145,11 +145,11 @@ git commit -m "docs(fase0): adjuntar regresión completa del segundo día Nasdaq
 - Consumes: payload MoldUDP64 y AXI-Stream existente.
 - Produces: validación de longitudes para los 22 tipos, recuperación real tras truncado y mutantes aplicables al RTL parametrizado.
 
-- [ ] **Step 1: Alinear contrato de throughput**
+- [x] **Step 1: Alinear contrato de throughput**
 
 Cambiar LIN-01 Gherkin para describir cuatro mensajes A/U de tamaño medio, QB=64 y stalls acotados `<=24`; mantener explícitamente como non-goal el feed infinito de mensajes mínimos. Corregir SEC-LIN-01 para usar un tipo H real fuera del subset.
 
-- [ ] **Step 2: Añadir rojos de tipos no-subset y recuperación**
+- [x] **Step 2: Añadir rojos de tipos no-subset y recuperación**
 
 Tests nuevos o reforzados:
 
@@ -160,19 +160,19 @@ paquete con A + A truncado, seguido de paquete con A íntegro -> 1 error y dos A
 sesión nueva, seq=100, count=0; siguiente paquete seq=100 -> cero gap
 ```
 
-- [ ] **Step 3: Ejecutar los rojos dirigidos**
+- [x] **Step 3: Ejecutar los rojos dirigidos**
 
 Usar `COCOTB_TEST_FILTER`/`TESTCASE` para cada test y registrar el fallo observable, no solo timeout.
 
-- [ ] **Step 4: Implementar tabla literal de 22 longitudes y flush de datagrama truncado**
+- [x] **Step 4: Implementar tabla literal de 22 longitudes y flush de datagrama truncado**
 
 Extender `explen` con las longitudes de `golden_model/itch/messages.py`; una longitud conocida incorrecta pulsa `error`. Al ver truncado por `tlast`, descartar los bytes residuales del datagrama antes de volver a `ST_HDR`. Resolver la doble asignación de `exp_seq` en cambio de sesión + `count=0` usando el `seq` del header.
 
-- [ ] **Step 5: Actualizar los tres mutantes parametrizados**
+- [x] **Step 5: Actualizar los tres mutantes parametrizados**
 
 Reemplazar patrones 64-bit obsoletos por expresiones vigentes basadas en `BYTES`, `DW` y `cbody`; ejecutar primero cada mutante y después el runner completo.
 
-- [ ] **Step 6: Gates de fase 1**
+- [x] **Step 6: Gates de fase 1**
 
 ```bash
 PATH="$VENV_BIN:$PATH" make -C verification/testbenches/parser sim
@@ -182,7 +182,7 @@ PATH="$VENV_BIN:$PATH" python3 scripts/verify/mutate_parser.py
 
 Expected: 0 fallos, 0 warnings y todos los mutantes aplicados/matados.
 
-- [ ] **Step 7: Informe y commit**
+- [x] **Step 7: Informe y commit**
 
 ```bash
 git add specs/fase1-parser-rtl rtl/parser/itch_parser.sv \

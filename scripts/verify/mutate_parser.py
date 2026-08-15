@@ -21,10 +21,10 @@ BACKUP = RTL + ".bak"
 
 # (id, descripcion, old, new) — old debe existir exactamente una vez en el RTL.
 MUTANTS = [
-    ("ALN-OFFBYONE", "offset del body en criado (off-by-one en base)",
-     "11 + 8*bi", "11 + 8*bi + 8"),
+    ("ALN-OFFBYONE", "offset del body capturado (off-by-one en base)",
+     "7'(11 + BYTES*bi)", "7'(12 + BYTES*bi)"),
     ("ALN-PAD-FILL", "relleno del cuerpo en lugar de cero",
-     "r[63 - 8*k -: 8] = 8'h0;", "r[63 - 8*k -: 8] = 8'hff;"),
+     "r[DW-1 - 8*k -: 8] = 8'h0;", "r[DW-1 - 8*k -: 8] = 8'hff;"),
     ("SEQ-GAP-NOGAP", "nunca detecta gap (flip != a ==)",
      "!= exp_seq) gap_detected <= 1'b1;",
      "== exp_seq) gap_detected <= 1'b1;"),
@@ -34,19 +34,24 @@ MUTANTS = [
     ("NEXT-OFFBYONE", "off-by-one en pack_left (vuelve al > 0)",
      "if (pack_left > 1) begin", "if (pack_left > 0) begin"),
     ("LEN-BODY_W", "body_w calculado con ceil incorrecto",
-     "- 8'd11 + 8'd7) >> 3", "- 8'd11) >> 3"),
+     "8'(BYTES-1)) >> L2B", "8'(BYTES)) >> L2B"),
     ("CAP-SUBSET", "emite aunque no seja subset",
      "st <= ((in_subset && msg_len >= 11 && len_ok) ? ST_W0 : ST_NEXT);",
      "st <= ST_W0;"),
     ("OUT-FREE", "heap sin out_take (re-presenta aunque no accepten)",
      "wire out_free   = !out_valid_reg || out_take;",
      "wire out_free   = !out_valid_reg;"),
-    ("LEN-CAPT-ERR", "no marca error si len < 11 (off-by-one)",
-     "if (8'({pbyte(q,0), pbyte(q,1)}) < 11) error <= 1'b1;",
-     "if (8'({pbyte(q,0), pbyte(q,1)}) <= 11) error <= 1'b1;"),
-    ("TRUNC-EOP", "ignora el latch de truncado en el mensaje incompleto",
-     "if (8'({pbyte(q,0), pbyte(q,1)}) < 11) error <= 1'b1;\n                            eop_seen <= 1'b0;\n                            st <= ST_CAP;\n                        end else if (eop_seen) begin",
-     "if (8'({pbyte(q,0), pbyte(q,1)}) < 11) error <= 1'b1;\n                            eop_seen <= 1'b0;\n                            st <= ST_CAP;\n                        end else if (1'b0) begin"),
+    ("LEN-CAPT-ERR", "marca como inválido el borde estructural len=11",
+     "(8'({pbyte(q,0), pbyte(q,1)}) < 11) ||",
+     "(8'({pbyte(q,0), pbyte(q,1)}) <= 11) ||"),
+    ("LEN-H", "acepta H con longitud 24 en lugar de 25",
+     "8'h48: explen = 8'd25;", "8'h48: explen = 8'd24;"),
+    ("SEQ-ZERO-SESSION", "count cero conserva el esperado de la sesión anterior",
+     "exp_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),\n                                        pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};\n                            eop_seen <= 1'b0;",
+     "exp_seq <= exp_seq;\n                            eop_seen <= 1'b0;"),
+    ("TRUNC-EOP", "ignora tlast aceptado y no detecta el truncado",
+     "if (in_take && s_axis_tlast) eop_seen <= 1'b1;",
+     "if (1'b0) eop_seen <= 1'b1;"),
 ]
 
 
@@ -89,14 +94,15 @@ def main():
             mid = mutant[0]
             if only and only != mid:
                 continue
+            mut = apply(mutant, raw)
             with open(BACKUP, "w") as f:
                 f.write(raw)
-            mut = apply(mutant, raw)
-            with open(RTL, "w") as f:
-                f.write(mut)
-            rc, out, fails = run_suite()
-            # restaurar
-            shutil.move(BACKUP, RTL)
+            try:
+                with open(RTL, "w") as f:
+                    f.write(mut)
+                rc, out, fails = run_suite()
+            finally:
+                shutil.move(BACKUP, RTL)
             killed = (fails > 0)
             results.append((mid, killed, fails))
             print(f"[{'MATADO' if killed else 'SOBREVIVE'}] {mid}: FAIL={fails} "

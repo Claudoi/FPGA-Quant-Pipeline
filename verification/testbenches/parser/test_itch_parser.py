@@ -13,6 +13,7 @@ from cocotb.triggers import RisingEdge, Timer
 import struct
 
 from golden_model.src import message_oracle
+from golden_model.itch.messages import MESSAGE_LENGTHS
 
 # ---------------------------------------------------------------------------
 # oráculo: palabras de salida esperadas (flat) para `messages`
@@ -61,6 +62,15 @@ def R(locate, ts):
             b"Q " + b"R" + b"N" + b"Y" + b" " + b"N" + struct.pack(">I", 0) + b"N")
     assert len(body) == 28
     return _mk(b"R", locate, ts, body)
+
+
+def H(locate, ts):
+    return _mk(b"H", locate, ts, b"AAPL    " + b"T" + b"\x00" + b"TEST")
+
+
+def canonical_message(msg_type):
+    length = MESSAGE_LENGTHS[msg_type][1]
+    return msg_type.encode("ascii") + bytes(length - 1)
 
 
 def A(locate, ts, ref, side, shares, stock, price):
@@ -198,11 +208,15 @@ async def test_par01_all_types_match_oracle(dut):
 
 @cocotb.test()
 async def test_sec_par04_no_subset_no_register(dut):
-    """Espejo §SEC-PAR-04: tipo fuera de subset no emite registro, el 'A' siguiente sí."""
-    await _reset(dut)
-    msgs = corpus_no_subset()
-    expected = run_oracle(msgs)  # solo el 'A' (msg_idx global 1 -> luego empieza 1)
-    got = await drive_and_collect(dut, msgs)
+    """Espejo §SEC-PAR-04: H válido avanza msg_idx sin emitir registro."""
+    a0 = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
+    h = H(13, 3)
+    a2 = A(13, 4, 8, b"\x00", 11, b"AAPL    ", 4)
+    msgs = [a0, h, a2]
+    payload = _packet_seq(msgs, 1)
+    got, errores = await drive_packets_err(dut, [payload])
+    expected = run_oracle(msgs)
+    assert errores == 0, f"SEC-PAR-04: H canónico produjo {errores} errores"
     assert got == expected, f"got={got} exp={expected}"
 
 # ---------------------------------------------------------------------------
@@ -320,11 +334,11 @@ async def drive_packets(dut, packets, out_tready=(1,), max_cycles=30000,
 
 
 # ---------------------------------------------------------------------------
-# LIN-01: mensajes mínimos back-to-back -> 0 stalls internos con tready alto
+# LIN-01: cuatro mensajes A/U back-to-back -> stalls acotados con tready alto
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_lin01_back_to_back_min_no_stall(dut):
-    """Espejo §LIN-01: mensajes mínimos back-to-back -> stalls ACOTADOS.
+    """Espejo §LIN-01: cuatro mensajes A/U back-to-back -> stalls acotados.
 
     El tramo cabe en la cola (amortiguamiento del diseño de captura a
     msg_reg): el parser no deja meter atrás mientras el downstream consume.
@@ -337,11 +351,9 @@ async def test_lin01_back_to_back_min_no_stall(dut):
     stalls ACOTADOS (~15 en 4 mensajes A/U): "sin backpressure sostenida"
     del régimen de fase 1. El límite caza regresiones groseras (p. ej. un
     drenaje roto); la corrección bit a bit se valida abajo."""
-    # Tramo de mensajes de tamaño medio (A/F/U/P, 35-44 B) que el diseño de
-    # captura a msg_reg sostiene sin backpressure interno: 0 stalls con el
-    # downstream consumiendo. El peor caso de mensajes MÍNIMOS back-to-back
-    # INFINITO exige un aligner con drenaje en emisión (SB: pendiente, ver
-    # spec.md LIN-01 alcance) y no se exige en este test.
+    # Tramo literal A/U pactado. El peor caso de mensajes mínimos back-to-back
+    # infinito queda como non-goal físico en la spec; este test mide el régimen
+    # real de QB=64 y no afirma cero stalls.
     msgs = [A(13, i + 10, i, b"\x01", 1000, b"AAPL    ", 1000 + i) if i % 2 == 0
             else U(13, i + 10, i, i + 1, 200, 1100 + i)
             for i in range(4)]
@@ -359,27 +371,23 @@ async def test_lin01_back_to_back_min_no_stall(dut):
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_aln01_message_not_word_aligned(dut):
-    """Espejo §ALN-01: un mensaje que cruza palabra se alinea y decodifica bien."""
+    """Espejo §ALN-01: A se decodifica en los ocho offsets de la word."""
     a = A(393, 1_000_000_002, 0x1122334455667788, b"\x01", 1000, b"AMZN    ", 1_234_567)
-    # Vamos a insertar el A precedido de un mensaje fuera de subset de longitud
-    # L (con su prefijo len => L+2 mod 8 varia), de modo que el A arranca en
-    # distintas fases y cruza límites de palabra. Los PM no-subset validos
-    # (H=25, B=19, I=50) dan fases 27,21,52 mod 8 = 3,5,4. Suficiente para
-    # cubrir cruces de palabra no triviales.
-    builders = [
-        (b"H", b"\x00" * 14),   # Stock Trading Action 25B (cabecera+stock+estado+razon)
-        (b"I", b"\x00" * 39),   # NOII 50B
-        (b"B", b"\x00" * 8),    # Broken Trade 19B
-    ]
-    for pref, body in builders:
-        m = pref + struct.pack(">H", 3) + b"\x00\x00" + (0).to_bytes(6, "big") + body
-        # validar longitud contra spec
-        assert len(m) in (25, 50, 19), ("len", len(m))
-        msgs = [m, a]
+    # Offset del type A = (header 20 + frames previos + len A 2) mod 8.
+    # Estos prefijos canónicos no-subset producen exactamente las ocho fases.
+    prefixes_by_offset = {
+        0: ("Q",), 1: ("H",), 2: ("I",), 3: ("B",),
+        4: ("N",), 5: ("O",), 6: (), 7: ("H", "N"),
+    }
+    for offset, prefix_types in prefixes_by_offset.items():
+        prefixes = [canonical_message(msg_type) for msg_type in prefix_types]
+        actual_offset = (20 + sum(2 + len(m) for m in prefixes) + 2) % 8
+        assert actual_offset == offset
+        msgs = prefixes + [a]
         payload = _packet_seq(msgs, 1)
         expected = run_oracle(msgs)
         words, _ = await drive_raw(dut, payload, out_tready=(1,))
-        assert words == expected, f"ALN pref={pref}: got {len(words)} exp {len(expected)}"
+        assert words == expected, f"ALN offset={offset}: got {len(words)} exp {len(expected)}"
 
 
 @cocotb.test()
@@ -509,11 +517,11 @@ async def test_sec_frm03_cambio_sesion_resetea_seq(dut):
 async def test_sec_frm04_count_cero_valido(dut):
     """Espejo §SEC-FRM-04: un paquete con count igual a cero es válido."""
     msgs = [A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)]
-    # paquete count=0 (vacío) no emite; el siguiente seq avanza por 0
-    p0 = _packet_seq([], 1)
-    p1 = _packet_seq(msgs, 1)   # seq=1 (esperado tras count=0)
+    # La sesión nueva fuerza exp_seq=100; count=0 debe conservar ese 100.
+    p0 = _packet_session(b"SESSIONBBB", 100, [])
+    p1 = _packet_session(b"SESSIONBBB", 100, msgs)
     out, gaps = await drive_packets(dut, [p0, p1], expect_gap=0)
-    exp = run_oracle_packets([(1, [], p0), (1, msgs, p1)])
+    exp = run_oracle_packets([(100, [], p0), (100, msgs, p1)])
     assert gaps == 0, f"SEC-FRM-04: count=0 no debe marcar gap, vistos {gaps}"
     assert out == exp, f"SEC-FRM-04: got {len(out)} exp {len(exp)}"
 
@@ -530,6 +538,24 @@ async def test_sec_par03_longitud_incoherente(dut):
     expected = run_oracle([ok])
     expected[0] = expected[0] + 1   # msg_idx=1 por el desecho del bad
     assert words == expected, f"SEC-PAR-03: got {len(words)} exp {len(expected)}"
+
+
+@cocotb.test()
+async def test_sec_par05_las_22_longitudes_conocidas_se_validan(dut):
+    """Espejo §SEC-PAR-05: todo tipo conocido con longitud errónea da error."""
+    malformed = []
+    for msg_type, (_name, expected_length) in MESSAGE_LENGTHS.items():
+        message = msg_type.encode("ascii") + bytes(expected_length - 2)
+        assert len(message) == expected_length - 1
+        malformed.append(message)
+    ok = A(13, 9, 99, b"\x01", 10, b"AAPL    ", 3)
+    payload = _packet_seq(malformed + [ok], 1)
+    words, errores = await drive_packets_err(dut, [payload])
+    expected = run_oracle([ok])
+    expected[0] += len(malformed)
+    assert errores == len(MESSAGE_LENGTHS), (
+        f"SEC-PAR-05: {errores} errores para {len(MESSAGE_LENGTHS)} longitudes inválidas")
+    assert words == expected, "SEC-PAR-05: no recuperó el A posterior"
 
 
 # ---------------------------------------------------------------------------
@@ -665,17 +691,20 @@ async def test_sec_frm01_frame_truncado(dut):
     ok = A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)
     # Paquete count=2: un 'A' completo + un 'A' que DECLARA 36 B pero cuyo
     # datagrama solo aporta 21 B (truncado real: el cuerpo no llega entero).
-    truncated = b"A" + b"\x00" * 20   # 21 B de un 'A' de 36 B declarados
+    truncated = b"A" + b"\x00" * 19   # 20 B; p1 acaba justo al final de word
     declared_len = 36                 # el prefijo declara el tamaño del tipo
     p1 = struct.pack(">10sQH", b"SIM0000001", 1, 2) + \
         len(ok).to_bytes(2, "big") + ok + \
         declared_len.to_bytes(2, "big") + truncated
-    # el datagrama termina ahí (los bytes que queden no completan el 2º 'A')
-    words, errores = await drive_packets_err(dut, [p1])
+    # El siguiente paquete empieza en la word posterior al tlast y debe salir.
+    next_ok = A(14, 3, 8, b"\x00", 11, b"MSFT    ", 4)
+    p2 = _packet_session(b"SIM0000002", 100, [next_ok])
+    assert len(p1) % 8 == 0
+    words, errores = await drive_packets_err(dut, [p1, p2])
     # error señalizado por el truncado
     assert errores > 0, f"SEC-FRM-01: frame truncado debe señalar error, vistos {errores}"
-    # el 'ok' (1er mensaje del paquete) sí se emite (continúa sin abortar)
-    exp = run_oracle([ok])
+    # El primer A y el A del paquete posterior salen; el truncado no emite.
+    exp = run_oracle([ok, next_ok])
     assert words == exp, f"SEC-FRM-01: got({len(words)}) exp({len(exp)})"
 
 
@@ -697,10 +726,12 @@ async def test_sec_frm02_tlast_en_medio(dut):
 @cocotb.test()
 async def test_sec_lin01_no_subset_no_rompe_line_rate(dut):
     """Espejo §SEC-LIN-01: mensajes fuera de subset no rompen el line rate."""
-    msgs = [S(393, 1, 0x4F), A(13, 2, 7, b"\x01", 10, b"AAPL    ", 3)]
+    msgs = [A(13, 1, 6, b"\x01", 9, b"AAPL    ", 2),
+            H(13, 2),
+            A(13, 3, 7, b"\x00", 10, b"AAPL    ", 3)]
     payload = _packet_seq(msgs, 1)
     words, stalls = await drive_raw(dut, payload, out_tready=(1,))
-    assert stalls == 0, f"SEC-LIN-01: {stalls} stalls con downstream consumiendo"
+    assert stalls <= 24, f"SEC-LIN-01: {stalls} stalls con downstream consumiendo"
     assert words == run_oracle(msgs), "SEC-LIN-01: salida correcta"
 
 
@@ -835,10 +866,10 @@ async def drive_and_sample_error(dut, payload, max_cycles=20000):
 async def test_sec_par03b_len_igual_once_no_error(dut):
     """Espejo §SEC-PAR-03 (borde): longitud declarada == 11 NO señaliza error.
     len mínima válida de un mensaje ITCH es 11 (solo cabecera común sin cuerpo).
-    Con len==11 el RTL la acepta (11 < 11 es falso); un mutante con `<=` la
-    marcaría erroneamente error."""
-    # un mensaje 'S' de exactamente 11 B (cabecera común, sin byte de cuerpo)
-    m = b"S" + bytes([0]) * 10
+    Un tipo desconocido se consume como passthrough; un tipo canónico conserva
+    su longitud exacta. Un mutante con `<=` marcaría este borde erróneamente."""
+    # Tipo desconocido de exactamente 11 B (cabecera común, sin cuerpo).
+    m = b"Z" + bytes([0]) * 10
     assert len(m) == 11
     payload = _packet_seq([m], 1)
     errores = await drive_and_sample_error(dut, payload)

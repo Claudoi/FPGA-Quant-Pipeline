@@ -43,7 +43,7 @@ Escenario: SEC-FRM-03 — un cambio de sesión resetea el seq esperado
 
 #language: es
 Escenario: SEC-FRM-04 — un paquete con count igual a cero es válido
-  Dado un payload MoldUDP64 cuya cuenta de mensajes es cero
-  Cuando el RTL procesa el paquete
+  Dado una sesión nueva con seq 100 y cuenta de mensajes cero
+  Cuando el siguiente paquete de la misma sesión llega también con seq 100
   Entonces no emite ningún registro y no señaliza error
-  Y avanza el seq esperado por cero
+  Y no señaliza gap porque el seq esperado avanzó por cero
