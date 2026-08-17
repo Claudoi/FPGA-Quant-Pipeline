@@ -4,7 +4,7 @@
 Sin Vivado, verifica que `synth/fase3_synth.tcl` y
 `synth/constraints/fase3_322mhz.xdc` son coherentes con el RTL y la spec:
 
-1. part objetivo = xcvu9p-flga2104-2L-e (spec, swappable).
+1. part objetivo = xcku3p-ffva676-2L-e (spec, decisión 002; swappable).
 2. top del tcl = módulo de `rtl/itch_chain.sv`.
 3. Ficheros RTL que lee el tcl existen.
 4. Periodo del reloj 3,103 ns == 1/322,265625e6 (tolerancia 0,01 %).
@@ -28,7 +28,7 @@ XDC = os.path.join(REPO, "synth", "constraints", "fase3_322mhz.xdc")
 TOP_SV = os.path.join(REPO, "rtl", "itch_chain.sv")
 BOOK_SV = os.path.join(REPO, "rtl", "orderbook", "orderbook.sv")
 
-PART = "xcvu9p-flga2104-2L-e"
+PART = "xcku3p-ffva676-2L-e"
 FREQ_HZ = 322.265625e6
 PERIOD_NS = 1e9 / FREQ_HZ  # 3,10303... ns
 
@@ -57,12 +57,12 @@ def main():
         print(f"[FAIL] tcl ausente: {TCL}")
         sys.exit(1)
 
-    tcl = open(TCL).read()
+    tcl = open(TCL, encoding="utf-8").read()
     top = re.search(r"set top\s+(\w+)", tcl).group(1)
     part = re.search(r"set part\s+(\S+)", tcl).group(1)
     check("part objetivo de la spec", part == PART, f"{part}")
 
-    sv = open(TOP_SV).read()
+    sv = open(TOP_SV, encoding="utf-8").read()
     sv_nocom = re.sub(r"//.*", "", sv)
     m = re.search(r"module\s+(\w+)\s*(?:#\s*\([^)]*\))?\s*\(", sv_nocom)
     check("top del tcl == módulo del RTL", m and m.group(1) == top,
@@ -88,7 +88,7 @@ def main():
     check("el Tcl aborta ante slack negativo",
           "slack_lesser_than 0.0" in tcl and "error" in tcl)
 
-    book = open(BOOK_SV).read()
+    book = open(BOOK_SV, encoding="utf-8").read()
     check("lectura de tabla registrada por rd_data",
           bool(re.search(r"rd_data\s*<=\s*o_mem\s*\[\s*rd_addr\s*\]", book)))
     direct_probe_read = re.search(r"o_mem\s*\[\s*pr_", book)
@@ -97,14 +97,14 @@ def main():
           "sin lecturas o_mem[pr_*]" if not direct_probe_read else
           f"lectura directa en offset {direct_probe_read.start()}")
 
-    xdc = open(XDC).read()
+    xdc = open(XDC, encoding="utf-8").read()
     period = re.search(r"create_clock[^;]*?-period\s+([\d.]+)", xdc)
     check("create_clock presente en el xdc", bool(period))
     if period:
         per = float(period.group(1))
         rel = abs(per - PERIOD_NS) / PERIOD_NS
         check("periodo == 1/322,265625e6 (tol 0,01 %)", rel < 1e-4,
-              f"{per} ns vs {PERIOD_NS:.4f} ns (Δ {rel:.2e})")
+              f"{per} ns vs {PERIOD_NS:.4f} ns (delta {rel:.2e})")
 
     # puertos del top (Anexo de la spec + BBO/depth/handshake)
     port_defs = re.findall(
