@@ -25,7 +25,7 @@ mensaje y ~15 % de palabras del stream interno.
   de w1 igual que hoy. El Anexo A de 64 bits NO se toca (regresión fases 1/2).
 - **Tabla de órdenes en URAM**: los 5 arrays `o_valid/o_ref/o_side/o_price/
   o_qty` se consolidan en un array único de NSLOT×86 bits (65.536×86 ≈ 20
-  URAM del VU9P) con **lectura síncrona registrada** (dirección → dato a los
+  URAM del XCKU3P) con **lectura síncrona registrada** (dirección → dato a los
   1 ciclo), nunca indexación combinacional. Reset por invalidación de slots
   (patrón que no bloquea la inferencia: jamás reset global del array).
 - **Sonda serializada con prefetch**: `lookup_ref`/`first_empty` consumen
@@ -45,7 +45,7 @@ mensaje y ~15 % de palabras del stream interno.
   media ≤ 45 ciclos (mejorable a ~35-40 con el recorte del Anexo A),
   determinismo de SEC-LAT-01 conservado.
 - **Artefactos de síntesis (criterio 10)**: constraints 3,103 ns + script tcl
-  (part `xcvu9p-flga2104-2L-e`, top `itch_chain`, DW=32) actualizados si el
+  (part `xcku3p-ffva676-2L-e`, top `itch_chain`, DW=32) actualizados si el
   RTL nuevo cambia puertos o estructura de memoria; `scripts/verify/synth_check.py`
   10/10; WNS ≥ 0 del run externo del owner en `synth/reports/`.
 
@@ -74,7 +74,10 @@ en esta campaña).
 
 ## Constraints
 
-- **Familia/part:** UltraScale+ **xcvu9p-flga2104-2L-e** (960 URAM, 1182K LUT).
+- **Familia/part:** UltraScale+ **xcku3p-ffva676-2L-e** (360 URAM, 162.720 CLB
+  LUT). Retarget desde el VU9P por decisión 002 (`docs/decisiones/002-retarget-kintex-xcku3p.md`):
+  el XCKU3P está soportado en Vivado ML Standard (gratuito); la tabla de
+  órdenes (~21 URAM) cabe con factor ~17 de margen.
 - **Frecuencia:** 322,265625 MHz (periodo 3,103 ns) — la razón de ser de la
   campaña es que el RTL RESISTA esa ruta, no solo la simulación.
 - **URAM:** lectura registrada obligatoria (1 ciclo de latencia);

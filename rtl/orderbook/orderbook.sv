@@ -144,7 +144,7 @@ module orderbook #(
 
     // ---------------------------------------------------------------
     // tabla de órdenes en URAM (fase3-uram): array único de NSLOT x OW bits
-    // (65.536 x 86 ≈ 20 URAM del VU9P). SIN reset de contenido (patrón de
+    // (65.536 x 86 ≈ 20 URAM del XCKU3P). SIN reset de contenido (patrón de
     // inferencia); la invalidación post-reset corre en ST_INVAL.
     // Entrada: {valid[0], ref[REFW:1], side[21], price[PXW+22-1:22], qty[85:54]}
     // ---------------------------------------------------------------

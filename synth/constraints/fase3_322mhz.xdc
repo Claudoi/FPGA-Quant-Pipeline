@@ -1,4 +1,4 @@
-# Constraints de fase 3 — variante 32-bit @ 322,265625 MHz (VU9P)
+# Constraints de fase 3 — variante 32-bit @ 322,265625 MHz (Kintex XCKU3P)
 # Reloj del datapath del pipeline (parser -> book). Periodo: 1/322,265625e6 s
 # = 3,103 ns. Ajustar el puerto si el top envuelto cambia de nombre.
 create_clock -period 3.103 -name clk_pipeline [get_ports clk]

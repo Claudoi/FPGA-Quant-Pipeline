@@ -71,8 +71,11 @@ renombra: solo se añaden parámetros/puertos nuevos y se parametriza lo existen
 
 ## Constraints
 
-- **Familia/part objetivo:** AMD/Xilinx UltraScale+ **xcvu9p-flga2104-2L-e**
-  (VU9P; 960 URAM, 1182K LUT, 34,6 Mb BRAM) — swappable en el tcl/constraints.
+- **Familia/part objetivo:** AMD/Xilinx UltraScale+ **xcku3p-ffva676-2L-e**
+  (Kintex XCKU3P; 360 URAM, 162.720 CLB LUT, 25,1 Mb BRAM). Retarget desde el
+  VU9P por decisión 002 (`docs/decisiones/002-retarget-kintex-xcku3p.md`):
+  soportado en Vivado ML Standard gratuito y reproducible sin licencia de
+  pago — swappable en el tcl/constraints.
 - **Frecuencia:** 322,265625 MHz (variante 32-bit) y 156,25 MHz (regresión
   64-bit). 32-bit @ 322,265625 = 10,3125 Gbps = line-rate 10G.
 - **Line-rate:** el datapath 32-bit acepta **1 palabra/ciclo en el peor caso**
@@ -186,8 +189,8 @@ hash = nuevo vector de error).
      (1 ciclo) y el mapeo (65.536×86 bits ≈ 20 URAM) se documenta en
      `docs/writeup/`; no hay ruta O(P·P) en el cálculo del mejor precio.
 10. [ ] **Síntesis**: `synth/` contiene constraints (322,265625 MHz) + script
-     tcl (synth/impl, part VU9P); el owner corre Vivado fuera y pega el
-     informe WNS/TNS y utilización en `synth/reports/` — WNS ≥ 0 en la
+     tcl (synth/impl, part `xcku3p-ffva676-2L-e`); el owner corre Vivado fuera y
+     pega el informe WNS/TNS y utilización en `synth/reports/` — WNS ≥ 0 en la
      variante 32-bit.
 11. [ ] Cocotb + Verilator compilan ambos tops a DW=32 con `--Wall` sin
      warnings reales silenciados; lint en verde sobre lo tocado.

@@ -1,8 +1,8 @@
 # synth/reports — evidencia de síntesis (criterio 10)
 
 El **owner** corre Vivado fuera del ciclo y pega aquí los informes del run de
-`fase3_synth.tcl` (part `xcvu9p-flga2104-2L-e`, top `itch_chain` con DW=32,
-reloj 322,265625 MHz):
+`fase3_synth.tcl` (part `xcku3p-ffva676-2L-e` — decisión 002, Vivado ML
+Standard gratuito; top `itch_chain` con DW=32, reloj 322,265625 MHz):
 
 - `timing_impl.txt` — WNS/TNS (criterio: **WNS ≥ 0** en la variante 32-bit).
 - `util_impl.txt` — utilización LUT/FF/BRAM/**URAM** (criterio 9: inferencia

@@ -2,7 +2,9 @@
 # Uso (Vivado batch, desde synth/):
 #   vivado -mode batch -source fase3_synth.tcl
 # El owner pega el informe en synth/reports/ (criterio 10).
-set part xcvu9p-flga2104-2L-e
+# Part objetivo: Kintex UltraScale+ (Vivado ML Standard gratuito). Decisión
+# 002 — docs/decisiones/002-retarget-kintex-xcku3p.md.
+set part xcku3p-ffva676-2L-e
 set top itch_chain
 set outdir [file normalize ./reports]
 
