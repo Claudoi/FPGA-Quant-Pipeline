@@ -16,11 +16,20 @@ URAM 32/48 inferida y DRC 0 errores, pero **WNS = -10,492 ns** (periodo
 3,103 ns) y **LUT al 100,33 %** — criterio 10 NO cerrado; el tcl aborta con
 `FASE3 TIMING FAIL` ante slack negativo.
 
-**Loop en curso (iter 7, 2026-08-18)**: el retiming del escaneo de niveles
-(pipeline ST_EMIT → A/B/C, commit `2fa7250`) está pendiente de verificación.
-El re-run del MISMO `fase3_synth.tcl` debe pegar aquí los informes nuevos
-(objetivo: WNS ≥ 0, TNS = 0, LUT ≤ 95 %, URAM 32/48 conservada) — sin esos
-outputs el criterio 10 sigue abierto.
+**Re-run iter 7 (2026-08-18 14:11, pipeline ST_EMIT → A/B/C, commit
+`2fa7250`, mismo tcl)**: el gate abortó de nuevo (`FASE3 TIMING FAIL:
+WNS=-7.395 ns`), pero los informes nuevos están en este directorio:
+WNS **-7,395 ns** (+3,1 ns), TNS **-430.582,411 ns** (+160 µs), LUT as
+Logic **96,49 %** (-3,84 pp), F7/F8 19.762/8.780, URAM 32/48 conservada,
+DRC 0. Peor ruta interna `lv_eq → lv2_mode` (31 niveles, escaneo etapa B)
+y peor absoluta I/O del wrapper (`msg_len → s_axis_tready`). El criterio
+10 sigue abierto (WNS < 0, TNS ≠ 0, LUT > 95 %).
+
+**Loop en curso (iter 8)**: candidatos documentados en el verify-report de
+fase 3 — registrar los puertos de salida del wrapper y/o partir la etapa B
+del escaneo en dos registros (spec antes de tocar RTL), y cerrar rojo→verde
++ gates A/E/B/C en la máquina con cocotb. Objetivo del re-run siguiente:
+WNS ≥ 0, TNS = 0, LUT ≤ 95 %, URAM 32/48 conservada.
 
 Verificación del tcl sin Vivado: `scripts/verify/synth_check.py` (o el lint de
 la skill verify) valida que el tcl/constraints referencian puertos y RTL

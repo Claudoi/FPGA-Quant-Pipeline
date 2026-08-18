@@ -314,3 +314,68 @@ SEC-URAM-01).
   URAM 32/48 conservada. Sin ese informe el criterio 10 sigue abierto.
 - Regresión completa de las suites (orderbook/phase3/uram/mdp3) por la
   enmienda de latencia y el FSM de emisión.
+
+### Re-run Vivado 2026-08-18 (14:11) — pipeline A/B/C: mejoró, no cierra
+
+Run completo con el mismo `synth/fase3_synth.tcl` (gate del tcl sin
+cambios; `vivado -mode batch -source fase3_synth.tcl`, log
+`synth/fase3_run_iter7.log`, PID 14924). El gate abortó como está
+diseñado:
+
+```text
+FASE3 TIMING FAIL: WNS=-7.395 ns (se exige WNS>=0 y TNS=0)
+INFO: [Common 17-206] Exiting Vivado at Tue Aug 18 14:11:52 2026...
+```
+
+| Métrica | Run base (10:59) | Re-run iter 7 (14:11) | Delta |
+|---|---|---|---|
+| WNS (setup) | -10,492 ns | **-7,395 ns** | +3,097 ns |
+| TNS (setup) | -590.856,875 ns | **-430.582,411 ns** | +160.274 ns |
+| Endpoints failing (setup) | 181.711 | **189.127** | +7.416 |
+| WHS (hold) | -2,541 ns (synth) | **-1,232 ns** | +1,309 ns |
+| LUT as Logic | 163.259 (100,33 %) | **157.011 (96,49 %)** | -3,84 pp |
+| F7/F8 muxes | 20.275 / 8.930 | **19.762 / 8.780** | -513 / -150 |
+| URAM288 | 32 (66,67 %) | **32 (66,67 %)** | = |
+| Bonded IOB | 223 | **222** | -1 |
+
+Rutas críticas post-route (timing_impl.txt):
+
+- **Peor ruta: -7,395 ns** — `u_parser/msg_len_reg[1]/C → s_axis_tready`
+  (11 niveles: CARRY8=1 LUT2=1 LUT4=1 LUT5=1 LUT6=6 OBUF=1; Data Path
+  Delay 6,387 ns con 50,9 % de route + 1 ns de output delay del pin). Es
+  un camino I/O del wrapper (`Ignore I/O Paths: No`): el parser empuja la
+  habilitación de drenaje (`qn[7]`/`drain_int[3]`) hasta el pin de salida
+  del wrapper. En la cadena real ese puerto va a la FIFO/registro del
+  siguiente bloque, no a un pad.
+- **Segunda peor: -5,837 ns** — `u_book/lv_eq_reg[3]/C →
+  u_book/lv2_mode_reg[1]_rep/D` (31 niveles: LUT2=2 LUT3=1 LUT5=4 LUT6=23
+  MUXF7=1; Data Path Delay 8,863 ns con 61,2 % de route). El escaneo de
+  niveles sigue siendo el camino interno dominante: la etapa B del
+  pipeline (find-first + `changed` + depth desde la captura) no quedó
+  corta — `lv_eq → lv2_mode` cruza el find-first completo en un solo
+  ciclo.
+
+**Conclusión del loop iter 7 (gate G):** el retiming A/B/C movió el
+indicador en la dirección correcta (WNS +3,1 ns, TNS +160 µs, LUT -3,84 pp,
+F7/F8 -513/-150, muxes del escaneo reducidos), la URAM se conserva 32/48 y
+el parser no aparece en el peor camino interno, pero **el criterio 10 NO
+se cierra**: WNS < 0 (-7,395), TNS ≠ 0 (-430.582,411 ns) y LUT 96,49 % >
+95 %. Además la peor ruta absoluta es un I/O del wrapper (`msg_len →
+s_axis_tready`), que en la cadena real no existe como pin: el wrapper
+expone demasiado y penaliza el run.
+
+**Siguiente loop (iter 8), candidatos estructurales documentados aquí:**
+1. Registrar en el wrapper (`itch_chain_synth.sv`) los puertos de salida
+   (`s_axis_tready` de la cadena) para eliminar el camino I/O del parser,
+   o re-analizar con `Ignore I/O Paths: Yes` para medir solo la lógica
+   interna; y
+2. Partir la etapa B del escaneo (el par `lv_eq → lv2_mode` con 31
+   niveles) en dos registros — p. ej. `sm_cap_*` → `lv_eq/lv2_mode`
+   intermedios registrados → combinación final — manteniendo la semántica
+   de RTM-01..04 (la sonda estructural expone la captura, no las etapas
+   intermedias, así que el pipeline interno puede re-timearse sin cambiar
+   el contrato de la sonda).
+
+Ambas opciones requieren spec (addendum) antes de tocar RTL, y el cierre
+de la iter 8 exige además el rojo→verde de sims y los gates A/E/B/C en la
+máquina con cocotb (pendientes desde la iter 7).
