@@ -2,9 +2,10 @@
 """Mutación HDL del order book (gate E de /verify, campaña fase3-uram).
 
 Cada mutante flipa un guard de la tabla URAM (sonda serializada + prefetch),
-del pipeline de niveles (etapas registradas) o del engine de fases 2-3 y corre
-las suites cocotb (fase 2 a DW=64, phase3 hash/depth/hard y uram a K=20); si
-ninguna suite se pone roja, el mutante sobrevive (test que falta). Uso:
+del pipeline de niveles (etapas registradas), del pipeline de emisión
+(A/B/C, iter 7) o del engine de fases 2-3 y corre las suites cocotb (fase 2
+a DW=64, phase3 hash/depth/hard/rtm y uram a K=20); si ninguna suite se pone
+roja, el mutante sobrevive (test que falta). Uso:
 
     python3 scripts/verify/mutate_orderbook.py [--mutant <ID>]
 """
@@ -16,13 +17,17 @@ BACKUP = RTL + ".bak"
 # (área, comando make): la fase 2 corre el feed real a DW=64 (REPLAY-01),
 # phase3 corre la suite hash a K=20 (probe agotado y tabla llena reales),
 # la suite depth a DW=32 (top-N vs golden, DP-01/DP-02), la suite hard
-# (símbolo 21 y retención bajo backpressure, SEC-NSYM-01/SEC-BP-01) y el área
-# uram (SEC-URAM-01/02/03: sonda serializada, prefetch y pipeline registrado).
+# (símbolo 21 y retención bajo backpressure, SEC-NSYM-01/SEC-BP-01), la suite
+# rtm (pipeline de emisión A/B/C, RTM-01..04 a DW=32 y RTM-REG-01 a DW=64,
+# iter 7) y el área uram (SEC-URAM-01/02/03: sonda serializada, prefetch y
+# pipeline registrado).
 SUITES = [
     ("verification/testbenches/orderbook", ["make", "sim"]),
     ("verification/testbenches/phase3", ["make", "sim-hash"]),
     ("verification/testbenches/phase3", ["make", "sim-depth"]),
     ("verification/testbenches/phase3", ["make", "sim-hard"]),
+    ("verification/testbenches/phase3", ["make", "sim-rtm"]),
+    ("verification/testbenches/phase3", ["make", "sim-rtm64"]),
     ("verification/testbenches/uram", ["make", "sim-uram"]),
 ]
 
@@ -34,14 +39,14 @@ MUTANTS = [
      "if (fnd == -1 && emp == -1) begin\n                // overflow de niveles (SEC-OV-01): la op se descarta\n                lv2_mode <= LV_MODE_NONE;\n                lverr = 1'b1;",
      "if (fnd == -1 && emp == -1) begin\n                // overflow de niveles (SEC-OV-01): la op se descarta\n                lv2_mode <= LV_MODE_NONE;\n                lverr = 1'b0;"),
     ("U-NOTATOMIC", "replace no atómico (borra la orig pero no añade la nueva)",
-     "launch_lv(u_side, u_price, u_shares);\n                    mem_wr(u_nidx, entry_new(u_newref, u_side, u_price, u_shares));",
+     "launch_lv(u_side, u_price, u_shares);\n                    wr_en = 1'b1;\n                    wr_addr = u_nidx;\n                    wr_data = entry_new(u_newref, u_side, u_price, u_shares);",
      "launch_lv(u_side, u_price, u_shares);"),
     ("U-DELETE-HALF", "replace conserva la qty de la orig en el nivel (doble cuenta)",
-     "launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),\n                                  -$signed(e_qty(pr_entry[OW-1:OW-QW])));\n                        mem_wr(pr_slot, {OW{1'b0}});\n                        u_newref <= newref;",
-     "mem_wr(pr_slot, {OW{1'b0}});\n                        u_newref <= newref;"),
+     "launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),\n                                  -$signed(e_qty(pr_entry[OW-1:OW-QW])));\n                        wr_en = 1'b1;\n                        wr_addr = pr_slot;\n                        wr_data = {OW{1'b0}};\n                        u_newref <= newref;",
+     "launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),\n                                  -$signed(e_qty(pr_entry[OW-1:OW-QW])));\n                        u_newref <= newref;"),
     ("U-SKIP-ROUTE", "replace no entra en ST_UADD (la nueva ref nunca se registra)",
-     "st <= lv_uadd ? ST_UADD : ST_EMIT;",
-     "st <= ST_EMIT;"),
+     "st <= lv_uadd ? ST_UADD : ST_EMIT_A;",
+     "st <= ST_EMIT_A;"),
     ("D-DOUBLE", "delete descuenta dos veces del nivel",
      "8'h44: begin\n                    oref = K'(b64(0));\n                    if (!pr_found) anomaly_count <= anomaly_count + 1;\n                    else begin\n                        launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),\n                                  -$signed(e_qty(pr_entry[OW-1:OW-QW])));",
      "8'h44: begin\n                    oref = K'(b64(0));\n                    if (!pr_found) anomaly_count <= anomaly_count + 1;\n                    else begin\n                        launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),\n                                  -2*$signed(e_qty(pr_entry[OW-1:OW-QW])));"),
@@ -52,8 +57,8 @@ MUTANTS = [
      "if (rest[33]) error <= 1'b1;   // execute > restante",
      "if (rest[33]) error <= 1'b0;   // execute > restante"),
     ("EMIT-NOCHANGED", "changed siempre 0 (rompe el flag de cambio)",
-     "changed = (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||\n                      (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);",
-     "changed = 1'b0;"),
+     "sm_changed <= (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||\n                          (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);",
+     "sm_changed <= 1'b0;"),
     ("HASH-NOREF", "el lookup no compara el ref (colisión -> op sobre la ref equivocada)",
      "if (rd_data[0] && (rd_data[REFW:1] == pr_target)) begin",
      "if (rd_data[0]) begin"),
@@ -70,8 +75,8 @@ MUTANTS = [
      "if (pr_found || shares == 0) begin",
      "if (shares == 0) begin"),
     ("HASH-INSERT-NOVALID", "el insert no escribe la entrada (la orden nunca aparece)",
-     "mem_wr(pr_empty, entry_new(oref, ask, price, shares));",
-     "if (1'b0) mem_wr(pr_empty, entry_new(oref, ask, price, shares));"),
+     "wr_en = 1'b1;\n                        wr_addr = pr_empty;\n                        wr_data = entry_new(oref, ask, price, shares);",
+     "wr_en = 1'b0;\n                        wr_addr = pr_empty;\n                        wr_data = entry_new(oref, ask, price, shares);"),
     ("URAM-COMB-INDEX", "la sonda indexa la tabla combinacionalmente (patrón de URAM roto)",
      "if (rd_data[0] && (rd_data[REFW:1] == pr_target)) begin",
      "if (o_mem[pr_base + pr_i][0] && (o_mem[pr_base + pr_i][REFW:1] == pr_target)) begin"),
@@ -85,17 +90,17 @@ MUTANTS = [
      "wq[i] = (i == lv2_found) ? QW'(lv2_newq[31:0]) : lv_qt[i];",
      "wq[i] = lv_qt[i];"),
     ("DP-BADORDER", "el top-N invierte el orden (peor nivel primero)",
-     "dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};",
-     "dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + (ND-1-di)][31:0],\n                        lv_qty[m_loc_idx*2*P + (ND-1-di)][31:0]};"),
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[di][31:0],\n                        sm_cap_qt[di][31:0]};",
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[ND-1-di][31:0],\n                        sm_cap_qt[ND-1-di][31:0]};"),
     ("DP-ASKSWAP", "el top-N emite el ask en el grupo del bid (y viceversa)",
-     "dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + P + di][31:0]};",
-     "dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};"),
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[P+di][31:0],\n                        sm_cap_qt[P+di][31:0]};",
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[di][31:0],\n                        sm_cap_qt[di][31:0]};"),
     ("DP-NOVALID", "depth nunca se valida (el consumidor ve 0)",
-     "depth_tdata <= dacc;\n            depth_tvalid <= 1'b1;",
-     "depth_tdata <= dacc;"),
+     "depth_tdata <= sm_dacc;\n                        depth_tvalid <= 1'b1;",
+     "depth_tdata <= sm_dacc;"),
     ("DP-TOPNCOUNT", "el top-N emite ND-1 niveles (el último queda fuera del bus)",
-     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};",
-     "for (di = 0; di < ND-1; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        lv_price[m_loc_idx*2*P + di][31:0],\n                        lv_qty[m_loc_idx*2*P + di][31:0]};"),
+     "for (di = 0; di < ND; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[di][31:0],\n                        sm_cap_qt[di][31:0]};",
+     "for (di = 0; di < ND-1; di = di + 1)\n                dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[di][31:0],\n                        sm_cap_qt[di][31:0]};"),
     ("NSYM-GUARD", "sin guard del símbolo 21 (el locate fuera del subset entra con m_loc_idx=31 -> OOB)",
      "bad_sym <= 1'b1;\n                            error <= 1'b1;\n                            m_loc_idx <= 0;\n                        end else begin\n                            m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);",
      "m_loc_idx <= loc_lookup(s_axis_tdata[DW-9 -: 16]);"),
@@ -105,6 +110,19 @@ MUTANTS = [
     ("LV-NEGWRAP", "el reduce sobre nivel ausente escribe la cantidad envuelta (phantom ~4,29e9)",
      "            end else if (fnd == -1 && lv_delta[31]) begin\n                // reduce sobre un nivel que no existe (orden en tabla sin\n                // nivel por overflow previo): jamás una cantidad envuelta\n                // (hallazgo G5)\n                lv2_mode <= LV_MODE_NONE;",
      "            end else if (fnd == -1 && lv_delta[31]) begin\n                // reduce sobre un nivel que no existe (orden en tabla sin\n                // nivel por overflow previo): jamás una cantidad envuelta\n                // (hallazgo G5)\n                lv2_mode <= LV_MODE_INSERT;"),
+    # --- mutantes del pipeline de emisión (addendum iter 7) ---
+    ("EMIT-NOCAPTURE", "etapa A omitida: la selección lee la captura stale (sm_cap_*)",
+     "if (emit_ok) capture_emit_a();",
+     "if (1'b0) capture_emit_a();"),
+    ("EMIT-FINDFIRST-INV", "prioridad del find-first invertida (primer slot vacío, no el mejor)",
+     "if (sm_cap_nzb[i]) begin",
+     "if (!sm_cap_nzb[i]) begin"),
+    ("EMIT-CHANGED-WRONG-PREV", "changed compara el bid contra el prev del ask (flag erróneo)",
+     "sm_changed <= (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||\n                          (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);",
+     "sm_changed <= (bp != prev_ap[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||\n                          (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);"),
+    ("EMIT-DEPTH-WRONGSIDE", "el depth del bid se empaqueta desde el grupo ask capturado",
+     "dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[di][31:0],\n                        sm_cap_qt[di][31:0]};",
+     "dacc = {dacc[2*ND*64-65:0],\n                        sm_cap_px[P+di][31:0],\n                        sm_cap_qt[P+di][31:0]};"),
 ]
 
 
