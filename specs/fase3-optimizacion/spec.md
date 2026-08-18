@@ -564,3 +564,62 @@ Sin escenarios Gherkin nuevos (gate F sin cambios).
 WNS >= 0 / TNS = 0 / LUT <= 95 %, el criterio 10 queda abierto y se escala
 al owner con la evidencia del run (WNS/TNS/LUT/URAM + rutas criticas
 residuales); el gate del tcl no se rebaja.
+
+## Addendum iter 10 (2026-08-18, enmienda de continuidad)
+
+**Evidencia del run iter 9 (commiteada)**: FASE3 TIMING FAIL: WNS =
+-3,527 ns (era -4,052), TNS = -211.438,033 ns (era -213.040,636), 177.459
+endpoints failing, LUT as Logic 155.893/162.720 = **95,80 %**, URAM 32/48,
+IOB 222, DRC 0. El retiming del book funciono: la familia del pin
+depth_tready (12 niveles + URAM cascade del run 8) desaparecio del
+top-10. Las 10 peores del run 9 son la **familia I/O del wrapper**:
+bo_locate_reg[0]/C -> bbo_locate[0] (pin) con 1 nivel (OBUF) pero
+**Clock Path Skew -2,671 ns** (SCD 2,671: el arbol de reloj al area del
+book con LUT al 96 %), Output Delay 1 ns, Data Path 2,924 ns; mismo
+patron en depth_tdata_reg[0] y _n_reg[1] -> s_axis_tready (pin);
+ademas rutas internas cortas de area: out_data_reg_reg[23] (parser ->
+FIFO del wrapper) y ody_acc_reg[2][28] (book) a FDRE, ~12 niveles de
+skew de regiones congestionadas.
+
+**Decision**: la iter 9 era la ultima del loop por el stop documentado;
+por decision del owner se abre UNA iteracion mas, limitada estrictamente
+al wrapper de sintesis (sin tocar el book ni el parser: los gates y el
+red rojo->verde pendiente no cambian de objetivo).
+
+**Cambios (solo synth/itch_chain_synth.sv)**:
+
+- **a. IOB packing de las salidas**: los puertos bo_locate,
+  bo_tdata, bo_tvalid, bo_changed, depth_tdata,
+  depth_tvalid llevan (* IOB = \'TRUE\' *); sus FFs (los FFs de
+  salida del book, que solo alimentan el pin, sin fanout interno) se
+  ubican en el IOB, donde el skew del arbol I/O es ~0 y la ruta
+  FF->pin cierra sin el skew -2,67 ns. Efecto secundario: 192 FFs salen
+  del area del book (el arbol interno se alivia y las rutas internas de
+  regiones pueden mejorar).
+- **b. tready de entrada registrado**: s_axis_tready <= (f_n < 3) en
+  un FF propio (con rst_n_c), tambien con IOB. El handshake del pin usa
+  el tready registrado (fifo_hs = tvalid && tready_ff): el productor
+  empuja cuando ve ready=1 y el wrapper cuenta el mismo ready: regimen
+  coherente, sin overflow (f_n <= 3 por construccion), backpressure
+  diferida 1 ciclo en el pin (SEC-BP-01 de la cadena intacta: el parser
+  retiene su par; la FIFO sigue siendo 4xDW).
+  Enmienda respecto al analisis de la iter 9 (c): alli se descarto
+  registrar el tready PORQUE el guard de emision lo miraba; el guard
+  (iter 9 a) ya no mira el tready y el registro vive SOLO en el wrapper:
+  no afecta a la retencion del par (linea 501, pin directo del book).
+  El wrapper no se simula (RTM-LAT mide la cadena, no el wrapper).
+
+**Objetivos**: WNS >= 0 y TNS = 0 post-route (gate intacto), LUT <= 95 %
+(la salida de FFs del area no reduce LUT, solo libera FFs/arbol; 95,80 %
+actual), URAM 32/48, IOB 222 conservado (el packing usa los IOB
+existentes).
+
+**Equivalencia**: el contrato del pin (AXI-S) se mantiene (ready diferido
+1 ciclo es backpressure legal); el par BBO/depth, la retencion y la
+atomicidad no cambian. Sin escenarios Gherkin nuevos; sin mutantes
+nuevos (el wrapper no se muta).
+
+**Stop final**: este es el ultimo run del loop. Si no cierra WNS >= 0 /
+TNS = 0 / LUT <= 95 %, el criterio 10 queda abierto y se escala al owner
+con la evidencia acumulada (run 8: -4,052; run 9: -3,527; run 10: este);
+el gate del tcl no se rebaja.

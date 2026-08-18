@@ -26,19 +26,26 @@ module itch_chain_synth #(
     parameter PXW  = 32,
     parameter QW   = 32
 ) (
-    input  wire              clk,
+input  wire              clk,
     input  wire              rst_n,
     input  wire [DW-1:0]     s_axis_tdata,
     input  wire [DW/8-1:0]   s_axis_tkeep,
     input  wire              s_axis_tvalid,
-    output wire              s_axis_tready,
+    (* IOB = "TRUE" *)
+    output reg               s_axis_tready,
     input  wire              s_axis_tlast,
+    (* IOB = "TRUE" *)
     output reg  [15:0]       bbo_locate,
+    (* IOB = "TRUE" *)
     output reg  [127:0]      bbo_tdata,
+    (* IOB = "TRUE" *)
     output reg               bbo_tvalid,
     input  wire              bbo_tready,
+    (* IOB = "TRUE" *)
     output reg               bbo_changed,
+    (* IOB = "TRUE" *)
     output reg  [31:0]       depth_tdata,
+    (* IOB = "TRUE" *)
     output reg               depth_tvalid,
     input  wire              depth_tready
 );
@@ -67,6 +74,8 @@ module itch_chain_synth #(
     reg [DW/8-1:0] f_keep [3:0];
     reg            f_tl  [3:0];
     reg [1:0]      f_n, f_wr, f_rd;
+    reg            tready_ff;
+    reg            rst_n_c;
 
     wire [DW-1:0]   p_s_axis_tdata;
     wire [DW/8-1:0] p_s_axis_tkeep;
@@ -79,9 +88,20 @@ module itch_chain_synth #(
     wire fifo_hs  = s_axis_tvalid && s_axis_tready;
     wire fifo_pop = p_s_axis_tvalid && p_s_axis_tready;
 
-    assign s_axis_tready = (f_n < 2'd3);
+    // tready del pin registrado (iter 10): la ruta f_n -> LUT -> OBUF ->
+    // pin con el skew del area del book no cierra; el FF del comparador se
+    // empaca en el IOB (atributo en el puerto). El handshake usa el tready
+    // registrado: el productor empuja cuando ve ready=1 y el wrapper cuenta
+    // el mismo ready (fifo_hs) -> regimen coherente, sin overflow
+    // (f_n <= 3 por construccion), backpressure diferida 1 ciclo en el pin.
+    always_ff @(posedge clk) begin
+        if (!rst_n_c)
+            tready_ff <= 1'b0;
+        else
+            tready_ff <= (f_n < 2'd3);
+    end
+    assign s_axis_tready = tready_ff;
 
-    reg rst_n_c;
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             rst_n_c <= 1'b0;
