@@ -89,3 +89,43 @@ Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
     Dado la cadena parser→book a DW=32 sobre una secuencia fija
     Cuando se mide la latencia wire→BBO por tipo de mensaje
     Entonces la re-ejecución produce el histograma idéntico
+
+  # --- iteración 7 (2026-08-18): retiming del escaneo de niveles ----------
+  # Addendum iteración 7 de spec.md. El ST_EMIT de un solo ciclo se divide en
+  # ST_EMIT_A (captura) / ST_EMIT_B (selección+changed+depth) / ST_EMIT_C
+  # (handshake) — +2 ciclos en el camino del evento, latencia re-derivada.
+
+  Escenario: RTM-01 — el escaneo de niveles del BBO/depth está registrado en etapas
+    Dado el book con ST_EMIT pipelined (etapas A/B/C)
+    Cuando se procesa un evento de update
+    Entonces la captura de niveles del símbolo es un registro (verificada con sonda interna)
+    Y el find-first por lado opera sobre la captura, no sobre los arrays de niveles
+    Y el payload emitido es bit a bit idéntico al golden book.py
+
+  Escenario: RTM-02 — el mejor nivel se halla aunque esté en el último slot
+    Dado un símbolo con su mejor nivel en el slot P-1 y los P-1 anteriores vacíos
+    Cuando el book emite el evento de ese símbolo
+    Entonces el BBO contiene ese nivel exacto
+
+  Escenario: RTM-03 — changed se calcula sobre la captura y no se pierde
+    Dado dos eventos consecutivos idénticos para el mismo símbolo
+    Cuando el segundo se emite
+    Entonces bbo_changed vale 0 en el segundo
+    Y un evento con cambio distinto vale 1
+
+  Escenario: RTM-04 — el handshake de salida retiene el evento pipelined
+    Dado un consumidor que baja bbo_tready tras observar bbo_tvalid
+    Cuando el evento proviene del pipeline de etapas A/B/C
+    Entonces bbo_tvalid y el payload permanecen estables hasta que tready sube
+    Y se entrega exactamente una vez, sin pérdida ni duplicado
+
+  Escenario: RTM-LAT-01 — la latencia re-medida cumple el umbral re-derivado
+    Dado la cadena parser→book a DW=32 sobre la secuencia fija de latencia
+    Cuando se mide la latencia wire→BBO por tipo de mensaje tras el pipeline
+    Entonces la media total es ≤ 48 ciclos
+    Y la re-ejecución produce el histograma idéntico
+
+  Escenario: RTM-REG-01 — la regresión de 64 bits sigue verde con el pipeline
+    Dado el book pipelined con DW=64 (default)
+    Cuando se re-ejecutan las suites de fase 1 y fase 2
+    Entonces todos los tests siguen pasando sin cambios

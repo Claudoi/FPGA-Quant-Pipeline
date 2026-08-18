@@ -297,3 +297,98 @@ del backlog estacionario de la cola del parser:
    por congestión), no la URAM ni el parser. Evidencia y rutas críticas en
    `verify-report.md`; el siguiente loop requiere cambio estructural con spec
    nueva (pipeline/retiming del escaneo de niveles o BBO sombra incremental).
+
+## Addendum iteración 7 (2026-08-18 — retiming del escaneo de niveles)
+
+Cierre del criterio 10 con cambio estructural del camino del evento BBO.
+**La decisión de dirección la tomó el owner el 2026-08-18: retiming/pipeline
+del escaneo de niveles** (la alternativa «BBO sombra incremental» queda
+documentada como plan B en `docs/writeup/` si esta iteración no cierra).
+
+### Causa raíz medida (run 2026-08-18, evidencia en `verify-report.md`)
+
+- WNS = -10,492 ns (periodo 3,103 ns), TNS = -590.856,875 ns, 181.711/275.646
+  endpoints en fallo; LUT al 100,33 % (163.259/162.720).
+- Rutas críticas: `u_book/m_loc_idx_reg → bbo_changed/bbo_tdata`, 37-41
+  niveles de LUT (2 CARRY8 + 37 LUT5/6), route 72,9 % por congestión. El
+  parser está en 12 niveles (fuera del límite); la URAM no es el cuello.
+- El culpable es `emit_bbo` (`rtl/orderbook/orderbook.sv:1045-1098`): en un
+  solo ciclo combinacional hace (a) mux de 40 grupos de niveles por
+  `m_loc_idx`, (b) find-first-nonzero de P=32 por lado, (c) `changed` contra
+  `prev_*` (otro mux por símbolo), (d) empaquetado depth 2×ND y (e) el
+  cross-check de mercado cruzado — lógica encadenada + fan-out gigante
+  (20.275 F7 + 8.930 F8 muxes).
+
+### Cambio estructural: ST_EMIT → pipeline de 2 etapas registradas
+
+`ST_EMIT` (un solo ciclo) se divide en tres estados: `ST_EMIT_A` (captura),
+`ST_EMIT_B` (selección + changed + depth) y `ST_EMIT_C` (handshake de
+salida). **+2 ciclos en el camino del evento BBO** — cambio de contrato de
+latencia, re-derivado abajo, jamás ocultado.
+
+- **Etapa A (captura)**: registros `sm_cap[2*P]` de `{px, qty}` del símbolo
+  del evento + bandera `qty != 0` por slot. Solo el mux 40-grupos por
+  `m_loc_idx` (la misma selección que hoy, SIN el scan encadenado).
+- **Etapa B (selección)**: find-first por lado sobre la captura (P→1 con
+  prioridad), `changed` contra `prev_*` (comparación sobre captura),
+  empaquetado depth 2×ND (mux 2P→ND pequeño), actualización de `prev_*`,
+  cross-check de mercado cruzado.
+- **Etapa C (salida)**: `bbo_tdata/bbo_changed/depth_tdata` → registros de
+  salida con handshake idéntico al actual: retener con `tready=0`, entregar
+  exactamente una vez (hereda §SEC-BP-01).
+- Las etapas solo se recorren cuando `emit_ok` (evento real); la semántica de
+  anomalía/error/descarte no cambia.
+- **Plan B documentado** (si la etapa B aún no cierra): retiming de 1 etapa
+  (captura + recombinación de la selección) o BBO sombra incremental; ambos
+  requieren su propio mini-spec antes de tocar RTL.
+
+### Cambios de contrato (explícitos, no ocultados)
+
+1. **Latencia — enmienda del umbral de SEC-URAM-04**: «media ≤ 45 ciclos» →
+   **media ≤ 48 ciclos**. Re-derivación: +2 ciclos ≈ +6,2 ns → media estimada
+   ~46,3 ciclos (línea base vigente 44,318); 48 × 3,103 ns = 148,9 ns, aún
+   muy por debajo del presupuesto wire→BBO original de 214,9 ns
+   (`docs/writeup/latencia.md`); margen 1,7 ciclos sobre la estimación. La
+   campaña fase3-uram no se reabre: el umbral numérico migra al criterio 8 de
+   esta campaña (§RTM-LAT-01) con su re-derivación documentada.
+2. **Histograma**: se re-mide (determinista, 2 ejecuciones idénticas) y se
+   commitea de nuevo en `verification/vectors/latency/`.
+3. **Puertos**: `bbo_*` y `depth_*` no cambian (mismo contrato AXI); el
+   wrapper `itch_chain_synth.sv` no cambia.
+
+### Objetivos físicos de esta iteración (criterio 10 re-definido)
+
+- WNS ≥ 0 y TNS = 0 post-route a 3,103 ns (el tcl ya aborta con
+  `FASE3 TIMING FAIL` ante slack negativo — mismo gate, cero cambio).
+- **LUT ≤ 95 %** post-route (el 100,33 % actual no deja headroom de
+  placement; la congestión domina la ruta). Si el pipeline no baja LUT lo
+  suficiente, la etapa B además simplifica los muxes F7/F8 del depth pack.
+- WHS ≥ 0 (hold limpio — hoy -1,145 ns por congestión).
+- URAM 32/48 (66,67 %) y BlockRAM 0 se conservan (la tabla no se toca).
+
+### Equivalencia y regresión
+
+- BBO/depth bit a bit vs golden (ND=5 y elaboración ND=3), con y sin
+  backpressure — los criterios 2/4/6/7 de la campaña se re-ejecutan.
+- Regresión 64-bit completa (fases 1-2): el pipeline es del book compartido,
+  el default DW=64 se re-ejecuta — §RTM-REG-01.
+- Gate E: mutantes nuevos del escaneo (etapa A omitida leyendo los arrays en
+  ST_EMIT, find-first con prioridad invertida, `changed` contra `prev_*`
+  incorrecto, depth empaquetado de la captura del lado contrario) — cada uno
+  debe compilar y morir.
+
+### Gherkin y gate F
+
+Escenarios nuevos en `optimizacion.feature`: **RTM-01** (pipeline registrado,
+sonda estructural como SEC-URAM-01), **RTM-02** (mejor nivel en el último
+slot), **RTM-03** (`changed` sobre la captura), **RTM-04** (backpressure en
+la salida pipelined), **RTM-LAT-01** (media ≤ 48 + determinismo),
+**RTM-REG-01** (regresión 64). Espejo de tests con títulos literales en
+`verification/testbenches/phase3/` (gate F).
+
+### Iteraciones y stop
+
+Límite de **2 iteraciones** para este loop: iter 7a (pipeline de 2 etapas,
+red→verde completo) → iter 7b (solo si 7a no cierra: retiming dirigido de la
+etapa B o paso al plan B). Al agotar el límite con WNS < 0 o LUT > 95 %,
+escala al owner con la evidencia del run (nunca se rebaja el gate del tcl).
