@@ -37,6 +37,9 @@ MUTANTS = [
     ("PUSH-IDLE", "no se libera el buffer al encolar la última word",
      "if (r_idx == rlen - 1 &&\n                                ((g1_mode",
      "if (1'b0 &&\n                                ((g1_mode"),
+    ("TKCNT-ALWAYS", "el beat avanza siempre BYTES (la máscara no limita el aporte)",
+     "qw <= 8'((32'(qw) + 32'(tk_cnt)) % 32'(MAX_MSG));",
+     "qw <= 8'((32'(qw) + 32'(BYTES)) % 32'(MAX_MSG));"),
 ]
 
 

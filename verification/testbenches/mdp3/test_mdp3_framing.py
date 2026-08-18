@@ -417,9 +417,15 @@ async def test_m3frm05_tkeep_bytes_validos_y_truncado_por_mascara(dut):
     assert_bytes_equal(got, expected_for(schema, [packet]), "M3-FRM-05a")
     assert errors == 0
 
-    # b) último beat con un lane tkeep=0: al mensaje le falta 1 byte
+    # b) último beat con un lane tkeep=0: al mensaje le falta 1 byte.
+    # La máscara se deriva de los bytes REALES del último beat (nv, de la
+    # máscara nominal), no de b: a DW=64 el último beat del paquete suele ser
+    # parcial y declarar (b-1) lanes como válidas añadiría los ceros de relleno
+    # como bytes legítimos, completando falsamente la longitud declarada.
     beats_b = list(beats_a)
-    beats_b[-1] = (beats_b[-1][0], True, ((1 << (b - 1)) - 1) << 1)
+    nv = beats_b[-1][2].bit_count()
+    beats_b[-1] = (beats_b[-1][0], True,
+                   ((1 << (nv - 1)) - 1) << (b - (nv - 1)))
     recovery = encode_packet(schema, 82, 2, [msg])
     await _reset(dut)
     got, _, errors, _ = await drive_and_collect(

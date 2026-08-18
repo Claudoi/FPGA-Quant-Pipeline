@@ -351,33 +351,38 @@ regresión) → iter 4 (mutación, gates, grade). Los criterios reabiertos se
 resuelven ahora en loops independientes de framing, schema/passthrough,
 backpressure y síntesis; ningún output histórico los cierra por arrastre.
 
-### Addendum framing tkeep (2026-08-18) — contrato del loop en curso
+### Addendum framing tkeep (2026-08-18, enmendado tras el verde) — contrato del loop
 
-El RTL actual de `mdp3_parser` consume beats completos (asume
-`DW/8` bytes por beat) y no expone `s_axis_tkeep`; la campaña queda
-reabierta por los criterios 2, 3, 7 y 8. Este loop se cierra con:
+El framing `s_axis_tkeep` de la fase 4 está **implementado y verde en
+WSL (2026-08-18)**: puerto del RTL `mdp3_parser` (commit `62e4e46`),
+suite DW=32 **9/9** y DW=64 **9/9**, gate B limpio y gate E 9/9 (incluye
+el mutante `TKCNT-ALWAYS`) — evidencia en el verify-report. El contrato
+del loop, ya cerrado por sus criterios 2 y 8 en su brazo tkeep:
 
 1. **Contrato de puertos:** `s_axis_tkeep[DW/8-1:0]` de entrada, máscara
    MSB-contigua por beat (los lanes válidos son los bytes altos del word).
    El apend de la cola (`qbytes`/`qw`) contabiliza solo los lanes con
    `tkeep=1`; un lane con `tkeep=0` nunca aporta bytes ni completa una
    longitud declarada (misma mecánica que el contrato común de fases 1-3).
-   Un beat con `tkeep=0` completo se consume sin aportar bytes y sin
-   trabarse. `tlast` cierra el burst del paquete igual que hoy; el último
-   beat parcial (pocos lanes válidos) es el truncado: si la longitud
-   declarada de un mensaje cae en lanes `tkeep=0`, se señaliza `error` y
-   el paquete siguiente se recupera íntegro.
-2. **Orden rojo→verde (máquina con cocotb):** los tests del área mdp3 ya
-   aplican `tkeep` cuando el puerto existe (driver `beat_list` +
-   `drive_and_collect` en `verification/testbenches/mdp3/test_mdp3_framing.py`)
-   y `test_m3frm05_tkeep_bytes_validos_y_truncado_por_mascara` (espejo
-   M3-FRM-05) informa la omisión con SkipTest mientras el RTL no exponga el
-   puerto. El rojo real se obtiene al añadir el puerto al RTL y correr el
-   área; el verde exige el framing completo (a), truncado por máscara (b)
-   y beat vacío en medio del burst (c).
-3. **Regresión:** tras el verde, la suite del área mdp3 completa (M3-FRM-01
-   a M3-INV-04, incluidas DW=32 y DW=64) y las fases 1-3 quedan intactas
-   (el contrato común ya está cerrado allí; M3-REG-01 no cambia su alcance).
-4. **Declaración:** un SkipTest de M3-FRM-05 no cierra el criterio; el
-   verify-report de esta campaña se actualiza solo con outputs reales del
-   área (gate A) y, cuando aplique, del run Vivado (gate G).
+   Implementación: `tk_cnt = popcount(tkeep)`, `qavail_eff` y el tready
+   usan `tk_cnt`; el apend solo escribe `k < tk_cnt`; un beat con `tkeep=0`
+   se consume sin aportar y sin trabarse. `tlast` cierra el burst del
+   paquete igual que hoy; el último beat parcial es el truncado: si la
+   longitud declarada de un mensaje cae en lanes `tkeep=0`, se señaliza
+   `error` y el paquete siguiente se recupera íntegro.
+2. **Cierre (hecho):** rojo→verde de M3-FRM-05 (a) framing nominal,
+   (b) truncado por máscara → `error` + recuperación, (c) beat vacío en
+   medio del burst → no se traba. Corregido el test (b): la máscara del
+   último beat se deriva de `nv` (bytes reales de la máscara nominal), no
+   de `DW/8` — a DW=64 el último beat del paquete suele ser parcial y
+   declarar `DW/8-1` lanes válidas añadía los ceros de relleno, completando
+   falsamente la longitud declarada.
+3. **Regresión (hecho):** la suite del área mdp3 completa DW=32 y DW=64
+   verde (M3-FRM-01..03, M3-SUB-01/02, M3-PASS-01, M3-GAP-01, M3-INV-01/02/03,
+   M3-FRM-05) sin regresión del contrato común.
+4. **Declaración:** los criterios 2 y 8 (en su brazo tkeep) de esta campaña
+   se actualizan en el verify-report **solo** con los outputs reales del
+   área (gate A) y el gate E del mutante tkeep; permanecen **abiertos**
+   (loops separados) el criterio 5 (schema/version, MAX_MSG 256/257), el
+   criterio 7 restante (máscaras con huecos, loop separado), el criterio 10
+   (backpressure de salida) y el timing (sin Vivado MDP3).

@@ -1,11 +1,16 @@
 # verify-report — fase4-mdp3-parser
 
-> **Estado vigente: REABIERTA (2026-08-15).** La evidencia previa no representa
-> últimos beats con un número parcial de bytes válidos. Los resultados se
-> conservan como evidencia histórica, pero los criterios 1, 2, 3, 5, 7, 8, 9 y 10
-> están abiertos. El framing requiere implementar y verificar `s_axis_tkeep`;
-> los hallazgos de schema/version, tamaño y backpressure se resolverán por
-> separado.
+> **Estado vigente (2026-08-18): NO CERRADA — framing `tkeep` verde.**
+> El framing `s_axis_tkeep` del RTL `mdp3_parser` quedó implementado y
+> verificado en WSL (cocotb 2.0.1 + Verilator 5.046, Python 3.12): suite
+> DW=32 9/9 y DW=64 9/9 (M3-FRM-05 a/b/c incluidos), gate B (verilator
+> `--Wall`) limpio y gate E 9/9 mutantes (incluye el `TKCNT-ALWAYS` que
+> ejercita la mecánica de la máscara). Siguen **abiertos**: criterio 5
+> (schemaId/version no soportados, MAX_MSG 256/257), criterio 7 restante
+> (máscaras con huecos, loop separado), criterio 10 (backpressure de
+> salida) y timing (sin Vivado). Gate C (verible) NO EJECUTADO (no
+> instalado). Los hallazgos de schema/version, tamaño y backpressure se
+> resuelven por separado.
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
@@ -235,3 +240,72 @@ La frecuencia objetivo de 322,265625 MHz (DW=32) / 156,25 MHz (DW=64) sigue
 siendo una **propiedad física no acreditada**: no hay Vivado en el entorno ni
 WNS/TNS/utilización del `mdp3_parser`. Este límite no invalida el cierre
 funcional histórico, pero prohíbe describir la fase como timing-closed.
+
+---
+
+## Iteración 5 (2026-08-18) — framing `s_axis_tkeep` verde en WSL
+
+El RTL `mdp3_parser` expone `s_axis_tkeep` (commit `62e4e46`) y el framing
+tkeep se verifica por primera vez con el puerto presente en un entorno
+reproducible (WSL2 Ubuntu 26.04, cocotb 2.0.1, Verilator 5.046, Python
+3.12.13).
+
+### Gate A — suite del área MDP3 (DW=32 y DW=64)
+
+Desde `make clean-all`:
+
+```text
+=== DW=32 ===
+TESTS=9 PASS=9 FAIL=0 SKIP=0
+=== DW=64 ===
+TESTS=9 PASS=9 FAIL=0 SKIP=0
+```
+
+Tests: M3-FRM-01, M3-FRM-02, M3-FRM-03, M3-SUB-01/02, M3-PASS-01, M3-GAP-01,
+M3-INV-01/02, M3-INV-03, **M3-FRM-05** (a/b/c). M3-FRM-05 pasa en ambas
+anchuras; el SkipTest por puerto ausente ya no aplica.
+
+### Corrección del test M3-FRM-05b (mask del último beat)
+
+Hallazgo del rojo DW=64: la máscara del último beat se calculaba como
+`((1 << (b-1)) - 1) << 1` (b = `DW/8`), que **sumaba los bytes de relleno**
+a DW=64: el último beat del paquete de 76 B es parcial (4 bytes reales, mask
+`11110000`) y esa receta declaraba `11111110` (= 7 lanes), completando
+falsamente la longitud declarada y suprimiendo el `error`. A DW=32 el paquete
+es múltiplo de palabra (último beat completo) por lo que el caso funcionaba.
+Se corrigió derivando la máscara del número real de bytes del beat (`nv` de la
+mask nominal): `((1 << (nv-1)) - 1) << (b - (nv-1))`.
+
+### Gate B — lint Verilator
+
+```text
+verilator --lint-only --Wall --top-module mdp3_parser rtl/parser/mdp3_parser.sv
+Verilator 5.046 ... (0 warnings, exit 0)
+```
+
+### Gate E — mutación (aumentado a 9, incluido tkeep)
+
+Se añadió el mutante `TKCNT-ALWAYS` (el beat avanza siempre `BYTES` en lugar
+de `tk_cnt`), que ejercita la mecánica de la máscara; muere en `sim` DW=32.
+
+```text
+TKCNT-ALWAYS   killed (sim, FAIL=1)
+TODOS LOS MUTANTES COMPILAN Y MUEREN. Gate E PASS.
+```
+
+Los `TKCNT-FULL`/`TKCNT-READY` iniciales se descartaron (equivalentes: escribir
+lanes extra a `qbytes` sin avanzar `qw` no cambia el observable, porque el
+decodificador lee de `tdata` directo para `k >= qavail`).
+
+### Gate C — NO EJECUTADO
+
+`verible-verilog-lint` no está instalado. Declarado NO EJECUTADO; no falsifica
+el gate B.
+
+### Declaración
+
+- Criterios **2 y 8** (brazo tkeep): cubiertos con evidencia vigente (18/18,
+  mutante tkeep). No se presentan como cierre de la campaña completa.
+- Siguen **abiertos** (loops separados): criterio 5 (schemaId/version,
+  MAX_MSG 256/257), criterio 7 restante (máscaras con huecos), criterio 10
+  (backpressure de salida) y timing (sin Vivado MDP3).
