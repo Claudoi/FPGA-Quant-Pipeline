@@ -34,19 +34,13 @@ input  wire              clk,
     (* IOB = "TRUE" *)
     output reg               s_axis_tready,
     input  wire              s_axis_tlast,
-    (* IOB = "TRUE" *)
-    output reg  [15:0]       bbo_locate,
-    (* IOB = "TRUE" *)
-    output reg  [127:0]      bbo_tdata,
-    (* IOB = "TRUE" *)
-    output reg               bbo_tvalid,
+    output wire [15:0]       bbo_locate,
+    output wire [127:0]      bbo_tdata,
+    output wire              bbo_tvalid,
     input  wire              bbo_tready,
-    (* IOB = "TRUE" *)
-    output reg               bbo_changed,
-    (* IOB = "TRUE" *)
-    output reg  [31:0]       depth_tdata,
-    (* IOB = "TRUE" *)
-    output reg               depth_tvalid,
+    output wire              bbo_changed,
+    output wire [31:0]       depth_tdata,
+    output wire              depth_tvalid,
     input  wire              depth_tready
 );
 
@@ -55,6 +49,30 @@ input  wire              clk,
     wire p_error, b_error, gap_detected;
     wire [31:0] cross_events, anomaly_count;
     wire [2*ND*64-1:0] depth_full;
+
+    // salidas del book (conectadas a wires internos; los FFs del book tienen
+    // fanout interno — retención + guard — y el placer NO los empaqueta en el
+    // IOB, iter 10). El pipeline de salida de la iter 11 registra FFs propios
+    // del wrapper con IOB (mismo mecanismo que replicó tready_ff).
+    wire [15:0]  bbo_locate_i;
+    wire [127:0] bbo_tdata_i;
+    wire         bbo_tvalid_i, bbo_changed_i;
+    wire         depth_tvalid_i;
+    (* IOB = "TRUE" *)
+    reg  [15:0]  bbo_locate_o;
+    (* IOB = "TRUE" *)
+    reg  [127:0] bbo_tdata_o;
+    (* IOB = "TRUE" *)
+    reg          bbo_tvalid_o, bbo_changed_o, depth_tvalid_o;
+    (* IOB = "TRUE" *)
+    reg  [31:0]  depth_tdata_o;
+
+    assign bbo_locate   = bbo_locate_o;
+    assign bbo_tdata    = bbo_tdata_o;
+    assign bbo_tvalid   = bbo_tvalid_o;
+    assign bbo_changed  = bbo_changed_o;
+    assign depth_tdata  = depth_tdata_o;
+    assign depth_tvalid = depth_tvalid_o;
 
     // ---------------------------------------------------------------
     // pines registrados (iter 8, addendum spec): la peor ruta del re-run
@@ -134,14 +152,47 @@ input  wire              clk,
         .clk(clk), .rst_n(rst_n_c),
         .s_axis_tdata(p_m_axis_tdata), .s_axis_tvalid(p_m_axis_tvalid),
         .s_axis_tready(p_m_axis_tready), .s_axis_tlast(p_m_axis_tlast),
-        .bbo_locate(bbo_locate), .bbo_tdata(bbo_tdata),
-        .bbo_tvalid(bbo_tvalid), .bbo_tready(bbo_tready),
-        .bbo_changed(bbo_changed), .depth_tdata(depth_full),
-        .depth_tvalid(depth_tvalid), .depth_tready(depth_tready),
+        .bbo_locate(bbo_locate_i), .bbo_tdata(bbo_tdata_i),
+        .bbo_tvalid(bbo_tvalid_i), .bbo_tready(bbo_tready),
+        .bbo_changed(bbo_changed_i), .depth_tdata(depth_full),
+        .depth_tvalid(depth_tvalid_i), .depth_tready(depth_tready),
         .cross_events(cross_events),
         .anomaly_count(anomaly_count), .error(b_error)
     );
 
-    assign depth_tdata = depth_full[31:0];
+    // ---------------------------------------------------------------
+    // pipeline de salida (iter 11, addendum spec): el par BBO/depth del
+    // book se registra en FFs PROPIOS del wrapper (IOB = "TRUE"), porque
+    // los FFs del book tienen fanout interno (retención + guard) y no se
+    // empaquetan. Régimen del pin idéntico al del book: captura cuando el
+    // book ofrece un par sin par en curso (`tvalid_i && !tvalid_o`),
+    // retención del lado del pin (`tvalid_o <= tvalid_o && !tready`: se
+    // retira 1 ciclo tras la aceptación externa, sin duplicado si el
+    // consumidor mantiene tready=1). +1 ciclo de latencia solo en el pin.
+    // Los tready del pin van directos al book (retención interna intacta).
+    // ---------------------------------------------------------------
+    always_ff @(posedge clk) begin
+        if (!rst_n_c) begin
+            bbo_locate_o <= 0; bbo_tdata_o <= 0;
+            bbo_tvalid_o <= 1'b0; bbo_changed_o <= 1'b0;
+            depth_tdata_o <= 0; depth_tvalid_o <= 1'b0;
+        end else begin
+            // retención del lado del pin (el par queda visible hasta la
+            // aceptación externa; se retira el ciclo siguiente)
+            bbo_tvalid_o <= bbo_tvalid_o && !bbo_tready;
+            depth_tvalid_o <= depth_tvalid_o && !depth_tready;
+            // captura de un par nuevo del book (solo si el pin está libre)
+            if (bbo_tvalid_i && !bbo_tvalid_o) begin
+                bbo_locate_o  <= bbo_locate_i;
+                bbo_tdata_o   <= bbo_tdata_i;
+                bbo_changed_o <= bbo_changed_i;
+                bbo_tvalid_o  <= 1'b1;
+            end
+            if (depth_tvalid_i && !depth_tvalid_o) begin
+                depth_tdata_o <= depth_full[31:0];
+                depth_tvalid_o <= 1'b1;
+            end
+        end
+    end
 
 endmodule

@@ -623,3 +623,49 @@ nuevos (el wrapper no se muta).
 TNS = 0 / LUT <= 95 %, el criterio 10 queda abierto y se escala al owner
 con la evidencia acumulada (run 8: -4,052; run 9: -3,527; run 10: este);
 el gate del tcl no se rebaja.
+
+## Addendum iter 11 (2026-08-18, enmienda de continuidad)
+
+**Evidencia del run iter 10 (commiteada)**: WNS = -3,748 ns (era -3,527),
+TNS = -221.038,368 ns, 178.310 endpoints failing, LUT 155.876/162.720 =
+**95,79 %**, URAM 32/48, IOB 222, DRC 0. El IOB packing **NO mueve los FFs
+de salida del book** (`u_book/bbo_changed_reg` etc. siguen dentro del area,
+Clock Path Skew -3,112 ns en las 10 peores): esos FFs tienen fanout interno
+real (retencion linea 507-508 + guard 838) y el placer no los replica; solo
+se replico `tready_ff` (FF del wrapper). Leccion escrita en
+`docs/writeup/lecciones-aprendidas.md` §7: el IOB packing aplica solo a
+FFs sin fanout interno; un FF interno -> pin pierde ~2,7-3,1 ns de skew
+del arbol (LUT ~96 %) + 1 ns de output delay.
+
+**Decision**: un run mas (iter 11), limitado estrictamente al wrapper de
+sintesis; no toca el book ni el parser (los gates y el red rojo->verde ya
+cerrado en WSL no cambian). Si falla, el criterio 10 queda ABIERTO y se
+escala al owner; el gate del tcl no se rebaja.
+
+**Cambios (solo `synth/itch_chain_synth.sv`)**:
+
+- **Pipeline de salida con retencion del lado del pin**: las salidas
+  `bbo_locate`/`bbo_tdata`/`bbo_tvalid`/`bbo_changed`/`depth_tdata`/
+  `depth_tvalid` dejan de ser los FFs del book (fanout interno, no
+  empaquetables). Se registran en FFs PROPIOS del wrapper con
+  `(* IOB = "TRUE" *)` (el mismo mecanismo que replico tready_ff):
+  - captura cuando el book ofrece un par nuevo: condicion
+    `bbo_tvalid_i && !bbo_tvalid_o` (tvalid interno sin par en el pin).
+  - retencion del lado del pin: `bbo_tvalid_o <= bbo_tvalid_o && !
+    bbo_tready` (el par se retira 1 ciclo despues de la aceptacion
+    externa, identico al regimen del book interno).
+  - `bbo_tready`/`depth_tready` del pin pasan directo al book (linea 501
+    intacta: la retencion interna del par sigue respondiendo al tready
+    externo).
+- El par en el pin es visible exactamente hasta la aceptacion externa; no
+  se duplica si el consumidor mantiene tready=1 (la retencion del pin lo
+  retira). +1 ciclo de latencia SOLO en el pin del wrapper (RTM-LAT mide
+  `itch_chain`, no el wrapper).
+
+**Objetivos**: WNS >= 0 y TNS = 0 post-route (gate intacto), LUT <= 95 %
+(95,79 % actual; el pipeline anade FFs pero no LUT de arbol), URAM 32/48,
+IOB 222 conservado.
+
+**Equivalencia**: el contrato AXI-S del pin se mantiene; +1 ciclo de
+latencia de pin (documentada). Sin escenarios Gherkin nuevos; sin mutantes
+nuevos (el wrapper no se muta).
