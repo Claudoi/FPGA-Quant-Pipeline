@@ -46,6 +46,7 @@ module mdp3_parser #(
     input  wire              rst_n,
     input  wire [DW-1:0]     s_axis_tdata,
     input  wire              s_axis_tvalid,
+    input  wire [DW/8-1:0]   s_axis_tkeep,
     output reg               s_axis_tready,
     input  wire              s_axis_tlast,
     output reg  [31:0]       m_axis_tdata,
@@ -64,6 +65,24 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     localparam logic [7:0]  EXP_BYTE   = 8'hF7; // PRICE9/PRICENULL9 exponent = -9
 
     localparam logic [15:0] TPL_46 = 16'd46, TPL_47 = 16'd47, TPL_52 = 16'd52, TPL_53 = 16'd53;
+
+    // ── tkeep (addendum framing tkeep, 2026-08-18) ───────────────────────────
+    // bytes válidos del beat por s_axis_tkeep; el contrato exige la máscara
+    // MSB-contigua (los lanes válidos son los bytes altos del word). Un lane
+    // con tkeep=0 nunca aporta bytes al apend ni completa una longitud
+    // declarada; un beat con tkeep=0 se consume sin aportar y sin trabarse.
+    // La validación de máscaras con huecos queda fuera del alcance de este
+    // loop (criterio 7, loop separado según el addendum).
+    function automatic [3:0] tkeep_cnt;
+        input [DW/8-1:0] tk;
+        integer k;
+        begin
+            tkeep_cnt = 0;
+            for (k = 0; k < DW/8; k = k + 1)
+                tkeep_cnt = tkeep_cnt + tk[k];
+        end
+    endfunction
+    wire [3:0] tk_cnt = tkeep_cnt(s_axis_tkeep);
 
     // offsets dentro del cuerpo (desde byte 10 del mensaje), LE
     localparam logic [31:0] O46_TS=0, O46_MEI=8, O46_DIM=11, O46_ENT=14, O46_BL1=32, O46_BL2=24;
@@ -94,7 +113,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
 
     wire [15:0] qavail = 16'((32'(qw) + 32'(MAX_MSG) - 32'(qh)) % 32'(MAX_MSG));
     wire [15:0] qavail_eff =
-        16'(qavail) + (s_axis_tvalid && s_axis_tready ? 16'(BYTES) : 16'd0);
+        16'(qavail) + (s_axis_tvalid && s_axis_tready ? 16'(tk_cnt) : 16'd0);
 
     // ── buffers de mensaje ping-pong ─────────────────────────────────────────
     reg [7:0] mbuf0 [MAX_MSG];
@@ -223,12 +242,15 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
             gap_detected <= 0;
             error <= 0;
 
-            // cola de bytes: apend del word entrante
+            // cola de bytes: apend de los lanes válidos del word entrante
+            // (solo tkeep=1; los bytes de los lanes 0 no se escriben ni
+            // avanzan qw — mecánica del addendum framing tkeep)
             if (s_axis_tvalid && s_axis_tready) begin
                 for (integer k = 0; k < BYTES; k = k + 1)
-                    qbytes[(32'(qw) + 32'(k)) % 32'(MAX_MSG)] <=
-                        s_axis_tdata[8*(32'(BYTES) - 1 - k) +: 8];
-                qw <= 8'((32'(qw) + 32'(BYTES)) % 32'(MAX_MSG));
+                    if (k < 32'(tk_cnt))
+                        qbytes[(32'(qw) + 32'(k)) % 32'(MAX_MSG)] <=
+                            s_axis_tdata[8*(32'(BYTES) - 1 - k) +: 8];
+                qw <= 8'((32'(qw) + 32'(tk_cnt)) % 32'(MAX_MSG));
                 if (s_axis_tlast)
                     pkt_end <= 1;
             end
@@ -391,7 +413,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                 end
             endcase
 
-            s_axis_tready <= (16'(qavail_eff) <= 16'(MAX_MSG) - 16'(BYTES)) &&
+            s_axis_tready <= (16'(qavail) + 16'(tk_cnt) <= 16'(MAX_MSG)) &&
                              (cst != CS_WAIT) && !pkt_end_eff;
 
             // ── decodificación ─────────────────────────────────────────────
