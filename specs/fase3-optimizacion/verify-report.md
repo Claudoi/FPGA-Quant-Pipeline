@@ -252,3 +252,58 @@ por el mismo script.
 
 Hasta adjuntar esa evidencia y cerrar la medición line-rate real de REP-02,
 **fase 3 permanece NO CERRADA**.
+
+## Iter 7 — retiming del escaneo de niveles (addendum spec, 2026-08-18) — estado del loop
+
+El addendum (commit `2ea5fc9`) parte el `ST_EMIT` de un ciclo combinacional
+en tres etapas registradas: **ST_EMIT_A** (captura de los 2·P niveles del
+símbolo del evento en `sm_cap_px/sm_cap_qt/sm_cap_nzb/sm_cap_nza`),
+**ST_EMIT_B** (find-first por lado, `changed`, depth 2·ND y `cross` sobre la
+captura, en `sm_bp/sm_bq/sm_ap/sm_aq/sm_changed/sm_dacc/sm_cross`) y
+**ST_EMIT_C** (handshake de salida + swap del doble buffer, semántica
+idéntica al `ST_EMIT` previo). +2 ciclos en el camino del evento;
+SEC-URAM-04 se enmienda a media `<=48` (48·3,103 ns = 148,9 ns < 214,9 ns del
+presupuesto original) y el umbral migra a RTM-LAT-01.
+
+### Verificado en este PC (checks estáticos)
+
+```text
+$ py -m py_compile verification/testbenches/phase3/test_rtm32.py \
+                       verification/testbenches/phase3/test_lat32.py
+py_compile OK (exit 0)
+
+$ py -3.12 scripts/verify/check_itch_gherkin.py
+Gate F PASS: 12 IDs en 3 campañas; ... (exit 0)
+
+$ py -3.12 scripts/verify/synth_check.py
+24 PASS; 0 FAIL; synth_check: OK (exit 0)
+
+$ xvlog --sv (Vivado 2023.2) sobre orderbook.sv con el pipeline A/B/C
+0 errores de sintaxis (el único aviso previo, nx_done usado antes de su
+declaración, es preexistente en HEAD y legal en SV — Verilator lo acepta)
+```
+
+Cambios RTL (iter 7): `localparams ST_EMIT_A/B/C = 4'd11/12/13`, registros
+`sm_cap_*`/`sm_bp`/`sm_bq`/`sm_ap`/`sm_aq`/`sm_changed`/`sm_dacc`/`sm_cross`
+(con reset), tareas `capture_emit_a`/`select_emit_b` (patrón find-first con
+flag `bdone`, Synth 8-3380) y el case del FSM en tres etapas; se eliminó el
+`localparam ST_EMIT=4'd4` huérfano. La captura (`sm_cap_px/sm_cap_qt`) se
+expone `/* verilator public */` para la sonda estructural de RTM-01 (estilo
+SEC-URAM-01).
+
+### Pendiente de ejecutar (no ejecutado en este PC)
+
+- **Rojo→verde** en la máquina con cocotb/Verilator:
+  `make -C verification/testbenches/phase3 clean-all` y luego
+  `sim-rtm` (RTM-01..04, DW=32), `sim-rtm64` (RTM-REG-01, DW=64) y `sim-lat`
+  (RTM-LAT-01 + SEC-URAM-04 migrado): el rojo debe fallar contra el commit
+  base (pipeline inexistente) y pasar contra este RTL.
+- Gates **B** (verilator `--Wall`) y **C** (verible) sobre el RTL tocado.
+- Gate **E** (mutación): los mutantes nuevos del addendum (etapa A omitida,
+  prioridad invertida del find-first, changed contra prev equivocado, depth
+  del lado equivocado).
+- **Re-run Vivado** (mismo `synth/fase3_synth.tcl`, gate del tcl sin
+  cambios): objetivo WNS >= 0, TNS = 0 y **LUT <= 95 %** post-route,
+  URAM 32/48 conservada. Sin ese informe el criterio 10 sigue abierto.
+- Regresión completa de las suites (orderbook/phase3/uram/mdp3) por la
+  enmienda de latencia y el FSM de emisión.

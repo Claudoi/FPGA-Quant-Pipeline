@@ -84,7 +84,6 @@ module orderbook #(
     localparam ST_TS         = 4'd1;
     localparam ST_BODY       = 4'd2;
     localparam ST_APPLY      = 4'd3;
-    localparam ST_EMIT       = 4'd4;
     localparam ST_UADD       = 4'd5;
     localparam ST_WAIT_PROBE = 4'd6;   // el prefetch no acabó durante el cuerpo
     localparam ST_INVAL      = 4'd7;   // invalidación post-reset (1 slot/ciclo)
@@ -94,6 +93,13 @@ module orderbook #(
     localparam ST_LV2        = 4'd8;
     localparam ST_LV3        = 4'd9;
     localparam ST_SWAP       = 4'd10;   // swap atómico del doble buffer (iter 4)
+    // pipeline de emisión del evento (iter 7, addendum): el ST_EMIT de un
+    // solo ciclo combinacional se parte en etapas A (captura) / B
+    // (selección+changed+depth) / C (handshake) — +2 ciclos en el camino del
+    // evento; latencia re-derivada a media <= 48 (RTM-LAT-01)
+    localparam ST_EMIT_A     = 4'd11;
+    localparam ST_EMIT_B     = 4'd12;
+    localparam ST_EMIT_C     = 4'd13;
     reg [3:0]  st /* verilator public */;
     reg [SLOT-1:0] st_inval_cnt;   // contador de la invalidación post-reset (1/ciclo)
     reg [6:0] nbody_w;      // words de cuerpo restantes por consumir
@@ -124,10 +130,11 @@ module orderbook #(
 
     // ---------------------------------------------------------------
     // receptor del mensaje siguiente (fase3-uram iter 4, versión B): mientras
-    // la cola del mensaje en curso procesa (WAIT_PROBE/APPLY/LV2/LV3/EMIT/
-    // UADD), las words del mensaje siguiente se acumulan aquí (doble buffer)
-    // y el swap a los registros del mensaje en curso ocurre al final de la
-    // cola (ST_EMIT o el descarte de ST_APPLY). Espejo de W0/TS/BODY.
+    // la cola del mensaje en curso procesa (WAIT_PROBE/APPLY/LV2/LV3/EMIT_A/
+    // EMIT_B/EMIT_C/UADD), las words del mensaje siguiente se acumulan aquí
+    // (doble buffer) y el swap a los registros del mensaje en curso ocurre al
+    // final de la cola (ST_EMIT_C o el descarte de ST_APPLY). Espejo de
+    // W0/TS/BODY.
     // ---------------------------------------------------------------
     reg        nx_active;          // hay mensaje siguiente recibiéndose
     reg        nx_done;            // cuerpo del mensaje siguiente COMPLETO
@@ -323,6 +330,20 @@ module orderbook #(
     reg [PXW-1:0] prev_bp [NSYM-1:0], prev_ap [NSYM-1:0];
     reg [QW-1:0]  prev_bq [NSYM-1:0], prev_aq [NSYM-1:0];
 
+    // pipeline de emisión (iter 7): captura registrada de los 2*P niveles del
+    // símbolo del evento (etapa A) y resultados de la selección (etapa B). La
+    // emisión en un solo ciclo combinacional era el camino crítico del run
+    // 2026-08-18 (37-41 niveles de lógica, WNS -10,492 ns). sm_cap_* se
+    // exponen public para la sonda estructural de RTM-01 (estilo SEC-URAM-01).
+    reg [PXW-1:0] sm_cap_px [0:2*P-1] /* verilator public */;
+    reg [QW-1:0]  sm_cap_qt [0:2*P-1] /* verilator public */;
+    reg [P-1:0]   sm_cap_nzb, sm_cap_nza;  // qty != 0 por slot, por lado
+    reg [PXW-1:0] sm_bp, sm_ap;
+    reg [QW-1:0]  sm_bq, sm_aq;
+    reg           sm_changed;
+    reg [2*ND*64-1:0] sm_dacc;
+    reg           sm_cross;
+
     reg market_open;
     reg [7:0] tstate [NSYM-1:0];   // trading state por símbolo (golden: por locate)
 
@@ -386,6 +407,13 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             for (int i = 0; i < NSYM; i++) begin
                 prev_bp[i] <= 0; prev_bq[i] <= 0; prev_ap[i] <= 0; prev_aq[i] <= 0;
             end
+            // pipeline de emisión (iter 7)
+            for (int i = 0; i < 2*P; i++) begin
+                sm_cap_px[i] <= 0; sm_cap_qt[i] <= 0;
+            end
+            sm_cap_nzb <= 0; sm_cap_nza <= 0;
+            sm_bp <= 0; sm_ap <= 0; sm_bq <= 0; sm_aq <= 0;
+            sm_changed <= 1'b0; sm_dacc <= 0; sm_cross <= 1'b0;
             bbo_tvalid <= 1'b0; bbo_locate <= 0; bbo_tdata <= 0; bbo_changed <= 1'b0;
             depth_tvalid <= 1'b0; depth_tdata <= 0;
             cross_events <= 0; anomaly_count <= 0; error <= 1'b0;
@@ -693,7 +721,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                             if (do_uadd || lv_en) st <= ST_LV2;
                             else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
                                      m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
-                                     m_type == 8'h55) st <= ST_EMIT;
+                                     m_type == 8'h55) st <= ST_EMIT_A;
                             else if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
                             else swap_next(st);
                         end
@@ -713,7 +741,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     // escribe de una sola vez (única escritura del lado)
                     if (s_axis_tvalid && !nx_done) nx_recv();
                     materialize_write();
-                    st <= lv_uadd ? ST_UADD : ST_EMIT;
+                    st <= lv_uadd ? ST_UADD : ST_EMIT_A;
                 end
                 ST_UADD: begin
                     // mitad add del replace: la segunda operación de nivel ve
@@ -727,11 +755,36 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     lv_uadd <= 1'b0;
                     st <= ST_LV2;
                 end
-                ST_EMIT: begin
-                    // cola del mensaje en curso: acepta el mensaje siguiente y,
-                    // al salir, el mensaje siguiente pasa a ser el mensaje en
-                    // curso (swap del doble buffer nx_*)
-                    if (emit_ok) emit_bbo();
+                ST_EMIT_A: begin
+                    // etapa A del pipeline de emisión (iter 7): captura
+                    // registrada de los 2*P niveles del símbolo del evento —
+                    // solo el mux por m_loc_idx, sin encadenar la selección
+                    // (ese encadenado era el camino crítico del run 2026-08-18)
+                    if (s_axis_tvalid && !nx_done) nx_recv();
+                    if (emit_ok) capture_emit_a();
+                    st <= ST_EMIT_B;
+                end
+                ST_EMIT_B: begin
+                    // etapa B (iter 7): mejor nivel por lado + changed + depth
+                    // sobre la captura registrada; el handshake es la etapa C
+                    if (s_axis_tvalid && !nx_done) nx_recv();
+                    if (emit_ok) select_emit_b();
+                    st <= ST_EMIT_C;
+                end
+                ST_EMIT_C: begin
+                    // etapa C (iter 7): emisión con la semántica del ST_EMIT de
+                    // fase 3 — par BBO/depth atómico con retención AXI (la
+                    // backpressure la gobierna el guard de ST_APPLY)
+                    if (emit_ok) begin
+                        bbo_locate <= m_locate;
+                        bbo_tdata  <= {sm_bp[31:0], sm_bq[31:0],
+                                       sm_ap[31:0], sm_aq[31:0]};
+                        bbo_changed <= sm_changed;
+                        bbo_tvalid  <= 1'b1;
+                        depth_tdata <= sm_dacc;
+                        depth_tvalid <= 1'b1;
+                        if (sm_cross) cross_events <= cross_events + 1;
+                    end
                     // swap atómico (iter 4): con word del mensaje siguiente en
                     // el bus (nx aún sin completar), se consume en nx y el
                     // swap se difiere un ciclo (ST_SWAP); sin word (o con nx
@@ -821,7 +874,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
 
     // ---------------------------------------------------------------
     // swap: el mensaje siguiente (nx_*) pasa a ser el mensaje en curso al
-    // terminar la cola del anterior (ST_EMIT, el descarte de ST_APPLY o, con
+    // terminar la cola del anterior (ST_EMIT_C, el descarte de ST_APPLY o, con
     // word en el bus, el estado dedicado ST_SWAP — jamás en el mismo ciclo
     // que una escritura de nx). Estado de arranque según lo recibido:
     //   nada     -> ST_W0   (la cola no solapó ninguna word)
@@ -1042,43 +1095,60 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             error <= lverr;
         end
     endtask
-    task automatic emit_bbo;
+    task automatic capture_emit_a;
+        // etapa A del pipeline de emisión (iter 7): captura registrada de los
+        // 2*P niveles del símbolo del evento + flags de no-vacío por lado.
+        // Solo un mux indexado por m_loc_idx; la selección/depth viven en la
+        // etapa B (select_emit_b)
+        integer i;
+        begin
+            for (i = 0; i < P; i = i + 1) begin
+                sm_cap_px[i]    <= lv_price[m_loc_idx*2*P + i];
+                sm_cap_qt[i]    <= lv_qty[m_loc_idx*2*P + i];
+                sm_cap_nzb[i]   <= (lv_qty[m_loc_idx*2*P + i] != 0);
+                sm_cap_px[P+i]  <= lv_price[m_loc_idx*2*P + P + i];
+                sm_cap_qt[P+i]  <= lv_qty[m_loc_idx*2*P + P + i];
+                sm_cap_nza[i]   <= (lv_qty[m_loc_idx*2*P + P + i] != 0);
+            end
+        end
+    endtask
+    task automatic select_emit_b;
+        // etapa B del pipeline de emisión (iter 7): mejor nivel por lado
+        // sobre la captura (primer slot con qty>0 — lista ordenada; exit
+        // temprano con flag: asignar i en el cuerpo no converge en Vivado —
+        // Synth 8-3380), changed vs prev, depth y cross. El handshake queda
+        // en la etapa C (ST_EMIT_C)
         reg [PXW-1:0] bp, ap;
         reg [QW-1:0] bq, aq;
-        reg changed;
         reg bdone;
         reg [2*ND*64-1:0] dacc;
         integer i, di;
         begin
-            // mejor nivel por lado = primer slot con qty>0 (lista ordenada)
-            // (exit temprano con flag: asignar i en el cuerpo no converge en
-            // Vivado — Synth 8-3380)
             bp = 0; bq = 0;
             bdone = 1'b0;
             for (i = 0; i < P && !bdone; i = i + 1) begin
-                if (lv_qty[m_loc_idx*2*P + i] != 0) begin
-                    bp = lv_price[m_loc_idx*2*P + i]; bq = lv_qty[m_loc_idx*2*P + i];
+                if (sm_cap_nzb[i]) begin
+                    bp = sm_cap_px[i]; bq = sm_cap_qt[i];
                     bdone = 1'b1;
                 end
             end
             ap = 0; aq = 0;
             bdone = 1'b0;
             for (i = 0; i < P && !bdone; i = i + 1) begin
-                if (lv_qty[m_loc_idx*2*P + P + i] != 0) begin
-                    ap = lv_price[m_loc_idx*2*P + P + i]; aq = lv_qty[m_loc_idx*2*P + P + i];
+                if (sm_cap_nza[i]) begin
+                    ap = sm_cap_px[P+i]; aq = sm_cap_qt[P+i];
                     bdone = 1'b1;
                 end
             end
-            if (market_open && tstate[m_loc_idx] == 8'h54 && bp != 0 && ap != 0 && bp >= ap)
-                cross_events <= cross_events + 1;
-            bbo_locate <= m_locate;
-            bbo_tdata  <= {bp[31:0], bq[31:0], ap[31:0], aq[31:0]};
-            changed = (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||
-                      (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);
-            bbo_changed <= changed;
+            sm_bp <= bp; sm_bq <= bq; sm_ap <= ap; sm_aq <= aq;
+            sm_changed <= (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||
+                          (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);
             prev_bp[m_loc_idx] <= bp; prev_bq[m_loc_idx] <= bq;
             prev_ap[m_loc_idx] <= ap; prev_aq[m_loc_idx] <= aq;
-            bbo_tvalid <= 1'b1;
+            if (market_open && tstate[m_loc_idx] == 8'h54 && bp != 0 && ap != 0 && bp >= ap)
+                sm_cross <= 1'b1;
+            else
+                sm_cross <= 1'b0;
             // top-N público (criterio 6): ND niveles por lado del símbolo del
             // evento, mejor primero (slot 0 de la lista = mejor), vacíos a 0.
             // Bus: {bid[ND-1..0], ask[ND-1..0]} MSB->LSB, cada nivel
@@ -1086,14 +1156,13 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             dacc = 0;
             for (di = 0; di < ND; di = di + 1)
                 dacc = {dacc[2*ND*64-65:0],
-                        lv_price[m_loc_idx*2*P + di][31:0],
-                        lv_qty[m_loc_idx*2*P + di][31:0]};
+                        sm_cap_px[di][31:0],
+                        sm_cap_qt[di][31:0]};
             for (di = 0; di < ND; di = di + 1)
                 dacc = {dacc[2*ND*64-65:0],
-                        lv_price[m_loc_idx*2*P + P + di][31:0],
-                        lv_qty[m_loc_idx*2*P + P + di][31:0]};
-            depth_tdata <= dacc;
-            depth_tvalid <= 1'b1;
+                        sm_cap_px[P+di][31:0],
+                        sm_cap_qt[P+di][31:0]};
+            sm_dacc <= dacc;
         end
     endtask
 

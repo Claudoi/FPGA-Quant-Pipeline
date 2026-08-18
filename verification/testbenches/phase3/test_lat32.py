@@ -222,9 +222,16 @@ async def test_sec_lat01_histograma_determinista_por_tipo(dut):
     if _os.path.exists(pcap):
         # SEC-URAM-04 (fase 3, iter 4): la media wire->BBO de la secuencia fija
         # del feed real debe quedar <= 45 ciclos. Iter 3: 64,586 (ROJO TDD).
+        # ENMIENDA iter 7 (addendum spec): el pipeline de emisión A/B/C añade
+        # +2 ciclos al camino del evento; el umbral re-derivado (media <= 48;
+        # 48x3,103 ns = 148,9 ns < 214,9 ns del presupuesto original) vive en
+        # RTM-LAT-01 y el assert heredado se migra al nuevo umbral — el
+        # <= 45 quedaría ROJO con el pipeline por un cambio de contrato
+        # deliberado, no ocultado.
         _mean = doc["total"]["mean_ciclos"]
-        assert _mean <= 45, (
-            f"SEC-URAM-04: media total {_mean} ciclos > 45 (ROJO iter 4)")
+        assert _mean <= 48, (
+            f"SEC-URAM-04/RTM-LAT-01: media total {_mean} ciclos > 48 "
+            f"(umbral re-derivado iter 7)")
     _os.makedirs(_os.path.dirname(LAT_PATH), exist_ok=True)
     with open(LAT_PATH, "w") as f:
         json.dump(doc, f, indent=2)
@@ -237,3 +244,47 @@ async def test_sec_lat01_histograma_determinista_por_tipo(dut):
             f"  tipo {t}: n={s['n']} min={s['min_ciclos']} "
             f"max={s['max_ciclos']} mean={s['mean_ciclos']} ciclos "
             f"({s['mean_ciclos']*NS_PER_CYCLE:.1f} ns)")
+
+
+@cocotb.test()
+async def test_rtm_lat01_media_total_menor_igual_48(dut):
+    """Espejo §RTM-LAT-01 (addendum iter 7): con el pipeline de emisión
+    (ST_EMIT -> etapas A/B/C, +2 ciclos en el camino del evento), la media
+    wire->BBO de la secuencia fija queda <= 48 ciclos y el histograma es
+    determinista entre dos re-ejecuciones. Re-derivación del umbral:
+    48x3,103 ns = 148,9 ns sigue bajo el presupuesto original de 214,9 ns.
+    Este espejo sustituye al umbral <= 45 de SEC-URAM-04 (enmendado en la
+    spec; la campaña fase3-uram no se reabre)."""
+    import os as _os
+    pcap = "/tmp/real_trading.pcap"
+    if _os.path.exists(pcap):
+        msgs, keep = _pcap_msgs_subset(pcap, max_symbols=20)
+        stream = f"subset de {len(keep)} símbolos del feed real (2019-12-30)"
+    else:
+        from test_orderbook import S, A
+        AMZN = 393
+        msgs = [
+            S(AMZN, 1_000_000_000, ord("Q")),
+            A(AMZN, 1_000_000_001, 1, b"B", 100, b"AMZN    ", 1_000_00),
+            A(AMZN, 1_000_000_002, 2, b"S", 50, b"AMZN    ", 1_005_00),
+            E(AMZN, 1_000_000_003, 1, 40, 1001),
+            A(AMZN, 1_000_000_004, 3, b"B", 200, b"AMZN    ", 999_00),
+        ]
+        stream = "corpus sintético (env sin pcap local)"
+    payload = _packet_seq(msgs, 1)
+    starts = _msg_word_starts(msgs)
+    accepts1, ev1, cross, anomaly, gaps = await drive_lat(dut, payload, starts)
+    accepts2, ev2, cross2, anomaly2, gaps2 = await drive_lat(dut, payload, starts)
+    lat1 = _latencies(msgs, starts, accepts1, ev1)
+    lat2 = _latencies(msgs, starts, accepts2, ev2)
+    assert lat1 == lat2, (
+        f"RTM-LAT-01: histogramas distintos entre re-ejecuciones "
+        f"({lat1} vs {lat2})")
+    total = [l for v in lat1.values() for l in v]
+    mean = sum(total) / len(total)
+    assert mean <= 48, (
+        f"RTM-LAT-01: media total {mean:.3f} ciclos > 48 (umbral re-derivado "
+        f"iter 7; 48x3,103 ns = 148,9 ns)")
+    cocotb.log.info(
+        f"RTM-LAT-01 OK: media {mean:.3f} ciclos ({mean*NS_PER_CYCLE:.1f} ns) "
+        f"<= 48, determinista ({len(ev1)} eventos, {stream})")

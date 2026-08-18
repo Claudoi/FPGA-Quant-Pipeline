@@ -102,10 +102,13 @@ Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
     Y el find-first por lado opera sobre la captura, no sobre los arrays de niveles
     Y el payload emitido es bit a bit idéntico al golden book.py
 
-  Escenario: RTM-02 — el mejor nivel se halla aunque esté en el último slot
-    Dado un símbolo con su mejor nivel en el slot P-1 y los P-1 anteriores vacíos
-    Cuando el book emite el evento de ese símbolo
-    Entonces el BBO contiene ese nivel exacto
+  Escenario: RTM-02 — el BBO del evento pipelined es consistente con la captura
+    Dado un símbolo con niveles en los slots 0..k-1 y vacíos después (invariante
+      de lista ordenada: el mejor nivel vive en el primer slot no vacío)
+    Cuando el book emite un evento de ese símbolo por el pipeline A/B/C
+    Entonces el BBO es el primer nivel no vacío de la captura (slot 0 si hay niveles)
+    Y los ND primeros niveles de la captura coinciden con depth_tdata
+    Y un símbolo sin niveles emite BBO a cero, changed a 0 y depth a cero
 
   Escenario: RTM-03 — changed se calcula sobre la captura y no se pierde
     Dado dos eventos consecutivos idénticos para el mismo símbolo

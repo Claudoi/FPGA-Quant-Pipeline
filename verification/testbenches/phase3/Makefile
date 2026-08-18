@@ -13,6 +13,8 @@
 #     make sim-parser                   -> itch_parser DW=32
 #     make sim-chain                    -> cadena itch_chain DW=32 (end-to-end)
 #     make sim-chain-nd3                -> cadena itch_chain DW=32 ND=3
+#     make sim-rtm                      -> orderbook pipeline de emisión DW=32 (RTM-01..04)
+#     make sim-rtm64                    -> orderbook pipeline de emisión DW=64 (RTM-REG-01)
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 TOPLEVEL ?= orderbook
@@ -65,9 +67,19 @@ sim-chain:
 sim-chain-nd3:
 	$(MAKE) sim TOPLEVEL=itch_chain MODULE=test_chain32 EXTRA_ARGS="-GDW=32 -GND=3" SIM_BUILD=sim_build_chain_nd3
 
+# iteración 7: retiming del escaneo de niveles (ST_EMIT -> etapas A/B/C,
+# addendum spec). sim-rtm ejercita la sonda estructural (DW=32) y sim-rtm64 la
+# regresión de la parametrización (DW=64): el binario difiere por -G, así que
+# cada combinación lleva su SIM_BUILD.
+sim-rtm:
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_rtm32 EXTRA_ARGS="-GDW=32" SIM_BUILD=sim_build_rtm
+
+sim-rtm64:
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_rtm32 EXTRA_ARGS="-GDW=64" SIM_BUILD=sim_build_rtm64
+
 # limpia todos los builds del área (el clean de cocotb solo borra SIM_BUILD)
 clean-all:
-	rm -rf sim_build sim_build_hash sim_build_parser sim_build_chain sim_build_chain_nd3
+	rm -rf sim_build sim_build_hash sim_build_parser sim_build_chain sim_build_chain_nd3 sim_build_rtm sim_build_rtm64
 
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 REPO_ROOT := $(CURDIR)/../../..

@@ -380,9 +380,11 @@ latencia, re-derivado abajo, jamás ocultado.
 ### Gherkin y gate F
 
 Escenarios nuevos en `optimizacion.feature`: **RTM-01** (pipeline registrado,
-sonda estructural como SEC-URAM-01), **RTM-02** (mejor nivel en el último
-slot), **RTM-03** (`changed` sobre la captura), **RTM-04** (backpressure en
-la salida pipelined), **RTM-LAT-01** (media ≤ 48 + determinismo),
+sonda estructural como SEC-URAM-01), **RTM-02** (consistencia BBO↔captura
+sobre la invariante de lista ordenada: el «mejor en el último slot» era
+invisible — la lista se compacta siempre; enmendado 2026-08-18 antes de
+implementar), **RTM-03** (`changed` sobre la captura), **RTM-04** (backpressure
+en la salida pipelined), **RTM-LAT-01** (media ≤ 48 + determinismo),
 **RTM-REG-01** (regresión 64). Espejo de tests con títulos literales en
 `verification/testbenches/phase3/` (gate F).
 
