@@ -172,5 +172,6 @@ evidencia: `specs/fase3-optimizacion/verify-report.md` y
 | Evidencia por campaña (gates A-G) | `specs/<campaña>/verify-report.md` |
 | Historial de runs Vivado fase 3 | `synth/reports/README.md` + `synth/reports/*.txt` |
 | Lecciones operativas | este documento |
+| Plan de cierre (pasos, comandos, stops) | `docs/writeup/plan-cierre.md` |
 | Latencia wire→BBO | `docs/writeup/latencia.md` |
 | Documento maestro (opciones/alcance) | raíz del repo |

@@ -47,6 +47,7 @@ downstream siempre listo; el total agregado del replay no sustituye esa medida.
 | Evidencia de una campaña | `specs/<campaña>/verify-report.md` |
 | Checks reproducibles | `verification/`, `scripts/verify/`, Makefiles y `synth/` |
 | Instalación y problemas del entorno | `docs/DESARROLLO.md` |
+| Plan de cierre ejecutable (qué falta y en qué orden) | `docs/writeup/plan-cierre.md` |
 
 Los informes históricos pueden mencionar el antiguo nombre de una etapa del
 proceso; son evidencia fechada, no instrucciones operativas.
