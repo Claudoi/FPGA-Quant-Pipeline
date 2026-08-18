@@ -394,3 +394,12 @@ Límite de **2 iteraciones** para este loop: iter 7a (pipeline de 2 etapas,
 red→verde completo) → iter 7b (solo si 7a no cierra: retiming dirigido de la
 etapa B o paso al plan B). Al agotar el límite con WNS < 0 o LUT > 95 %,
 escala al owner con la evidencia del run (nunca se rebaja el gate del tcl).
+
+**Estado 2026-08-18**: la iter 7a está implementada y commiteada (`2fa7250`:
+RTL del pipeline A/B/C + tests RTM-01..04/RTM-REG-01/RTM-LAT-01 + targets
+`sim-rtm`/`sim-rtm64`; checks estáticos verdes: py_compile, gate F,
+synth_check 24/24, xvlog 0 errores). Falta el red→verde de
+`sim-rtm`/`sim-rtm64`/`sim-lat` y los gates A/E/B/C en la máquina con cocotb,
+y el re-run Vivado (mismo tcl) para WNS ≥ 0, TNS = 0 y LUT ≤ 95 %. Mientras
+esas pasadas no existan, la iteración 7a no está cerrada y la 7b sigue en
+reserva (los criterios de aceptación no cambian).

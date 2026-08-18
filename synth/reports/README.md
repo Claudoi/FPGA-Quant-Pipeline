@@ -16,6 +16,12 @@ URAM 32/48 inferida y DRC 0 errores, pero **WNS = -10,492 ns** (periodo
 3,103 ns) y **LUT al 100,33 %** — criterio 10 NO cerrado; el tcl aborta con
 `FASE3 TIMING FAIL` ante slack negativo.
 
+**Loop en curso (iter 7, 2026-08-18)**: el retiming del escaneo de niveles
+(pipeline ST_EMIT → A/B/C, commit `2fa7250`) está pendiente de verificación.
+El re-run del MISMO `fase3_synth.tcl` debe pegar aquí los informes nuevos
+(objetivo: WNS ≥ 0, TNS = 0, LUT ≤ 95 %, URAM 32/48 conservada) — sin esos
+outputs el criterio 10 sigue abierto.
+
 Verificación del tcl sin Vivado: `scripts/verify/synth_check.py` (o el lint de
 la skill verify) valida que el tcl/constraints referencian puertos y RTL
 existentes.

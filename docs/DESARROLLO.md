@@ -64,8 +64,16 @@ verificado) y deja activas las reglas de consistencia genuinas.
 
 - Si `cocotb-config` no existe, el entorno Python no está activado o no se
   instaló `requirements-dev.txt`; los Makefiles RTL no pueden arrancar.
-- Vivado no está disponible localmente. El run de fase 3 se ejecuta desde
-  `synth/` y sus informes se guardan en `synth/reports/`.
+- **Vivado ML 2023.2 SÍ está disponible en el PC de trabajo (Windows,
+  `C:\Xilinx\Vivado\2023.2`)** desde el run 2026-08-18: `vivado -mode batch
+  -source synth/fase3_synth.tcl` y los informes se guardan en
+  `synth/reports/`. No está en el PATH: invocar
+  `C:\Xilinx\Vivado\2023.2\bin\vivado.bat` (o `xvlog.bat` para un parse
+  rápido del RTL sin Verilator: `xvlog --sv --nolog <file>.sv`; en aislamiento
+  reporta un falso positivo preexistente de `nx_done` usado antes de su
+  declaración — legal en SV, no bloquea el parse). En la máquina de
+  desarrollo (macOS) Vivado NO está instalado; allí solo corren los gates de
+  simulación (A/E/B/C).
 - Los datos y pcaps reales son locales e ignorados por Git; los testbenches
   leen vectores de `verification/vectors/` o artefactos locales ignorados. Un
   replay omitido por pcap ausente no cuenta como PASS de datos reales.

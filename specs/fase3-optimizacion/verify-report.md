@@ -25,6 +25,13 @@ part)**.
 latencia de 44,318 ciclos es una medición de simulación; convertirla usando el
 periodo objetivo no acredita que el dispositivo alcance 322,265625 MHz.
 
+**Loop en curso — iter 7 (retiming del escaneo de niveles)**: el pipeline
+ST_EMIT → A/B/C está implementado y commiteado (`2fa7250`, ver sección «Iter
+7» abajo), con checks estáticos verdes en este PC. El veredicto de fase 3
+sigue siendo NO CERRADA hasta que el red→verde de `sim-rtm`/`sim-rtm64`/
+`sim-lat`, los gates A/E/B/C y el re-run Vivado (WNS ≥ 0, TNS = 0, LUT ≤ 95 %)
+aporten sus outputs.
+
 ## Entorno reproducido
 
 ```text
