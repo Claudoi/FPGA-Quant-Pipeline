@@ -129,11 +129,33 @@ evidencia: `specs/fase3-optimizacion/verify-report.md` y
    son síntoma de área llena, no solo de rutas largas. Reducir LUT alivia
    también las rutas internas.
 7. **xvlog 2023.2 es más estricto que Verilator**: rechaza patrones legales de
-   SV (`mru32(...)[15:0]` part-select de llamada de función, identificadores
-   usados antes de su declaración como `qavail`/`hdr_pos`/`rst_n_c`). Validar
-   con verilator (gate B real) o con parches temporales solo para el parse; el
-   único error real en el RTL limpio es el falso positivo preexistente de
-   `nx_done` (legal en SV, Verilator lo acepta).
+    SV (`mru32(...)[15:0]` part-select de llamada de función, identificadores
+    usados antes de su declaración como `qavail`/`hdr_pos`/`rst_n_c`). Validar
+    con verilator (gate B real) o con parches temporales solo para el parse; el
+    único error real en el RTL limpio es el falso positivo preexistente de
+    `nx_done` (legal en SV, Verilator lo acepta).
+ 8. **Un test que no corrió nunca es una declaración, no una verificación**
+    (destapado por la primera pasada cocotb en WSL, 2026-08-18): los tests
+    RTM-01/02/03 de la iter 7 nunca se ejecutaron contra el RTL final de la
+    iter 9 y asumían una semántica que la iter 9 cambió (el par de salida se
+    hace visible 1 ciclo después de ST_EMIT_C por la retención AXI). Regla: un
+    test estructural nuevo debe correrse en el mismo ciclo que se escribe; el
+    `py_compile`+gate F no detecta supuestos de timing.
+9. **cocotb 2.0.1 no tiene `SkipTest` en runtime**: `raise cocotb.SkipTest`
+    (API 1.x) da `AttributeError`; solo existe `@cocotb.test(skip=True)`
+    estático. Para separar por ancho/elaboración, un módulo por elaboración
+    (p. ej. `test_rtm32.py` para DW=32 y `test_rtm64.py` para DW=64) y el
+    Makefile apunta cada target.
+10. **Los escenarios de test deben ser válidos para el oráculo**: un `X(2,80)`
+    que cancela 80 de una orden con 50 aborta el golden (invariante del book);
+    el test corregido usa `X(2,30)`. Y los `expected` hardcodeados (p. ej.
+    `changed==[1,0,1,0]`) deben derivarse del oráculo, no suponerse.
+11. **IOB packing y retención**: los FF de salida del book no se empaquetan en
+    el IOB porque la retención (`tvalid <= tvalid && !tready`) y el guard del
+    FSM les dan fanout interno. El pipeline de salida de la iter 11 los
+    re-registra en FF propios del wrapper (IOB) con captura
+    `tvalid_i && !tvalid_o` y retención del lado del pin — sin duplicado
+    aunque el consumidor mantenga tready=1.
 
 ## 8. Entorno Windows (PC de trabajo 2026-08-18)
 
@@ -141,6 +163,16 @@ evidencia: `specs/fase3-optimizacion/verify-report.md` y
   `vivado.bat -mode batch -source <tcl>` para runs; `xvlog.bat --sv --nolog`
   para parse rápido del RTL. La máquina de desarrollo (macOS) no tiene Vivado:
   allí solo corren los gates de simulación.
+- **WSL2 Ubuntu 26.04** con Verilator **5.046** (compilado desde fuente con
+  git en `<wsl-user>/verilator-git`; el 5.032 de apt no cumple el requisito de
+  cocotb 2.0.1) + cocotb 2.0.1 + Python **3.12** (el 3.14 de Ubuntu no lo
+  soporta) es la máquina de simulación de este PC (2026-08-18). Path del venv:
+  `<wsl-user>/repo/.venv`. `bash -c` de WSL no carga el PATH del usuario:
+  pasarlo explícito. Necesitó `python3.12` del PPA deadsnakes y las deps
+  `git make autoconf g++ flex bison libfl-dev ccache`.
+- **PowerShell 5.1 re-interpreta los heredocs y caracteres** (`` `'' ``, `<`,
+  `>`): todo script multilinea de WSL/Python debe ir en un archivo `*.sh` /
+  `*.py` referenciado, no inline en el comando.
 - **PowerShell 5.1 `Add-Content` escribe cp1252** (rompe el gate F) o UTF-8 con
   BOM: usar Python para ediciones de bytes o `-Encoding UTF8` y limpiar BOM.
 - Los datos/pcaps reales son locales e ignorados; un replay omitido por pcap
