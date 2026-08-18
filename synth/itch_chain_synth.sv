@@ -49,18 +49,69 @@ module itch_chain_synth #(
     wire [31:0] cross_events, anomaly_count;
     wire [2*ND*64-1:0] depth_full;
 
+    // ---------------------------------------------------------------
+    // pines registrados (iter 8, addendum spec): la peor ruta del re-run
+    // 2026-08-18 14:11 era un I/O del wrapper (msg_len_reg -> s_axis_tready,
+    // -7,395 ns: el parser empujaba su drenaje hasta el pin) y las rutas
+    // de reset del pin (rst_n -> lv_qty_reg/R, ~-5,7 ns). El wrapper de
+    // síntesis replica la integración real de la cadena a 322 MHz:
+    //   - FIFO de entrada de 4xDW: el handshake del pin lo gobierna un
+    //     contador local (ruta FF->pin de ~3 niveles). Régimen (no ocultado):
+    //     la backpressure del pin se difiere hasta 3 palabras de
+    //     amortiguación; la cadena interna no cambia; latencia de pin +1
+    //     ciclo (SEC-URAM-04/RTM-LAT-01 miden la cadena, no el wrapper).
+    //   - rst_n regenerado en un FF local: corta la ruta del pin a los R
+    //     de los FDRE (sincronizador de práctica estándar en el top).
+    // ---------------------------------------------------------------
+    reg [DW-1:0]   f_mem [3:0];
+    reg [DW/8-1:0] f_keep [3:0];
+    reg            f_tl  [3:0];
+    reg [1:0]      f_n, f_wr, f_rd;
+
+    wire [DW-1:0]   p_s_axis_tdata;
+    wire [DW/8-1:0] p_s_axis_tkeep;
+    wire            p_s_axis_tvalid, p_s_axis_tlast, p_s_axis_tready;
+    assign p_s_axis_tdata  = f_mem[f_rd];
+    assign p_s_axis_tkeep  = f_keep[f_rd];
+    assign p_s_axis_tvalid = (f_n != 2'd0);
+    assign p_s_axis_tlast  = f_tl[f_rd];
+
+    wire fifo_hs  = s_axis_tvalid && s_axis_tready;
+    wire fifo_pop = p_s_axis_tvalid && p_s_axis_tready;
+
+    assign s_axis_tready = (f_n < 2'd3);
+
+    reg rst_n_c;
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            rst_n_c <= 1'b0;
+            f_n <= 2'd0; f_wr <= 2'd0; f_rd <= 2'd0;
+        end else begin
+            rst_n_c <= 1'b1;
+            if (fifo_hs) begin
+                f_mem[f_wr]  <= s_axis_tdata;
+                f_keep[f_wr] <= s_axis_tkeep;
+                f_tl[f_wr]   <= s_axis_tlast;
+                f_wr         <= f_wr + 2'd1;
+            end
+            if (fifo_pop)
+                f_rd <= f_rd + 2'd1;
+            f_n <= f_n + (fifo_hs ? 2'd1 : 2'd0) - (fifo_pop ? 2'd1 : 2'd0);
+        end
+    end
+
     itch_parser #(.DW(DW), .QB(QB)) u_parser (
-        .clk(clk), .rst_n(rst_n),
-        .s_axis_tdata(s_axis_tdata), .s_axis_tkeep(s_axis_tkeep),
-        .s_axis_tvalid(s_axis_tvalid),
-        .s_axis_tready(s_axis_tready), .s_axis_tlast(s_axis_tlast),
+        .clk(clk), .rst_n(rst_n_c),
+        .s_axis_tdata(p_s_axis_tdata), .s_axis_tkeep(p_s_axis_tkeep),
+        .s_axis_tvalid(p_s_axis_tvalid),
+        .s_axis_tready(p_s_axis_tready), .s_axis_tlast(p_s_axis_tlast),
         .m_axis_tdata(p_m_axis_tdata), .m_axis_tvalid(p_m_axis_tvalid),
         .m_axis_tready(p_m_axis_tready), .m_axis_tlast(p_m_axis_tlast),
         .gap_detected(gap_detected), .error(p_error)
     );
 
     orderbook #(.DW(DW), .K(K), .P(P), .ND(ND), .NSYM(NSYM), .PXW(PXW), .QW(QW)) u_book (
-        .clk(clk), .rst_n(rst_n),
+        .clk(clk), .rst_n(rst_n_c),
         .s_axis_tdata(p_m_axis_tdata), .s_axis_tvalid(p_m_axis_tvalid),
         .s_axis_tready(p_m_axis_tready), .s_axis_tlast(p_m_axis_tlast),
         .bbo_locate(bbo_locate), .bbo_tdata(bbo_tdata),

@@ -76,21 +76,27 @@ module orderbook #(
     // bytes por palabra y su log2: 64 bits -> 8 B (b>>3), 32 bits -> 4 B (b>>2)
     localparam BYTES = DW / 8;
     localparam L2B   = $clog2(DW / 8);
+    // log2(P) para el encoder first-hot en árbol de la etapa 2a (iter 8);
+    // P debe ser potencia de 2 (la cadena fija P=32)
+    localparam integer LOGP = $clog2(P);
 
     // ---------------------------------------------------------------
     // FSM de recepción
     // ---------------------------------------------------------------
-    localparam ST_W0         = 4'd0;
-    localparam ST_TS         = 4'd1;
-    localparam ST_BODY       = 4'd2;
-    localparam ST_APPLY      = 4'd3;
-    localparam ST_UADD       = 4'd5;
+localparam ST_W0         = 4'd0;
+localparam ST_TS         = 4'd1;
+localparam ST_BODY       = 4'd2;
+localparam ST_APPLY      = 4'd3;
+localparam ST_UADD       = 4'd5;
     localparam ST_WAIT_PROBE = 4'd6;   // el prefetch no acabó durante el cuerpo
     localparam ST_INVAL      = 4'd7;   // invalidación post-reset (1 slot/ciclo)
     // pipeline de niveles (fase3-uram iter 3): level_add partido en etapas
-    // registradas — ST_LV2 decide (priority encoders), ST_LV3 materializa y
-    // escribe. Cada operación consume 2 ciclos extra como máximo (SEC-URAM-03)
+    // registradas — ST_LV2 (iter 8: find-first en árbol, decode_lv2a),
+    // ST_LV2B (iter 8: prioridad + mux, decode_lv2b), ST_LV3 materializa y
+    // escribe. Cada operación consume 3 ciclos extra como máximo (SEC-URAM-03
+    // enmendado por el +1 de la iter 8; la media se mantiene <= 48)
     localparam ST_LV2        = 4'd8;
+    localparam ST_LV2B       = 4'd14;
     localparam ST_LV3        = 4'd9;
     localparam ST_SWAP       = 4'd10;   // swap atómico del doble buffer (iter 4)
     // pipeline de emisión del evento (iter 7, addendum): el ST_EMIT de un
@@ -323,6 +329,11 @@ module orderbook #(
     reg [31:0] lv2_found, lv2_empty, lv2_ins;
     reg [31:0] lv2_newq;
     reg [1:0]  lv2_mode;
+    // decode 2a (iter 8): índices first-hot en árbol y flags any, registrados
+    // (el decode completo en un ciclo era el camino lv_eq -> lv2_mode); la
+    // prioridad y el mux viven en 2b (decode_lv2b, un ciclo después).
+    reg [LOGP-1:0] lv2_fnd, lv2_emp, lv2_btx;
+    reg            lv2_afnd, lv2_aemp, lv2_abtx;
     // materialización (etapa 3): muxes por modo, luego escritura única
     reg [PXW-1:0] wp[0:P-1];
     reg [QW-1:0]  wq[0:P-1];
@@ -387,6 +398,31 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             if (loc_map[ii] == l) begin
                 loc_lookup = 5'(ii);
                 done = 1'b1;
+            end
+        end
+    endfunction
+
+    // encoder first-hot con prioridad al índice menor, en árbol log2(P)
+    // niveles de OR/mux (iter 8). any_lvl[k][j] = |v[(j+1)*2^k-1 : j*2^k];
+    // el índice se decide de mayor a menor bit: en cada nivel, si la mitad
+    // izquierda del bloque actual está vacía, el primer 1 vive en la derecha
+    // (bit k = 1). Sin cadenas seriales: el decode completo en un ciclo era
+    // el camino lv_eq -> lv2_mode de 31 niveles del re-run 2026-08-18 14:11.
+    function automatic logic [LOGP-1:0] first_one(input logic [P-1:0] v);
+        logic [P-1:0] any_lvl [LOGP];
+        logic [LOGP-1:0] blk;
+        integer k, i;
+        begin
+            any_lvl[0] = v;
+            for (k = 0; k < LOGP - 1; k = k + 1)
+                for (i = 0; i < (P >> (k + 1)); i = i + 1)
+                    any_lvl[k + 1][i] = any_lvl[k][2*i] | any_lvl[k][2*i + 1];
+            first_one = {LOGP{1'b0}};
+            blk = {LOGP{1'b0}};
+            for (k = LOGP - 1; k >= 0; k = k - 1) begin
+                if (!any_lvl[k][blk * 2])
+                    first_one[k] = 1'b1;
+                blk = {blk[LOGP-2:0], first_one[k]};
             end
         end
     endfunction
@@ -456,6 +492,8 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             end
             lv2_found <= 0; lv2_empty <= 0; lv2_ins <= 0;
             lv2_newq <= 32'd0; lv2_mode <= LV_MODE_NONE;
+            lv2_fnd <= 0; lv2_emp <= 0; lv2_btx <= 0;
+            lv2_afnd <= 1'b0; lv2_aemp <= 1'b0; lv2_abtx <= 1'b0;
         end else begin
             // retención AXI (SEC-BP-01): el par BBO/depth se mantiene válido
             // hasta que su tready lo acepta; el guard de ST_APPLY frena el
@@ -728,12 +766,21 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     end
                 end
                 ST_LV2: begin
-                    // etapa 2 del pipeline: decode por prioridad sobre los
-                    // registros capturados en ST_APPLY/ST_UADD (visibles aquí,
-                    // un ciclo después del launch); el resultado queda
-                    // registrado y la etapa 3 lo consume un ciclo tarde
+                    // etapa 2a (iter 8): find-first en árbol sobre los
+                    // registros capturados en ST_APPLY/ST_UADD (visibles
+                    // aquí, un ciclo después del launch); los índices y los
+                    // flags quedan registrados y 2b los combina un ciclo
+                    // tarde
                     if (s_axis_tvalid && !nx_done) nx_recv();
-                    decode_lv2();
+                    decode_lv2a();
+                    st <= ST_LV2B;
+                end
+                ST_LV2B: begin
+                    // etapa 2b (iter 8): prioridad + mux sobre los índices
+                    // resueltos por 2a; el resultado queda registrado y la
+                    // etapa 3 lo consume un ciclo tarde
+                    if (s_axis_tvalid && !nx_done) nx_recv();
+                    decode_lv2b();
                     st <= ST_LV3;
                 end
                 ST_LV3: begin
@@ -1042,51 +1089,58 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
     endtask
 
     // ---------------------------------------------------------------
-    // etapa 2 del pipeline: decode por prioridad (encoders first-hot) sobre
-    // los registros capturados en ST_APPLY/ST_UADD. El resultado queda
-    // registrado en lv2_* (non-blocking) y la etapa 3 lo consume un ciclo
-    // tarde; el pulso de error se muestra aquí (1 ciclo, como en fase 3).
-    // Semántica idéntica a la pasada O(P) de fase 3:
-    //   found  -> primer slot con el precio objetivo (nivel existente)
-    //   empty  -> primer slot vacío (hueco de inserción)
-    //   ins    -> burbuja de inserción: j = primer nivel ESTRICTAMENTE peor
-    //             que el precio nuevo (lv_beat); si ninguno (elemento peor
-    //             de todos), el elemento se queda en el hueco (j = empty).
-    //             Los vencidos forman un sufijo por invariante de orden.
+    // etapa 2a del pipeline (iter 8): find-first por lado con encoders en
+    // árbol (first_one, log2(P) niveles) sobre los predicados de la etapa 1.
+    // El decode completo en un ciclo (cadenas seriales + mux + prioridad) era
+    // el camino lv_eq -> lv2_mode de 31 niveles del re-run 2026-08-18 14:11.
+    // Solo los índices y los flags any quedan registrados; la prioridad de
+    // condiciones y el mux viven en 2b (decode_lv2b, un ciclo después).
     // ---------------------------------------------------------------
-    task automatic decode_lv2;
-        integer i, fnd, emp, btx;
+    task automatic decode_lv2a;
+        begin
+            lv2_fnd  <= first_one(lv_eq);
+            lv2_emp  <= first_one(lv_zer);
+            lv2_btx  <= first_one(lv_beat);
+            lv2_afnd <= |lv_eq;
+            lv2_aemp <= |lv_zer;
+            lv2_abtx <= |lv_beat;
+        end
+    endtask
+
+    // ---------------------------------------------------------------
+    // etapa 2b (iter 8): decode por prioridad sobre los índices ya resueltos
+    // por 2a (O(1) por índice: mux 32:1 de lv_cand_newq + condiciones).
+    // Semántica idéntica al decode_lv2 de fase 3 (iter 3): found/empty/ins
+    // conservan el valor 0xFFFFFFFF (ex -1) cuando no hay nivel y la etapa 3
+    // (materialize_write) se comporta igual. El pulso de error se muestra
+    // aquí (1 ciclo, como en fase 3).
+    // ---------------------------------------------------------------
+    task automatic decode_lv2b;
         reg lverr;
         begin
-            fnd = -1; emp = -1; btx = -1; lverr = 1'b0;
-            for (i = 0; i < P; i = i + 1) begin
-                if (fnd == -1 && lv_eq[i]) fnd = i;
-                if (emp == -1 && lv_zer[i]) emp = i;
-                if (btx == -1 && lv_beat[i]) btx = i;
-            end
-            lv2_found <= fnd;
-            lv2_empty <= emp;
-            btx = (btx == -1) ? emp : btx;
-            lv2_ins <= btx;
-            if (fnd == -1 && emp == -1) begin
+            lverr = 1'b0;
+            lv2_found <= lv2_afnd ? lv2_fnd : 32'hFFFFFFFF;
+            lv2_empty <= lv2_aemp ? lv2_emp : 32'hFFFFFFFF;
+            lv2_ins   <= (lv2_abtx ? lv2_btx : lv2_emp);
+            if (!lv2_afnd && !lv2_aemp) begin
                 // overflow de niveles (SEC-OV-01): la op se descarta
                 lv2_mode <= LV_MODE_NONE;
                 lverr = 1'b1;
-            end else if (fnd == -1 && lv_delta[31]) begin
+            end else if (!lv2_afnd && lv_delta[31]) begin
                 // reduce sobre un nivel que no existe (orden en tabla sin
                 // nivel por overflow previo): jamás una cantidad envuelta
                 // (hallazgo G5)
                 lv2_mode <= LV_MODE_NONE;
                 lverr = 1'b1;
-            end else if (fnd == -1) begin
+            end else if (!lv2_afnd) begin
                 lv2_mode <= LV_MODE_INSERT;
             end else begin
-                lv2_newq <= lv_cand_newq[fnd][31:0];
-                if (lv_cand_newq[fnd][32]) begin
+                lv2_newq <= lv_cand_newq[lv2_fnd][31:0];
+                if (lv_cand_newq[lv2_fnd][32]) begin
                     // la cantidad envolvería 32 bits: descarte (jamás phantom)
                     lv2_mode <= LV_MODE_NONE;
                     lverr = 1'b1;
-                end else if (lv_cand_newq[fnd] == 0) begin
+                end else if (lv_cand_newq[lv2_fnd] == 0) begin
                     lv2_mode <= LV_MODE_REMOVE;   // nivel vacío no existe
                 end else begin
                     lv2_mode <= LV_MODE_UPDATE;

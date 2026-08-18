@@ -403,3 +403,96 @@ synth_check 24/24, xvlog 0 errores). Falta el red→verde de
 y el re-run Vivado (mismo tcl) para WNS ≥ 0, TNS = 0 y LUT ≤ 95 %. Mientras
 esas pasadas no existan, la iteración 7a no está cerrada y la 7b sigue en
 reserva (los criterios de aceptación no cambian).
+
+## Addendum iteración 8 (2026-08-18 — retiming del decode y pines del wrapper)
+
+### Causa raíz medida (re-run 14:11, evidencia en `verify-report.md`)
+
+El pipeline A/B/C de la iter 7 movió el indicador (WNS -10,492 → -7,395 ns,
+LUT 100,33 → 96,49 %) pero el re-run mostró **tres** familias de rutas
+violadas, ninguna en la emisión:
+
+1. **I/O del wrapper (peor ruta absoluta, -7,395 ns)**: `msg_len_reg →
+   s_axis_tready` (11 niveles + OBUF + 1 ns de output delay + skew de clock
+   tree). El parser empuja su drenaje de cola hasta el pin del wrapper; en la
+   integración real ese puerto alimenta el registro/FIFO del maestro, no un
+   pad.
+2. **decode_lv2 (2ª-10ª rutas, -5,84 a -5,60 ns)**: `lv_eq_reg →
+   lv2_mode_reg` con 31 niveles. La etapa 2 del pipeline de niveles hace en
+   UN ciclo los tres find-first seriales (fnd/emp/btx, cadenas de prioridad
+   de 32), el mux 32:1 de `lv_cand_newq[fnd]` y la prioridad de condiciones.
+   NO es la etapa B de emisión: es la máquina de actualización del nivel.
+3. **Reset (rst_n → lv_qty_reg/R, ~-5,7 ns)**: el reset síncrono del pin se
+   infiere al pin R del FDRE sobre 1.280+ registros con skew del pin.
+
+### Cambios estructurales
+
+1. **decode_lv2 partido en dos etapas registradas (book, `orderbook.sv`)**:
+   - **decode_lv2a** (ST_LV2, nuevo): tres encoders first-hot en **árbol
+     log2(P)** (función `first_one`: OR-tree por niveles + decisión binaria
+     de mayor a menor bit — sin cadenas seriales) → registros
+     `lv2_fnd/lv2_emp/lv2_btx` + flags `lv2_afnd/lv2_aemp/lv2_abtx`.
+   - **decode_lv2b** (ST_LV2B nuevo): la prioridad de condiciones y el mux
+     `lv_cand_newq[lv2_fnd]` sobre los índices ya resueltos → los mismos
+     `lv2_mode/lv2_found/lv2_empty/lv2_ins/lv2_newq` y el pulso `error` del
+     decode actual. `lv2_found/lv2_empty/lv2_ins` conservan el valor
+     `0xFFFFFFFF` (ex -1) cuando no hay nivel, para que la etapa 3
+     (`materialize_write`) se comporte idéntica.
+   - El FSM pasa de ST_LV2 → ST_LV3 a ST_LV2 → ST_LV2B → ST_LV3. La etapa 3
+     ya consumía los `lv2_*` un ciclo después del decode; ahora los consume
+     un ciclo después de 2b — semántica observada idéntica.
+   - **Latencia: +1 ciclo** en el camino de todo mensaje de libro (media
+     esperada 44,318 → ~45,3). SEC-URAM-04 (media ≤ 48) se mantiene sin
+     enmendar: margen 2,7 ciclos; si la medida real supera 48, el umbral se
+     re-abre (nunca se ajusta el peor caso).
+2. **Wrapper de síntesis (`itch_chain_synth.sv`) — pines registrados**:
+   - **FIFO de entrada de 4×DW** entre el pin `s_axis_*` y el parser: el
+     `s_axis_tready` del pin lo gobierna un contador local
+     (`f_n < 3`, ruta FF→pin de ~3 niveles) — la ruta `msg_len → tready`
+     desaparece del análisis. Régimen documentado (no ocultado): la
+     backpressure del pin se difiere hasta 3 palabras de amortiguación; la
+     cadena interna y su régimen no cambian; latencia de pin +1 ciclo
+     (la métrica SEC-URAM-04/RTM-LAT-01 mide la cadena, no el wrapper).
+   - **rst_n regenerado** en un FF local (`rst_n_c <= rst_n`): corta la
+     ruta del pin a los R de los FDRE (familias 3). Reset sincronizador de
+     práctica estándar en el wrapper de síntesis.
+   - Los puertos de salida (bbo/depth) NO se registran: el re-run mostró
+     sus rutas en slack inf (salidas del book ya registradas); el
+     `bbo_tready/depth_tready` del pin no aparecen entre las violadas.
+3. **Sin cambios** en: emisión A/B/C (iter 7), sonda estructural
+   (`sm_cap_*`), hash/probe, URAM, contratos AXI de la cadena, tests.
+
+### Objetivos físicos (criterio 10, mismo gate del tcl)
+
+- WNS ≥ 0 y TNS = 0 post-route a 3,103 ns (el gate `FASE3 TIMING FAIL`
+  sigue intacto; el run mide la cadena en su contexto de integración
+  registrado, documentado arriba).
+- LUT ≤ 95 % post-route (96,49 % actual; la FIFO del wrapper añade ~200 FF
+  y el árbol de 2a reduce la lógica del decode).
+- WHS ≥ 0; URAM 32/48 conservada.
+
+### Equivalencia y regresión
+
+- BBO/depth bit a bit vs golden (ND=5 y ND=3), con y sin backpressure: los
+  tests existentes del área (orderbook/phase3/uram + RTM-01..04 +
+  RTM-REG-01 + RTM-LAT-01) son el espejo — la iter 8 no cambia nada
+  observable (misma sonda, mismas salidas, +1 ciclo de latencia cubierto
+  por el umbral). El red→verde de la iter 7 y de la 8 se ejecuta contra el
+  RTL final de la 8 en la máquina con cocotb (el red de la 7 sobre el
+  commit base queda como evidencia histórica: los tests ya existen).
+- Gate E: los 30 mutantes del runner vigente (incluidos los 4 del addendum
+  iter 7) deben compilar y morir contra el RTL de la 8; no se añaden
+  mutantes nuevos (2a/2b no crea contratos nuevos: los índices
+  `lv2_fnd/emp/btx` son internos; un mutante de `first_one` (bit de
+  prioridad invertido) se propone como opcional en la máquina con cocotb.
+- Gate F: sin escenarios nuevos (RTM-01..04/RTM-LAT-01/RTM-REG-01 ya
+  espejan el contrato; la división 2a/2b es interna).
+
+### Iteraciones y stop
+
+Límite de **2 iteraciones** para este loop: iter 8 (decode partido + pines
+registrados, red→verde + run) → iter 9 solo si 8 no cierra (retiming
+dirigido adicional: p. ej. registro de `lv_cand_newq` en la etapa 1 o
+árbol de muxes para el depth pack). Al agotar el límite con WNS < 0 o
+LUT > 95 %, escala al owner con la evidencia del run (el gate del tcl
+nunca se rebaja).
