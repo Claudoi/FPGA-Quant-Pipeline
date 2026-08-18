@@ -1149,6 +1149,54 @@ async def test_rep02_replay_pcap_real_dia_local(dut):
         f"stalls de entrada con m_axis_tready=1: {input_stalls}")
 
 
+def _first_au_window(packets, w=4):
+    """Primera ventana de w mensajes consecutivos del feed real donde todos
+    son de tipo A o U, sin índices manuales (selección reproducible desde el
+    pcap en orden de captura — enmienda REP-02 2026-08-18). Devuelve
+    (msgs, seq0, start, end) o None si el pcap no contiene la ventana."""
+    flat = []
+    for seq, msgs, _payload in packets:
+        for m in msgs:
+            flat.append((seq, m))
+    for i in range(len(flat) - w + 1):
+        win = flat[i:i + w]
+        if all(chr(m[0]) in "AU" for _s, m in win):
+            return [m for _s, m in win], win[0][0], i, i + w - 1
+    return None
+
+
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
+async def test_rep02_tramo_au_real_line_rate(dut):
+    """Espejo §REP-02 (enmienda 2026-08-18, cierre line-rate): un tramo real
+    de cuatro A/U consecutivos seleccionado desde el pcap sin índices
+    manuales (primera ventana deslizante en orden de captura), procesado
+    con el downstream siempre listo: <= 24 stalls de entrada y salida bit a
+    bit contra el oráculo. El total agregado del replay no sustituye esta
+    medida."""
+    from scripts.binaryfile_to_pcap import iter_pcap_packets
+
+    packets = list(iter_pcap_packets(REAL_PCAP))
+    win = _first_au_window(packets, 4)
+    if win is None:
+        raise cocotb.SkipTest(
+            "REP-02 line-rate: el pcap real no contiene 4 A/U consecutivos "
+            "(no hay tramo que medir; el criterio sigue abierto)")
+    msgs, seq0, start, end = win
+    payload = _packet_seq(msgs, seq0)
+    words, stalls = await drive_raw(dut, payload, out_tready=(1,))
+    expected = run_oracle(msgs)
+    assert words == expected, (
+        f"REP-02 line-rate: got({len(words)}) exp({len(expected)}) en el "
+        f"tramo A/U real (msgs {start}..{end})")
+    assert stalls <= 24, (
+        f"REP-02 line-rate: {stalls} stalls en el tramo A/U real "
+        f"(msgs {start}..{end}); esperado <= 24")
+    cocotb.log.info(
+        f"REP-02 line-rate OK: tramo A/U real (msgs {start}..{end}, "
+        f"{len(msgs)} mensajes), {stalls} stalls con downstream siempre "
+        f"listo, salida bit a bit")
+
+
 # ---------------------------------------------------------------------------
 # SEC-PAR-03b: longitud declarada == 11 (borde) NO marca error
 #   Mata al mutante LEN-CAPT-ERR (flip < 11 -> <= 11).

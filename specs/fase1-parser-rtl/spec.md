@@ -293,6 +293,27 @@ verde:
 Stop limit: **5 iteraciones**. Cadencia: encadenar build→verify→grade mientras
 quede cola; al agotar el límite con criterios en FAIL, escala al owner.
 
+### Enmienda REP-02 (2026-08-18) — cierre del line-rate sobre tramo real
+
+El criterio 8 sigue abierto por su brazo line-rate. El cierre del replay
+agregado (byte a byte + `tlast` 91/91 + contador de stalls) ya está en
+`verify-report.md`, pero **no sustituye** la medición del umbral sobre un
+tramo real: REP-02 debe además:
+
+1. Seleccionar desde el pcap, **sin índices manuales**, un tramo real de
+   cuatro mensajes consecutivos de tipo A o U (primera ventana deslizante de
+   4 en orden de captura; definición en el test, no en el RTL).
+2. Procesar ese tramo aislado con `m_axis_tready=1` siempre y contar los
+   stalls de entrada (`s_axis_tvalid && !s_axis_tready`) durante el tramo:
+   **<= 24** (criterio 2 aplicado al replay real).
+3. Verificar la salida del tramo bit a bit contra el oráculo (misma
+   selección derivada, oráculo independiente).
+
+Espejo: `test_rep02_tramo_au_real_line_rate` en
+`verification/testbenches/parser/test_itch_parser.py`. Si el pcap local no
+existe o no contiene la ventana, el test declara la omisión (SkipTest) y el
+criterio permanece abierto.
+
 ---
 
 ## Anexo A — layout del registro de mensaje normalizado (canónico)
