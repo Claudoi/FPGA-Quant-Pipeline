@@ -1,47 +1,63 @@
-# synth/reports — evidencia de síntesis (criterio 10)
+# synth/reports — historial de runs Vivado (criterio 10)
 
-El **owner** corre Vivado fuera del ciclo y pega aquí los informes del run de
-`fase3_synth.tcl` (part `xcku3p-ffva676-2L-e` — decisión 002, Vivado ML
-Standard gratuito; top de síntesis `itch_chain_synth.sv` — wrapper de 223
-pins, el `itch_chain.sv` completo expone 896 puertos de debug y no entra en
-el paquete FFVA676; DW=32, reloj 322,265625 MHz):
+> Los informes de este directorio (`timing_impl.txt`, `util_impl.txt`,
+> `timing_synth.txt`, `util_synth.txt`, `ram_*.txt`, `drc_impl.txt`,
+> `check_timing_*.txt`, `clocks_synth.txt`) son los del **último run**; los
+> números de los runs anteriores están en las tablas de este documento y en
+> `specs/fase3-optimizacion/verify-report.md`.
 
-- `timing_impl.txt` — WNS/TNS (criterio: **WNS ≥ 0** en la variante 32-bit).
-- `util_impl.txt` — utilización LUT/FF/BRAM/**URAM** (criterio 9: inferencia
-  de 32 URAM288 para la tabla de órdenes, medido en el run 2026-08-18).
-- `timing_synth.txt` / `util_synth.txt` — mismos informes post-síntesis.
+Run reproducible con Vivado ML Standard (gratuito, part `xcku3p-ffva676-2L-e`,
+decisión 002; top de síntesis `synth/itch_chain_synth.sv`, wrapper del contrato
+AXI: el `itch_chain.sv` completo expone 896 puertos y no entra en el paquete
+FFVA676; DW=32, periodo 3,103 ns):
 
-El run 2026-08-18 (synth+place+route completo) es la evidencia vigente:
-URAM 32/48 inferida y DRC 0 errores, pero **WNS = -10,492 ns** (periodo
-3,103 ns) y **LUT al 100,33 %** — criterio 10 NO cerrado; el tcl aborta con
-`FASE3 TIMING FAIL` ante slack negativo.
+```bash
+vivado -mode batch -source synth/fase3_synth.tcl
+```
 
-**Re-run iter 7 (2026-08-18 14:11, pipeline ST_EMIT → A/B/C, commit
-`2fa7250`, mismo tcl)**: el gate abortó de nuevo (`FASE3 TIMING FAIL:
-WNS=-7.395 ns`), pero los informes nuevos están en este directorio:
-WNS **-7,395 ns** (+3,1 ns), TNS **-430.582,411 ns** (+160 µs), LUT as
-Logic **96,49 %** (-3,84 pp), F7/F8 19.762/8.780, URAM 32/48 conservada,
-DRC 0. Peor ruta interna `lv_eq → lv2_mode` (31 niveles, escaneo etapa B)
-y peor absoluta I/O del wrapper (`msg_len → s_axis_tready`). El criterio
-10 sigue abierto (WNS < 0, TNS ≠ 0, LUT > 95 %).
+El tcl aborta con `FASE3 TIMING FAIL` ante slack negativo (gate sin rebajar).
+Verificación estática sin Vivado: `scripts/verify/synth_check.py`.
 
-**Re-run iter 8 (2026-08-18 15:55, decode partido 2a/2b + FIFO/rst_n_c del
-wrapper, commit `7d728de`, mismo tcl)**: gate abortó de nuevo
-(`FASE3 TIMING FAIL: WNS=-4.052 ns`); los informes de este directorio son
-los de este run: WNS **-4,052 ns** (+3,34 ns), TNS **-213.040,636 ns**
-(+217 µs), 176.945 endpoints failing, LUT as Logic **95,68 %** (-0,81 pp),
-URAM 32/48 conservada, DRC 0. Las 10 peores rutas son todas el mismo
-patrón de pin (`depth_tready` → URAM/FDRE, 12 niveles, input delay 1 ns +
-skew 2,2 ns); pre-route la interna dominante es la prioridad serial de la
-emisión (`sm_cap_nzb → sm_changed`, 31 niveles). Criterio 10 sigue
-abierto; iter 9 (última del loop) en curso según el addendum de la spec.
+## Historial de runs (2026-08-18, mismo tcl en todos)
 
-**Loop en curso (iter 8)**: candidatos documentados en el verify-report de
-fase 3 — registrar los puertos de salida del wrapper y/o partir la etapa B
-del escaneo en dos registros (spec antes de tocar RTL), y cerrar rojo→verde
-+ gates A/E/B/C en la máquina con cocotb. Objetivo del re-run siguiente:
-WNS ≥ 0, TNS = 0, LUT ≤ 95 %, URAM 32/48 conservada.
+| Run | Cambio (commit) | WNS | TNS | Endpoints failing | LUT as Logic | URAM | Peor familia |
+|---|---|---|---|---|---|---|---|
+| Base 10:59 | wrapper original | **-10,492 ns** | -590.856,875 ns | 181.711 | 163.259 (100,33 %) | 32/48 | lógica del book (37-41 niveles) + I/O `msg_len→tready` |
+| Iter 7 14:11 | ST_EMIT → etapas A/B/C registradas (`2fa7250`) | **-7,395 ns** | -430.582,411 ns | 189.127 | 157.011 (96,49 %) | 32/48 | `lv_eq → lv2_mode` (31 niveles, etapa B) + I/O |
+| Iter 8 15:55 | decode partido 2a/2b + FIFO/rst_n_c del wrapper (`7d728de`) | **-4,052 ns** | -213.040,636 ns | 176.945 | 155.697 (95,68 %) | 32/48 | `depth_tready` → URAM cascade (12 niveles, 7 URAM288, skew pin 2,2 ns) |
+| Iter 9 17:50 | guard solo tvalid + find-first precomputado (`5fbf6ac`) | **-3,527 ns** | -211.438,033 ns | 177.459 | 155.893 (95,80 %) | 32/48 | I/O del wrapper: `bbo_locate → pin` (1 nivel, skew árbol -2,67 ns); internas `out_data`/`body_acc` |
+| Iter 10 19:45 | IOB=TRUE en puertos + tready registrado (`b3d5327`) | **-3,748 ns** | -221.038,368 ns | 178.310 | 155.876 (95,79 %) | 32/48 | FFs de salida del book SIN packing (fanout interno: retención + guard); solo se replicó `tready_ff` |
 
-Verificación del tcl sin Vivado: `scripts/verify/synth_check.py` (o el lint de
-la skill verify) valida que el tcl/constraints referencian puertos y RTL
-existentes.
+DRC: 0 errores en todos los runs. IOB: 222 en todos.
+
+## Lectura del historial
+
+- El retiming del book funcionó: WNS -10,49 → -3,53 ns y LUT 100,33 % →
+  95,79 % entre el base y la iter 9; la familia `depth_tready` → URAM del
+  run 8 murió con el guard solo-tvalid de la iter 9.
+- El cuello residual es **I/O del wrapper**: todo FF interno → pin pierde el
+  skew del árbol de reloj del área del book (~2,7-3,1 ns con LUT ~96 %) + el
+  output delay de 1,0 ns del XDC. La iter 10 demostró que el IOB packing NO
+  mueve los FFs de salida del book (se releen en la retención y los lee el
+  guard del FSM): solo los FFs del wrapper sin fanout (como `tready_ff`) se
+  replican al IOB.
+- **Candidato documentado (sin aplicar)**: pipeline de salida en el wrapper —
+  FFs propios `bbo_*_o`/`depth_*_o` con retención del lado del pin
+  (`tvalid_o <= tvalid_o && !tready`), captura con `tvalid_interno &&
+  !tvalid_o`, `(* IOB = "TRUE" *)` en esos FFs. Régimen del par idéntico al
+  del book (visible 1 ciclo tras la aceptación, sin duplicado), +1 ciclo solo
+  en el pin del wrapper (RTM-LAT mide la cadena, no el wrapper). Ver addendum
+  iter 10 de `specs/fase3-optimizacion/spec.md`.
+
+## Estado del criterio 10
+
+**ABIERTO**: WNS < 0, TNS ≠ 0, LUT > 95 % en los 5 runs; URAM 32/48
+conservada y DRC 0. No se declara timing cerrado sin WNS ≥ 0 y TNS = 0 en un
+run post-route. Las lecciones de síntesis que evitan repetir runs: sección 7
+de `docs/writeup/lecciones-aprendidas.md`.
+
+## Artefactos adicionales (en `synth/`)
+
+- `iter_100_CongestedCLBsAndNets.txt` — CLBs congestionados y nets con
+  iter 100 (evidencia del diagnóstico del área del book).
+- `tight_setup_hold_pins.txt`, `clockInfo.txt` — informes auxiliares.

@@ -19,7 +19,7 @@
 //     vía task rompía la inferencia, Synth 8-7186, hallazgo 2026-08-18; 1
 //     write máx por ciclo, nunca en el mismo ciclo que una lectura de la
 //     sonda). NUNCA indexación combinacional de la tabla (bloqueador B1 del
-//     criterio 10, documentado en docs/writeup/revision-exhaustiva-2026-08-14.md).
+//     criterio 10, documentado en docs/writeup/lecciones-aprendidas.md §7).
 //   - La sonda (probe engine) serializa el lookup a ≤1 slot/ciclo y arranca
 //     DURANTE ST_BODY (prefetch del grupo de hash: la order_ref viaja en las
 //     primeras words del cuerpo y el hash se conoce antes de ST_APPLY):

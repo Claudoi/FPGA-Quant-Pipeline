@@ -93,8 +93,8 @@ renombra ni mueve nada existente. `verification/testbenches/` y
   último usa un prefijo MSB contiguo de unos. Los lanes con `tkeep=0` no entran
   en la cola. Máscaras con huecos, `tkeep=0` o una palabra parcial sin `tlast`
   pulsan `error` y descartan el datagrama, drenándolo hasta `tlast` si el beat
-  inválido no era final. Contrato completo:
-  `docs/superpowers/specs/2026-08-15-axis-tkeep-framing-design.md`.
+  inválido no era final.   Contrato completo:
+  `docs/decisiones/003-axis-tkeep-framing.md`.
 
 ## Superficie y amenazas
 
@@ -190,8 +190,9 @@ real del feed (decisión Q8/Q9).
    salida AXI-Stream siempre excede la entrada (D: 24 B salida por 21 B feed;
    S: 24/14) y ningún aligner alcanza «1 palabra/ciclo infinito» con una cola
    finita. Se verifica con el tramo acotado que cabe amortiguado (stalls `<=24`),
-   y el límite se documenta en `docs/research-parser-rtl-pendientes.md` §C.0
-   como non-goal derivado del Anexo A (no como defecto de RTL). Si en el futuro
+   y el límite se documenta (con los ratios medidos y la evidencia de presión)
+   en la sección 9 de `docs/writeup/lecciones-aprendidas.md` como non-goal
+   derivado del Anexo A (no como defecto de RTL). Si en el futuro
    se requiere el caso infinito, la decisión es rediseñar el Anexo A (salida
    comprimida / bus más ancho), no parchear el parser.
    — Gherkin: `datapath.feature` §LIN-01

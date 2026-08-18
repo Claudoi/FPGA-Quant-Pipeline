@@ -44,10 +44,11 @@ Idoneidad medida:
 - `synth/fase3_synth.tcl` (línea del part), `synth/constraints/fase3_322mhz.xdc`
   (comentario), `synth/reports/README.md` y `scripts/verify/synth_check.py`
   (constante PART + docstring) alineados.
-- Los write-ups fechados (`docs/writeup/uram.md`,
-  `docs/writeup/revision-exhaustiva-2026-08-14.md`,
-  `docs/writeup/plan-proxima-sesion-uram.md`) son evidencia histórica de la
-  era VU9P y no se reescriben; la referencia operativa vigente es la spec.
+- Los write-ups fechados de la era VU9P (mapeo URAM, revisión exhaustiva y
+  plan de la sesión URAM) se consolidaron en
+  `docs/writeup/lecciones-aprendidas.md` y sus originales se eliminaron en la
+  limpieza de documentación de 2026-08-18; la referencia operativa vigente es
+  la spec.
 - El run `vivado -mode batch -source fase3_synth.tcl` se puede reproducir en
   cualquier máquina con Vivado ML Standard instalado (registro AMD gratuito,
   sin licencia de pago).

@@ -283,7 +283,7 @@ del backlog estacionario de la cola del parser:
    ~1,4× de ganancia; se eligió QB=64 por el balance latencia/área.
 5. **Evidencia**: `verification/vectors/latency/latency_dw32.json` re-medido
    (determinista, 2 ejecuciones idénticas); `docs/writeup/latencia.md`
-   actualizado; `docs/writeup/revision-exhaustiva-2026-08-14.md` con el
+   actualizado; `docs/writeup/lecciones-aprendidas.md` con el
    análisis completo (incl. los bloqueadores de síntesis B1/B2/B3 para el
    criterio 10).
 6. **Criterio 10 — primer run físico (2026-08-18)**: Vivado 2023.2 ejecutado

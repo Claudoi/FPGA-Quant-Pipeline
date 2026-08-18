@@ -75,6 +75,6 @@ Histograma completo (sparse, ciclos) y por tipo: ver el JSON.
   tabla corto, cola vacía).
 - El recorte adicional del encabezado de 32 bits (w2/w3 de ts, que el book
   descarta) y la serialización URAM son las palancas de la próxima campaña
-  (ver `revision-exhaustiva-2026-08-14.md`).
+  (ver `docs/writeup/lecciones-aprendidas.md` secciones 4 y 7).
 - La latencia se mide en simulación en ciclos; la conversión a ns usa el reloj
   objetivo (out of scope: wire-to-wire con hardware real).

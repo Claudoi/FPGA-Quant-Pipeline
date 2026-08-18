@@ -33,7 +33,7 @@
 // 46 B con prefijo) cabe con holgura (64 >= 46). No tocar QB sin re-medir la
 // evidencia de latencia (SEC-LAT-01). ATENCIÓN: en la cadena (itch_chain.sv)
 // el parámetro QB se sobrescribe desde el top — cambiar el default aquí no
-// afecta a fase 3 (ver revision-exhaustiva-2026-08-14.md, §3).
+// afecta a fase 3 (ver docs/writeup/lecciones-aprendidas.md, §1).
 module itch_parser #(
     parameter DW = 64,
     parameter QB = 64

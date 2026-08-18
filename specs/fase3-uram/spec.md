@@ -5,7 +5,7 @@
 Hacer sintetizable el order book y cerrar el **criterio 10 (322,265625 MHz)**
 del maestro: convertir la tabla de órdenes de registros planos (NSLOT=65.536
 con sonda combinacional paralela — no sintetizable a 3,103 ns, bloqueadores
-B1/B2 medidos en `docs/writeup/revision-exhaustiva-2026-08-14.md`) en un
+B1/B2, análisis en la sección 7 de `docs/writeup/lecciones-aprendidas.md`) en un
 diseño **URAM con sonda serializada y pipeline de niveles registrado**, sin
 perder NI UN BIT de la corrección verificada en fases 2-3 (30.729 eventos BBO
 bit a bit) ni la latencia actual (~42 ciclos de media; objetivo ≤ 45).
@@ -32,7 +32,8 @@ mensaje y ~15 % de palabras del stream interno.
   ≤ 1 slot/ciclo; el probe de hasta PROBE=8 slots tarda ≤ 8+2 ciclos; el
   primer read del grupo de hash del mensaje en curso se emite **durante
   ST_BODY** (el hash se conoce antes de ST_APPLY) para no añadir latencia al
-  caso con body ≥ 4 words (diseño documentado en `docs/writeup/uram.md`).
+   caso con body ≥ 4 words (patrón documentado en el criterio 2/6 y en
+   `docs/decisiones/002-retarget-kintex-xcku3p.md`).
 - **Pipeline del mantenimiento de niveles** (`level_add`): el reordenamiento
   O(P) actual en una pasada combinacional (~6-8 ns, bloqueador B2) se parte
   en etapas registradas; cada operación consume ≤ 2-3 ciclos extra en
@@ -221,8 +222,9 @@ verde:
 
 ## Loop
 
-Stop limit: **5 iteraciones** (las 4 del plan `plan-proxima-sesion-uram.md`
-+ 1 por el recorte del Anexo A, ahora obligatorio). Cadencia:
+Stop limit: **5 iteraciones** (las 4 del plan de la sesión + 1 por el
+recorte del Anexo A, ahora obligatorio; ver
+`docs/writeup/lecciones-aprendidas.md` §4). Cadencia:
 build → verify → grade encadenados. Orden sugerido: iter 1 (recorte del Anexo
 A + regresión: aislar el cambio de contrato) → iter 2 (memoria URAM + sonda
 serializada + prefetch) → iter 3 (pipeline de niveles) → iter 4 (latencia

@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date              : Tue Aug 18 15:10:48 2026
+| Date              : Tue Aug 18 19:01:41 2026
 | Host              : atini running 64-bit major release  (build 9200)
 | Command           : report_timing_summary -check_timing_verbose -report_unconstrained -max_paths 10 -file <local-build-path>/synth/reports/timing_synth.txt
 | Design            : itch_chain_synth
@@ -44,7 +44,7 @@ Timing Summary Report
 
 Rule       Severity  Description            Violations  
 ---------  --------  ---------------------  ----------  
-TIMING-15  Warning   Large hold violation   1000        
+TIMING-15  Warning   Large hold violation   103         
 TIMING-16  Warning   Large setup violation  1000        
 
 Note: This report is based on the most recent report_methodology run and may not be up-to-date. Run report_methodology on the current design for the latest report.
@@ -144,7 +144,7 @@ Table of Contents
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
     -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-     -4.015    -8326.790                   6488               286664       -2.760   -12408.542                  21763               286664        0.851        0.000                       0                 94695  
+     -2.685    -4481.451                   3799               286529       -2.760     -915.358                  20027               286529       -0.092      -16.560                     180                 94643  
 
 
 Timing constraints are not met.
@@ -167,7 +167,7 @@ clk_pipeline  {0.000 1.551}        3.103           322.269
 
 Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
 -----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-clk_pipeline       -4.015    -8326.790                   6488               286664       -2.760   -12408.542                  21763               286664        0.851        0.000                       0                 94695  
+clk_pipeline       -2.685    -4481.451                   3799               286529       -2.760     -915.358                  20027               286529       -0.092      -16.560                     180                 94643  
 
 
 ------------------------------------------------------------------------------------------------
@@ -217,149 +217,24 @@ Path Group    From Clock    To Clock
 From Clock:  clk_pipeline
   To Clock:  clk_pipeline
 
-Setup :         6488  Failing Endpoints,  Worst Slack       -4.015ns,  Total Violation    -8326.791ns
-Hold  :        21763  Failing Endpoints,  Worst Slack       -2.760ns,  Total Violation   -12408.542ns
-PW    :            0  Failing Endpoints,  Worst Slack        0.851ns,  Total Violation        0.000ns
+Setup :         3799  Failing Endpoints,  Worst Slack       -2.685ns,  Total Violation    -4481.451ns
+Hold  :        20027  Failing Endpoints,  Worst Slack       -2.760ns,  Total Violation     -915.358ns
+PW    :          180  Failing Endpoints,  Worst Slack       -0.092ns,  Total Violation      -16.560ns
 ---------------------------------------------------------------------------------------------------
 
 
 Max Delay Paths
 --------------------------------------------------------------------------------------
-Slack (VIOLATED) :        -4.015ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_changed_reg/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/sm_changed_reg/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.963ns  (logic 1.639ns (23.539%)  route 5.324ns (76.461%))
-  Logic Levels:           31  (CARRY8=2 LUT5=16 LUT6=12 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
-    Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
-  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
-    Total System Jitter     (TSJ):    0.071ns
-    Total Input Jitter      (TIJ):    0.000ns
-    Discrete Jitter          (DJ):    0.000ns
-    Phase Error              (PE):    0.000ns
-
-    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
-  -------------------------------------------------------------------    -------------------
-                         (clock clk_pipeline rise edge)
-                                                      0.000     0.000 r  
-                                                      0.000     0.000 r  clk (IN)
-                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.582     0.582 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     0.582    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.161     0.743    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
-  -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[3]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[3]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[3]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[3]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[3]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[3]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[3]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[3]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[3]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[3]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[3]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[3]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[3]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[3]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[3]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[3]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[3]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[3]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[3]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[3]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[3]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[3]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[3]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[3]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[3]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[3]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[3]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[3]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[3]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[3]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[3]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[3]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[3]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[3]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[3]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[3]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[3]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[3]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[3]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[3]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[3]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[3]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[3]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[3]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[3]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[3]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[3]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[3]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[3]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[3]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[3]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[3]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[3]_i_1/O
-                         net (fo=22, unplaced)        0.191     9.675    u_book/bp[3]
-                         LUT6 (Prop_LUT6_I0_O)        0.089     9.764 r  u_book/sm_changed_i_28/O
-                         net (fo=1, unplaced)         0.023     9.787    u_book/sm_changed_i_28_n_0
-                         CARRY8 (Prop_CARRY8_S[1]_CO[7])
-                                                      0.197     9.984 r  u_book/sm_changed_reg_i_6/CO[7]
-                         net (fo=1, unplaced)         0.005     9.989    u_book/sm_changed_reg_i_6_n_0
-                         CARRY8 (Prop_CARRY8_CI_CO[2])
-                                                      0.057    10.046 r  u_book/sm_changed_reg_i_2/CO[2]
-                         net (fo=1, unplaced)         0.186    10.232    u_book/sm_changed30_out
-                         LUT6 (Prop_LUT6_I0_O)        0.038    10.270 r  u_book/sm_changed_i_1/O
-                         net (fo=1, unplaced)         0.048    10.318    u_book/sm_changed_i_1_n_0
-                         FDRE                                         r  u_book/sm_changed_reg/D
-  -------------------------------------------------------------------    -------------------
-
-                         (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_changed_reg/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/sm_changed_reg
-  -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                         -10.318    
-  -------------------------------------------------------------------
-                         slack                                 -4.015    
-
-Slack (VIOLATED) :        -3.265ns  (required time - arrival time)
-  Source:                 f_n_reg[0]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            s_axis_tready
+  Destination:            bbo_changed
                             (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.978ns  (logic 1.074ns (54.291%)  route 0.904ns (45.709%))
-  Logic Levels:           2  (LUT2=1 OBUF=1)
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
     Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
@@ -383,16 +258,14 @@ Slack (VIOLATED) :        -3.265ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  f_n_reg[0]/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_changed_reg/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 f  f_n_reg[0]/Q
-                         net (fo=14, unplaced)        0.178     3.610    f_n[0]
-                         LUT2 (Prop_LUT2_I1_O)        0.038     3.648 r  s_axis_tready_OBUF_inst_i_1/O
-                         net (fo=1, unplaced)         0.726     4.374    s_axis_tready_OBUF
-                         OBUF (Prop_OBUF_I_O)         0.959     5.332 r  s_axis_tready_OBUF_inst/O
-                         net (fo=0)                   0.000     5.332    s_axis_tready
-                                                                      r  s_axis_tready (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_changed_reg/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_changed_OBUF
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_changed_OBUF_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_changed
+                                                                      r  bbo_changed (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
@@ -402,24 +275,25 @@ Slack (VIOLATED) :        -3.265ns  (required time - arrival time)
                          output delay                -1.000     2.068    
   -------------------------------------------------------------------
                          required time                          2.068    
-                         arrival time                          -5.332    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.265    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[0]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][0]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[0]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -438,103 +312,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[0]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[0]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[0]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[0]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[0]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[0]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[0]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[0]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[0]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[0]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[0]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[0]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[0]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[0]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[0]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[0]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[0]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[0]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[0]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[0]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[0]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[0]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[0]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[0]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[0]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[0]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[0]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[0]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[0]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[0]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[0]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[0]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[0]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[0]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[0]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[0]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[0]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[0]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[0]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[0]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[0]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[0]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[0]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[0]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[0]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[0]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[0]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[0]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[0]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[0]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[0]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[0]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[0]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[0]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[0]
-                         FDRE                                         r  u_book/prev_bp_reg[0][0]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[0]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[0]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[0]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[0]
+                                                                      r  bbo_locate[0] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][0]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][0]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[10]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][10]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[10]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -553,103 +366,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[10]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[10]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[10]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[10]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[10]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[10]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[10]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[10]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[10]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[10]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[10]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[10]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[10]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[10]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[10]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[10]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[10]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[10]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[10]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[10]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[10]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[10]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[10]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[10]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[10]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[10]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[10]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[10]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[10]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[10]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[10]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[10]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[10]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[10]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[10]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[10]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[10]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[10]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[10]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[10]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[10]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[10]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[10]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[10]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[10]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[10]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[10]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[10]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[10]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[10]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[10]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[10]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[10]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[10]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[10]
-                         FDRE                                         r  u_book/prev_bp_reg[0][10]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[10]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[10]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[10]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[10]
+                                                                      r  bbo_locate[10] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][10]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][10]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[11]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][11]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[11]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -668,103 +420,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[11]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[11]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[11]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[11]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[11]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[11]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[11]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[11]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[11]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[11]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[11]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[11]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[11]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[11]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[11]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[11]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[11]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[11]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[11]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[11]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[11]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[11]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[11]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[11]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[11]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[11]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[11]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[11]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[11]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[11]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[11]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[11]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[11]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[11]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[11]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[11]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[11]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[11]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[11]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[11]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[11]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[11]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[11]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[11]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[11]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[11]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[11]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[11]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[11]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[11]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[11]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[11]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[11]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[11]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[11]
-                         FDRE                                         r  u_book/prev_bp_reg[0][11]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[11]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[11]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[11]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[11]
+                                                                      r  bbo_locate[11] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][11]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][11]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[12]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][12]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[12]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -783,103 +474,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[12]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[12]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[12]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[12]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[12]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[12]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[12]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[12]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[12]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[12]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[12]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[12]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[12]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[12]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[12]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[12]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[12]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[12]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[12]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[12]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[12]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[12]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[12]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[12]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[12]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[12]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[12]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[12]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[12]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[12]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[12]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[12]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[12]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[12]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[12]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[12]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[12]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[12]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[12]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[12]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[12]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[12]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[12]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[12]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[12]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[12]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[12]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[12]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[12]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[12]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[12]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[12]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[12]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[12]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[12]
-                         FDRE                                         r  u_book/prev_bp_reg[0][12]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[12]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[12]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[12]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[12]
+                                                                      r  bbo_locate[12] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][12]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][12]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[13]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][13]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[13]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -898,103 +528,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[13]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[13]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[13]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[13]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[13]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[13]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[13]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[13]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[13]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[13]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[13]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[13]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[13]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[13]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[13]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[13]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[13]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[13]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[13]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[13]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[13]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[13]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[13]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[13]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[13]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[13]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[13]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[13]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[13]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[13]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[13]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[13]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[13]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[13]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[13]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[13]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[13]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[13]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[13]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[13]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[13]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[13]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[13]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[13]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[13]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[13]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[13]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[13]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[13]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[13]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[13]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[13]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[13]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[13]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[13]
-                         FDRE                                         r  u_book/prev_bp_reg[0][13]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[13]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[13]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[13]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[13]
+                                                                      r  bbo_locate[13] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][13]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][13]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[14]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][14]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[14]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -1013,103 +582,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[14]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[14]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[14]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[14]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[14]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[14]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[14]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[14]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[14]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[14]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[14]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[14]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[14]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[14]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[14]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[14]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[14]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[14]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[14]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[14]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[14]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[14]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[14]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[14]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[14]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[14]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[14]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[14]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[14]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[14]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[14]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[14]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[14]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[14]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[14]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[14]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[14]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[14]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[14]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[14]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[14]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[14]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[14]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[14]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[14]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[14]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[14]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[14]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[14]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[14]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[14]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[14]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[14]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[14]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[14]
-                         FDRE                                         r  u_book/prev_bp_reg[0][14]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[14]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[14]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[14]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[14]
+                                                                      r  bbo_locate[14] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][14]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][14]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[15]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][15]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[15]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -1128,103 +636,42 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[15]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[15]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[15]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[15]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[15]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[15]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[15]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[15]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[15]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[15]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[15]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[15]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[15]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[15]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[15]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[15]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[15]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[15]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[15]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[15]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[15]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[15]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[15]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[15]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[15]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[15]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[15]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[15]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[15]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[15]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[15]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[15]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[15]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[15]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[15]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[15]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[15]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[15]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[15]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[15]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[15]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[15]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[15]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[15]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[15]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[15]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[15]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[15]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[15]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[15]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[15]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[15]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[15]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[15]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[15]
-                         FDRE                                         r  u_book/prev_bp_reg[0][15]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[15]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[15]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[15]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[15]
+                                                                      r  bbo_locate[15] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][15]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][15]
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
-Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
-  Source:                 u_book/sm_cap_nzb_reg[2]_rep/C
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            u_book/prev_bp_reg[0][16]/D
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[1]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
   Path Group:             clk_pipeline
-  Path Type:              Setup (Max at Slow Process Corner)
+  Path Type:              Max at Slow Process Corner
   Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        6.177ns  (logic 1.258ns (20.366%)  route 4.919ns (79.634%))
-  Logic Levels:           27  (LUT5=16 LUT6=10 MUXF7=1)
-  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    2.927ns = ( 6.030 - 3.103 ) 
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.283ns
+    Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -1243,88 +690,80 @@ Slack (VIOLATED) :        -3.229ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/sm_cap_nzb_reg[2]_rep/C
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  u_book/sm_cap_nzb_reg[2]_rep/Q
-                         net (fo=66, unplaced)        0.230     3.662    u_book/sm_cap_nzb_reg[2]_rep_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.150     3.812 r  u_book/sm_bp[16]_i_10/O
-                         net (fo=3, unplaced)         0.143     3.955    u_book/sm_bp[16]_i_10_n_0
-                         LUT6 (Prop_LUT6_I1_O)        0.053     4.008 r  u_book/sm_bp[16]_i_20/O
-                         net (fo=1, unplaced)         0.186     4.194    u_book/sm_bp[16]_i_20_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.232 r  u_book/sm_bp[16]_i_15/O
-                         net (fo=2, unplaced)         0.186     4.418    u_book/sm_bp[16]_i_15_n_0
-                         LUT6 (Prop_LUT6_I0_O)        0.038     4.456 r  u_book/sm_bp[16]_i_29/O
-                         net (fo=1, unplaced)         0.186     4.642    u_book/sm_bp[16]_i_29_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.680 r  u_book/sm_bp[16]_i_27/O
-                         net (fo=4, unplaced)         0.198     4.878    u_book/sm_bp[16]_i_27_n_0
-                         LUT6 (Prop_LUT6_I2_O)        0.038     4.916 r  u_book/sm_bp[16]_i_38/O
-                         net (fo=1, unplaced)         0.186     5.102    u_book/sm_bp[16]_i_38_n_0
-                         LUT6 (Prop_LUT6_I4_O)        0.038     5.140 r  u_book/sm_bp[16]_i_36/O
-                         net (fo=2, unplaced)         0.186     5.326    u_book/sm_bp[16]_i_36_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.364 r  u_book/sm_bp[16]_i_40/O
-                         net (fo=2, unplaced)         0.186     5.550    u_book/sm_bp[16]_i_40_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.588 r  u_book/sm_bp[16]_i_42/O
-                         net (fo=2, unplaced)         0.186     5.774    u_book/sm_bp[16]_i_42_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     5.812 r  u_book/sm_bp[16]_i_44/O
-                         net (fo=2, unplaced)         0.186     5.998    u_book/sm_bp[16]_i_44_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.036 r  u_book/sm_bp[16]_i_46/O
-                         net (fo=1, unplaced)         0.186     6.222    u_book/sm_bp[16]_i_46_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     6.260 r  u_book/sm_bp[16]_i_45/O
-                         net (fo=1, unplaced)         0.186     6.446    u_book/sm_bp[16]_i_45_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.484 r  u_book/sm_bp[16]_i_43/O
-                         net (fo=1, unplaced)         0.186     6.670    u_book/sm_bp[16]_i_43_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.708 r  u_book/sm_bp[16]_i_41/O
-                         net (fo=1, unplaced)         0.186     6.894    u_book/sm_bp[16]_i_41_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     6.932 r  u_book/sm_bp[16]_i_37/O
-                         net (fo=1, unplaced)         0.186     7.118    u_book/sm_bp[16]_i_37_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     7.156 r  u_book/sm_bp[16]_i_34/O
-                         net (fo=1, unplaced)         0.186     7.342    u_book/sm_bp[16]_i_34_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.380 r  u_book/sm_bp[16]_i_32/O
-                         net (fo=1, unplaced)         0.186     7.566    u_book/sm_bp[16]_i_32_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.604 r  u_book/sm_bp[16]_i_28/O
-                         net (fo=1, unplaced)         0.186     7.790    u_book/sm_bp[16]_i_28_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     7.828 r  u_book/sm_bp[16]_i_26/O
-                         net (fo=1, unplaced)         0.186     8.014    u_book/sm_bp[16]_i_26_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.052 r  u_book/sm_bp[16]_i_23/O
-                         net (fo=1, unplaced)         0.186     8.238    u_book/sm_bp[16]_i_23_n_0
-                         LUT6 (Prop_LUT6_I5_O)        0.038     8.276 r  u_book/sm_bp[16]_i_16/O
-                         net (fo=1, unplaced)         0.186     8.462    u_book/sm_bp[16]_i_16_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.500 r  u_book/sm_bp[16]_i_12/O
-                         net (fo=1, unplaced)         0.186     8.686    u_book/sm_bp[16]_i_12_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     8.724 r  u_book/sm_bp[16]_i_8/O
-                         net (fo=1, unplaced)         0.186     8.910    u_book/sm_bp[16]_i_8_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.037     8.947 r  u_book/sm_bp[16]_i_5/O
-                         net (fo=1, unplaced)         0.024     8.971    u_book/sm_bp[16]_i_5_n_0
-                         MUXF7 (Prop_MUXF7_I0_O)      0.067     9.038 r  u_book/sm_bp_reg[16]_i_4/O
-                         net (fo=1, unplaced)         0.184     9.222    u_book/sm_bp_reg[16]_i_4_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.260 r  u_book/sm_bp[16]_i_2/O
-                         net (fo=1, unplaced)         0.186     9.446    u_book/sm_bp[16]_i_2_n_0
-                         LUT5 (Prop_LUT5_I4_O)        0.038     9.484 r  u_book/sm_bp[16]_i_1/O
-                         net (fo=22, unplaced)        0.048     9.532    u_book/bp[16]
-                         FDRE                                         r  u_book/prev_bp_reg[0][16]/D
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[1]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[1]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[1]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[1]
+                                                                      r  bbo_locate[1] (OUT)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       3.103     3.103 r  
-                                                      0.000     3.103 r  clk (IN)
-                         net (fo=0)                   0.000     3.103    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     3.434 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     3.434    clk_IBUF_inst/OUT
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -4.752    
+  -------------------------------------------------------------------
+                         slack                                 -2.685    
+
+Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+  Source:                 u_book/bbo_locate_reg[2]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[2]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    3.355ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.582     0.582 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     0.582    clk_IBUF_inst/OUT
                          IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     3.434 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.133     3.567    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.024     3.591 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     6.030    u_book/clk_IBUF_BUFG
-                         FDRE                                         r  u_book/prev_bp_reg[0][16]/C
-                         clock pessimism              0.283     6.313    
-                         clock uncertainty           -0.035     6.277    
-                         FDRE (Setup_FDRE_C_D)        0.025     6.302    u_book/prev_bp_reg[0][16]
+                                                      0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.161     0.743    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         FDRE                                         r  u_book/bbo_locate_reg[2]/C
+  -------------------------------------------------------------------    -------------------
+                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  u_book/bbo_locate_reg[2]/Q
+                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[2]
+                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[2]_inst/O
+                         net (fo=0)                   0.000     4.752    bbo_locate[2]
+                                                                      r  bbo_locate[2] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
   -------------------------------------------------------------------
-                         required time                          6.302    
-                         arrival time                          -9.532    
+                         required time                          2.068    
+                         arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -3.229    
+                         slack                                 -2.685    
 
 
 
@@ -1373,7 +812,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1425,7 +864,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1477,7 +916,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMF/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1529,7 +968,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMG/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1581,7 +1020,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1633,7 +1072,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1685,7 +1124,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMF/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1737,7 +1176,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMG/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1789,7 +1228,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_28_31/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_28_31/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_28_31/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1841,7 +1280,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    f_mem_reg_0_3_28_31/WCLK
+                         net (fo=94642, unplaced)     2.584     3.355    f_mem_reg_0_3_28_31/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_28_31/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1863,37 +1302,37 @@ Waveform(ns):       { 0.000 1.551 }
 Period(ns):         3.103
 Sources:            { clk }
 
-Check Type        Corner  Lib Pin      Reference Pin  Required(ns)  Actual(ns)  Slack(ns)  Location  Pin
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_0/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_1/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_10/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_11/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_12/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_13/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_14/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_15/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_16/CLK
-Min Period        n/a     URAM288/CLK  n/a            2.000         3.103       1.103                u_book/o_mem_reg_uram_17/CLK
-Low Pulse Width   Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_0/CLK
-Low Pulse Width   Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_0/CLK
-Low Pulse Width   Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_1/CLK
-Low Pulse Width   Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_1/CLK
-Low Pulse Width   Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_10/CLK
-Low Pulse Width   Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_10/CLK
-Low Pulse Width   Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_11/CLK
-Low Pulse Width   Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_11/CLK
-Low Pulse Width   Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_12/CLK
-Low Pulse Width   Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_12/CLK
-High Pulse Width  Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_0/CLK
-High Pulse Width  Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_0/CLK
-High Pulse Width  Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_1/CLK
-High Pulse Width  Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_1/CLK
-High Pulse Width  Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_10/CLK
-High Pulse Width  Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_10/CLK
-High Pulse Width  Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_11/CLK
-High Pulse Width  Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_11/CLK
-High Pulse Width  Slow    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_12/CLK
-High Pulse Width  Fast    URAM288/CLK  n/a            0.700         1.551       0.851                u_book/o_mem_reg_uram_12/CLK
+Check Type        Corner  Lib Pin  Reference Pin  Required(ns)  Actual(ns)  Slack(ns)  Location  Pin
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               tready_ff_reg_rep/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_changed_reg/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[0]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[10]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[11]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[12]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[13]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[14]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[15]/C
+Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               u_book/bbo_locate_reg[1]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                tready_ff_reg_rep/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                tready_ff_reg_rep/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_changed_reg/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_changed_reg/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[0]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[0]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[10]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[10]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[11]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[11]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                tready_ff_reg_rep/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                tready_ff_reg_rep/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_changed_reg/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_changed_reg/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[0]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[0]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[10]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[10]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[11]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                u_book/bbo_locate_reg[11]/C
 
 
 
@@ -1959,7 +1398,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
@@ -2012,7 +1451,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 Slack:                    inf
@@ -2065,7 +1504,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
 
 Slack:                    inf
@@ -2118,7 +1557,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
 
 Slack:                    inf
@@ -2171,7 +1610,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
@@ -2224,7 +1663,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 Slack:                    inf
@@ -2277,7 +1716,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
 
 Slack:                    inf
@@ -2330,7 +1769,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
 
 Slack:                    inf
@@ -2383,7 +1822,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
@@ -2436,7 +1875,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 
@@ -2477,7 +1916,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2512,7 +1951,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2547,7 +1986,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2582,7 +2021,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2617,7 +2056,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2652,7 +2091,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2687,7 +2126,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2722,7 +2161,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2757,7 +2196,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2792,7 +2231,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94694, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94642, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 

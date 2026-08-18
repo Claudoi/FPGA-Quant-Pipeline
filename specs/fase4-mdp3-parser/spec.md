@@ -100,7 +100,7 @@ se reflejan en el Definition of Done vigente de este documento.
   Máscaras con huecos, cero o parciales sin `tlast` pulsan `error` y descartan
   el paquete, drenándolo hasta `tlast` si el beat inválido no era final.
   Contrato completo:
-  `docs/superpowers/specs/2026-08-15-axis-tkeep-framing-design.md`.
+  `docs/decisiones/003-axis-tkeep-framing.md`.
 - **Framing confirmado:** paquete = MsgSeqNum(u32) + SendingTime(u64, ns
   desde epoch) = 12 B; cada mensaje = **MessageSize(u16) que INCLUYE los
   10 B de prefijo** (MessageSize + cabecera SBE de 8 B: blockLength/

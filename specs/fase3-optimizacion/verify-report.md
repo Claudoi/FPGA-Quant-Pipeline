@@ -450,3 +450,92 @@ en la etapa A (sm_bsel/sm_asel por first_one en arbol; la B selecciona
 por indice) y (c, enmendado) sin registro de tready en el wrapper (un
 tready registrado duplicaria el par para el consumidor; los pines
 quedan directos).
+
+### Re-run Vivado 2026-08-18 (17:50) - iter 9 (guard solo tvalid + find-first precomputado): mejoro, no cierra
+
+Run completo con el mismo synth/fase3_synth.tcl (gate sin cambios; log
+synth/fase3_run_iter9.log). El gate aborto como esta disenado:
+
+`	ext
+FASE3 TIMING FAIL: WNS=-3.527 ns (se exige WNS>=0 y TNS=0)
+INFO: [Common 17-206] Exiting Vivado at Tue Aug 18 17:50:42 2026...
+`
+
+| Metrica | Iter 8 (15:55) | Iter 9 (17:50) | Delta 9 vs 8 |
+|---|---|---|---|
+| WNS (setup) | -4,052 ns | **-3,527 ns** | +0,525 ns |
+| TNS (setup) | -213.040,636 ns | **-211.438,033 ns** | +1.602,6 ns |
+| Endpoints failing (setup) | 176.945 | **177.459** | +514 |
+| LUT as Logic | 155.697 (95,68 %) | **155.893 (95,80 %)** | +0,12 pp |
+| URAM288 | 32 (66,67 %) | **32 (66,67 %)** | = |
+| Bonded IOB | 222 | **222** | = |
+
+Rutas criticas post-route (timing_impl.txt): las 10 peores ya NO son la
+familia depth_tready -> URAM del run 8 (el guard solo-tvalid de la
+iter 9a mato esa ruta). Son ahora la **familia I/O del wrapper**:
+u_book/bbo_locate_reg[0]/C -> bbo_locate[0] (pin), 1 nivel (OBUF=1),
+Data Path Delay 2,924 ns, Output Delay 1,0 ns, **Clock Path Skew
+-2,671 ns** (SCD 2,671: el arbol de reloj al area del book con LUT al
+96 %); mismo patron en depth_tdata_reg[0] y _n_reg[1] ->
+s_axis_tready (pin). Ademas rutas internas de area: u_parser/
+out_data_reg_reg[23] (parser -> FIFO del wrapper) y u_book/
+body_acc_reg[2][28] -> FDRE, cortas pero con skew de regiones
+congestionadas.
+
+**Conclusion del loop iter 9 (gate G):** el retiming del book funciono
+(familia URAM del run 8 fuera del top-10; WNS +0,53 ns) pero las salidas
+del wrapper sin empaquetar en IOB no cierran: todo FF interno -> pin
+pierde ~2,67 ns de skew del arbol + 1 ns de output delay. El criterio 10
+sigue abierto (WNS < 0, TNS != 0, LUT 95,80 % > 95 %).
+
+**Iter 10 (ultima del loop, enmienda de continuidad por decision del
+owner)**: addendum en spec - solo synth/itch_chain_synth.sv: (a) IOB
+packing ((* IOB = \'TRUE\' *)) de bbo_locate/bbo_tdata/bbo_tvalid/
+bbo_changed/depth_tdata/depth_tvalid: los FFs de salida del book (sin
+fanout interno) se empacan en el IOB, skew I/O ~0, y 192 FFs salen del
+area del book (el arbol interno se alivia); (b) s_axis_tready registrado
+(tready_ff <= f_n < 3, IOB): la ruta f_n -> LUT -> OBUF -> pin no cierra;
+el handshake del pin usa el tready registrado (fifo_hs = tvalid &&
+tready_ff: regimen coherente, sin overflow, backpressure diferida 1
+ciclo en el pin). El guard de emision de la 9a no mira el tready: la
+retencion del par queda intacta; el wrapper no se simula (RTM-LAT mide
+la cadena). Run lanzado 18:05 (log synth/fase3_run_iter10.log).
+
+### Re-run Vivado 2026-08-18 (19:45) - iter 10 (IOB packing + tready registrado, wrapper): no cierra
+
+Run completo con el mismo `synth/fase3_synth.tcl` (gate sin cambios; log
+`synth/fase3_run_iter10.log`). El gate aborto como esta disenado:
+
+```text
+FASE3 TIMING FAIL: WNS=-3.748 ns (se exige WNS>=0 y TNS=0)
+INFO: [Common 17-206] Exiting Vivado at Tue Aug 18 19:45:01 2026...
+```
+
+| Metrica | Iter 9 (17:50) | Iter 10 (19:45) | Delta 10 vs 9 |
+|---|---|---|---|
+| WNS (setup) | -3,527 ns | **-3,748 ns** | -0,221 ns |
+| TNS (setup) | -211.438,033 ns | **-221.038,368 ns** | -9.600 ns |
+| Endpoints failing (setup) | 177.459 | **178.310** | +851 |
+| LUT as Logic | 155.893 (95,80 %) | **155.876 (95,79 %)** | -0,01 pp |
+| URAM288 | 32 (66,67 %) | **32 (66,67 %)** | = |
+| Bonded IOB | 222 | **222** | = |
+
+Rutas criticas post-route (timing_impl.txt): las 10 peores siguen siendo
+la **familia I/O del wrapper**, pero ahora desde los FFs del book dentro
+del area, no empacados: `u_book/bbo_changed_reg/C -> bbo_changed` (pin),
+`u_book/bbo_tdata_reg[16/20/21/17] -> bbo_tdata[...]` y
+`u_book/bbo_tvalid_reg -> bbo_tvalid`, 1 nivel (OBUF=1), Data Path
+2,703 ns, Output Delay 1,0 ns, **Clock Path Skew -3,112 ns**. El tool
+solo replico `tready_ff_reg` (`INFO: [Synth 8-4163] Replicating register
+tready_ff_reg to handle IOB=TRUE attribute`) — el IOB packing **NO movio
+los FFs de salida del book** porque tienen fanout interno real
+(retencion `bbo_tvalid <= bbo_tvalid && !bbo_tready` y guard
+`!bbo_tvalid && !depth_tvalid` del FSM), incontractible por el placer.
+
+**Conclusion del loop iter 10 (gate G):** el IOB packing solo aplica a
+FFs sin fanout interno; los FFs del book no son replicables al IOB y las
+salidas siguen perdiendo el skew del arbol (~2,7-3,1 ns) + 1 ns de
+output delay. **El criterio 10 sigue abierto** (WNS < 0, TNS != 0, LUT
+95,79 % > 95 %); la unica via documentada restante es el pipeline de
+salida en el wrapper (FFs propios con retencion del lado del pin + IOB),
+sin rebajar el gate del tcl.

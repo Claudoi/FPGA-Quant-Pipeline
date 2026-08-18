@@ -1,8 +1,7 @@
-# Contrato AXI de bytes válidos para framing UDP
+# 003 — Contrato AXI de bytes válidos para framing UDP (`s_axis_tkeep`)
 
-**Fecha:** 2026-08-15
-
-**Estado:** aprobado por el owner; implementación planificada
+**Fecha:** 2026-08-15 · **Estado:** aprobada e implementada (ITCH fase 1,
+integración fase 3; MDP3 fase 4 pendiente de rojo→verde)
 
 **Campañas afectadas:** fase 1 ITCH, integración de fase 3 y fase 4 MDP3
 

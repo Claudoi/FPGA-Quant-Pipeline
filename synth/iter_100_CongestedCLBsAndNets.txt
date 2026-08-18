@@ -1,0 +1,8 @@
+List of CLB Tiles
+CLEL_L_X5Y40
+CLEL_R_X5Y40
+
+List of Congested Nets
+u_book/price[16]
+u_book/lv_pr[5][16]_i_3_n_0
+

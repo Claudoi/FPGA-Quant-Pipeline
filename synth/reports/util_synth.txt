@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date         : Tue Aug 18 15:09:47 2026
+| Date         : Tue Aug 18 19:00:39 2026
 | Host         : atini running 64-bit major release  (build 9200)
 | Command      : report_utilization -hierarchical -file <local-build-path>/synth/reports/util_synth.txt
 | Design       : itch_chain_synth
@@ -22,10 +22,10 @@ Table of Contents
 +----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
 |       Instance       |    Module   | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | URAM | DSP Blocks |
 +----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
-| itch_chain_synth     |       (top) |     153025 |     152999 |      26 |    0 | 94612 |      0 |      0 |   32 |          0 |
-|   (itch_chain_synth) |       (top) |         32 |          6 |      26 |    0 |     7 |      0 |      0 |    0 |          0 |
-|   u_book             |   orderbook |     150430 |     150430 |       0 |    0 | 93775 |      0 |      0 |   32 |          0 |
-|   u_parser           | itch_parser |       2563 |       2563 |       0 |    0 |   830 |      0 |      0 |    0 |          0 |
+| itch_chain_synth     |       (top) |     153711 |     153685 |      26 |    0 | 94560 |      0 |      0 |   32 |          0 |
+|   (itch_chain_synth) |       (top) |         32 |          6 |      26 |    0 |     9 |      0 |      0 |    0 |          0 |
+|   u_book             |   orderbook |     151046 |     151046 |       0 |    0 | 93721 |      0 |      0 |   32 |          0 |
+|   u_parser           | itch_parser |       2633 |       2633 |       0 |    0 |   830 |      0 |      0 |    0 |          0 |
 +----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
 
 
