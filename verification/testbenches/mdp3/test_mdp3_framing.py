@@ -67,30 +67,49 @@ async def _reset(dut):
     dut.s_axis_tdata.value = 0
     dut.s_axis_tvalid.value = 0
     dut.s_axis_tlast.value = 0
+    if hasattr(dut, "s_axis_tkeep"):
+        dut.s_axis_tkeep.value = 0
     dut.m_axis_tready.value = 1
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
 
 
-async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000):
+def beat_list(packets, bytes_per_input_word):
+    """Beats (value, is_last, tkeep) de los paquetes, tkeep MSB-contiguo:
+    los lanes válidos son los bytes altos del word; el último beat del burst
+    declara solo sus bytes reales (contrato tkeep común, addendum 2026-08-18)."""
+    beats = []
+    for pkt in packets:
+        n = (len(pkt) + bytes_per_input_word - 1) // bytes_per_input_word
+        for i in range(n):
+            bite = pkt[i * bytes_per_input_word:(i + 1) * bytes_per_input_word]
+            nv = len(bite)
+            beats.append(
+                (int.from_bytes(bite, "big")
+                 << (8 * (bytes_per_input_word - nv)),
+                 i == n - 1,
+                 ((1 << nv) - 1) << (bytes_per_input_word - nv)))
+    return beats
+
+
+async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000,
+                            beats_override=None):
     """Conduce paquetes MDP 3.0 al parser y devuelve los bytes de salida.
 
     Cada paquete es un burst AXI-Stream con su propio tlast (back-to-back),
     como en fase 1: tras el tlast de un paquete llega el header de 12 B del
     siguiente. Devuelve (bytes de salida, run máximo de entrada parada).
+    Si el RTL expone s_axis_tkeep, todos los beats lo aplican (y el último
+    beat parcial del burst declara solo sus bytes reales); beats_override
+    sustituye la lista de beats para inyectar máscaras especiales (M3-FRM-05).
     """
     bytes_per_input_word = len(dut.s_axis_tdata) // 8
     bytes_per_output_word = len(dut.m_axis_tdata) // 8
-    words = []
-    for pkt in packets:
-        n = (len(pkt) + bytes_per_input_word - 1) // bytes_per_input_word
-        for i in range(n):
-            bite = pkt[i * bytes_per_input_word:(i + 1) * bytes_per_input_word]
-            words.append((int.from_bytes(bite, "big")
-                          << (8 * (bytes_per_input_word - len(bite))),
-                          i == n - 1))
-    nwords = len(words)
+    has_tkeep = hasattr(dut, "s_axis_tkeep")
+    beats = (beats_override if beats_override is not None
+             else beat_list(packets, bytes_per_input_word))
+    nwords = len(beats)
 
     out = bytearray()
     wi = 0
@@ -101,8 +120,10 @@ async def drive_and_collect(dut, packets, tready_high=True, max_cycles=40000):
     gap_count = 0
     for _ in range(max_cycles):
         dut.s_axis_tvalid.value = 1 if wi < nwords else 0
-        dut.s_axis_tdata.value = words[wi][0] if wi < nwords else 0
-        dut.s_axis_tlast.value = words[wi][1] if wi < nwords else 0
+        dut.s_axis_tdata.value = beats[wi][0] if wi < nwords else 0
+        dut.s_axis_tlast.value = beats[wi][1] if wi < nwords else 0
+        if has_tkeep:
+            dut.s_axis_tkeep.value = beats[wi][2] if wi < nwords else 0
         if not tready_high:
             dut.m_axis_tready.value = 1 if (_ % 3) != 1 else 0
         await RisingEdge(dut.clk)
@@ -364,3 +385,55 @@ async def test_m3inv03_grupo_vacio_o_entry_fuera_del_mensaje(dut):
     got, _, errors, _ = await drive_and_collect(dut, packets)
     assert_bytes_equal(got, expected_for(schema, [packets[2]]), "M3-INV-03")
     assert errors >= 2
+
+
+@cocotb.test()
+async def test_m3frm05_tkeep_bytes_validos_y_truncado_por_mascara(dut):
+    """Espejo M3-FRM-05 (addendum framing tkeep, 2026-08-18).
+
+    a) Framing nominal: el driver aplica tkeep MSB-contiguo a todos los
+       bursts, con el último beat parcial declarando solo sus bytes reales.
+    b) Truncado por máscara: un mensaje cuya longitud declarada solo se
+       completaría con lanes tkeep=0 no se completa (error, sin records
+       parciales) y el siguiente paquete íntegro se recupera bit a bit.
+    c) Beat con tkeep=0 completo en medio del burst: se consume sin aportar
+       bytes y sin trabarse; el paquete llega íntegro bit a bit.
+    Si el RTL aún no expone s_axis_tkeep, informa la omisión (SkipTest): el
+    framing tkeep de fase 4 no está implementado.
+    """
+    if not hasattr(dut, "s_axis_tkeep"):
+        raise cocotb.SkipTest(
+            "M3-FRM-05: el RTL mdp3_parser aún no expone s_axis_tkeep "
+            "(framing tkeep de fase 4 pendiente de implementar)")
+    schema = load_schema(SCHEMA_PATH)
+    msg = literal_template47(schema)
+    packet = encode_packet(schema, 81, 1, [msg])
+    b = len(dut.s_axis_tdata) // 8
+
+    # a) nominal con tkeep correcto
+    beats_a = beat_list([packet], b)
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(dut, [packet])
+    assert_bytes_equal(got, expected_for(schema, [packet]), "M3-FRM-05a")
+    assert errors == 0
+
+    # b) último beat con un lane tkeep=0: al mensaje le falta 1 byte
+    beats_b = list(beats_a)
+    beats_b[-1] = (beats_b[-1][0], True, ((1 << (b - 1)) - 1) << 1)
+    recovery = encode_packet(schema, 82, 2, [msg])
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(
+        dut, [packet, recovery],
+        beats_override=beats_b + beat_list([recovery], b))
+    assert errors >= 1, "M3-FRM-05b: faltó el error por truncado de máscara"
+    assert_bytes_equal(got, expected_for(schema, [recovery]), "M3-FRM-05b")
+
+    # c) beat vacío (tkeep=0) en medio del burst
+    if len(beats_a) >= 3:
+        mid = len(beats_a) // 2
+        beats_c = beats_a[:mid] + [(0, False, 0)] + beats_a[mid:]
+        await _reset(dut)
+        got, _, errors, _ = await drive_and_collect(
+            dut, [packet], beats_override=beats_c)
+        assert_bytes_equal(got, expected_for(schema, [packet]), "M3-FRM-05c")
+        assert errors == 0

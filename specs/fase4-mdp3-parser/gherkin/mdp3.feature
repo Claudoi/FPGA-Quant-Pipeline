@@ -60,6 +60,17 @@ Funcionalidad: Parser CME MDP 3.0 (SBE) a line-rate con Anexo M normalizado
       entry_type, precio (mantissa+exponente), size, num_orders y price_level
       bit a bit iguales al golden
 
+  Escenario: M3-FRM-05 — el framing consume s_axis_tkeep byte a byte
+    Dado un paquete presentado con tkeep MSB-contiguo y el último beat
+      parcial declarando solo sus bytes reales
+    Cuando el parser procesa el stream
+    Entonces el Anexo M es bit a bit idéntico al golden
+    Y un mensaje cuya longitud declarada solo se completaría con lanes
+      tkeep=0 no se completa: pulsa error, no emite record parcial
+    Y el siguiente paquete íntegro se recupera bit a bit
+    Y un beat con tkeep=0 completo en medio del burst se consume sin aportar
+      bytes ni trabarse
+
   Escenario: M3-SUB-02 — el precio compuesto y los grupos multi-entry
     Dado un mensaje con varios entries y precios con exponentes negativos
     Cuando el parser decodifica

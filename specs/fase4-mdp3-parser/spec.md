@@ -350,3 +350,34 @@ bit a bit, line-rate) → iter 3 (subset + passthrough + gaps + robustez +
 regresión) → iter 4 (mutación, gates, grade). Los criterios reabiertos se
 resuelven ahora en loops independientes de framing, schema/passthrough,
 backpressure y síntesis; ningún output histórico los cierra por arrastre.
+
+### Addendum framing tkeep (2026-08-18) — contrato del loop en curso
+
+El RTL actual de `mdp3_parser` consume beats completos (asume
+`DW/8` bytes por beat) y no expone `s_axis_tkeep`; la campaña queda
+reabierta por los criterios 2, 3, 7 y 8. Este loop se cierra con:
+
+1. **Contrato de puertos:** `s_axis_tkeep[DW/8-1:0]` de entrada, máscara
+   MSB-contigua por beat (los lanes válidos son los bytes altos del word).
+   El apend de la cola (`qbytes`/`qw`) contabiliza solo los lanes con
+   `tkeep=1`; un lane con `tkeep=0` nunca aporta bytes ni completa una
+   longitud declarada (misma mecánica que el contrato común de fases 1-3).
+   Un beat con `tkeep=0` completo se consume sin aportar bytes y sin
+   trabarse. `tlast` cierra el burst del paquete igual que hoy; el último
+   beat parcial (pocos lanes válidos) es el truncado: si la longitud
+   declarada de un mensaje cae en lanes `tkeep=0`, se señaliza `error` y
+   el paquete siguiente se recupera íntegro.
+2. **Orden rojo→verde (máquina con cocotb):** los tests del área mdp3 ya
+   aplican `tkeep` cuando el puerto existe (driver `beat_list` +
+   `drive_and_collect` en `verification/testbenches/mdp3/test_mdp3_framing.py`)
+   y `test_m3frm05_tkeep_bytes_validos_y_truncado_por_mascara` (espejo
+   M3-FRM-05) informa la omisión con SkipTest mientras el RTL no exponga el
+   puerto. El rojo real se obtiene al añadir el puerto al RTL y correr el
+   área; el verde exige el framing completo (a), truncado por máscara (b)
+   y beat vacío en medio del burst (c).
+3. **Regresión:** tras el verde, la suite del área mdp3 completa (M3-FRM-01
+   a M3-INV-04, incluidas DW=32 y DW=64) y las fases 1-3 quedan intactas
+   (el contrato común ya está cerrado allí; M3-REG-01 no cambia su alcance).
+4. **Declaración:** un SkipTest de M3-FRM-05 no cierra el criterio; el
+   verify-report de esta campaña se actualiza solo con outputs reales del
+   área (gate A) y, cuando aplique, del run Vivado (gate G).
