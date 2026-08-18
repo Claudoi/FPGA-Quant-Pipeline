@@ -399,3 +399,52 @@ expone demasiado y penaliza el run.
 Ambas opciones requieren spec (addendum) antes de tocar RTL, y el cierre
 de la iter 8 exige además el rojo→verde de sims y los gates A/E/B/C en la
 máquina con cocotb (pendientes desde la iter 7).
+
+### Re-run Vivado 2026-08-18 (15:55) - iter 8 (decode partido + FIFO wrapper): mejoro, no cierra
+
+Run completo con el mismo `synth/fase3_synth.tcl` (gate del tcl sin
+cambios; `vivado -mode batch -source fase3_synth.tcl`, log
+`synth/fase3_run_iter8.log`). El gate aborto como esta disenado:
+
+```text
+FASE3 TIMING FAIL: WNS=-4.052 ns (se exige WNS>=0 y TNS=0)
+INFO: [Common 17-206] Exiting Vivado at Tue Aug 18 15:55:33 2026...
+```
+
+| Metrica | Run base (10:59) | Iter 7 (14:11) | Iter 8 (15:55) | Delta 8 vs 7 |
+|---|---|---|---|---|
+| WNS (setup) | -10,492 ns | -7,395 ns | **-4,052 ns** | +3,343 ns |
+| TNS (setup) | -590.856,875 ns | -430.582,411 ns | **-213.040,636 ns** | +217.542 ns |
+| Endpoints failing (setup) | 181.711 | 189.127 | **176.945** | -12.182 |
+| LUT as Logic | 163.259 (100,33 %) | 157.011 (96,49 %) | **155.697 (95,68 %)** | -0,81 pp |
+| URAM288 | 32 (66,67 %) | 32 (66,67 %) | **32 (66,67 %)** | = |
+| Bonded IOB | 223 | 222 | **222** | = |
+
+Rutas criticas post-route (timing_impl.txt): las **10 peores son todas el
+mismo patron de pin**: `depth_tready` -> `u_book/o_mem_reg_uram_7/
+CAS_IN_DIN_B[66]` y FDRE de la retencion, 12 niveles (IBUFCTRL=1 INBUF=1
+LUT4=1 LUT6=2 URAM288=7; Data Path Delay 7,994 ns con 67,3 % de route),
+input delay 1 ns + skew del pin 2,2 ns. El camino existe porque el guard
+de aceptacion del par BBO/depth vive en la entrada de `ST_APPLY`: el
+`tready` del pin decide el write de la URAM a traves del FSM.
+
+Rutas criticas pre-route (timing_synth.txt): la interna dominante es
+`u_book/sm_cap_nzb_reg[2]_rep/C -> sm_changed_reg/D` con **31 niveles**
+(CARRY8=2 LUT5=16 LUT6=12 MUXF7=1; Data Path Delay 6,963 ns) - la
+prioridad serial `for (i = 0; i < P && !bdone; i++)` de la etapa B de
+emision (P=32). La iter 8 elimino la cadena del decode de niveles pero la
+cadena quedo en la emision.
+
+**Conclusion del loop iter 8 (gate G):** WNS +3,34 ns, TNS +217,5 us,
+LUT -0,81 pp, 176.945 endpoints (menos que el base) y URAM 32/48
+conservada; **el criterio 10 sigue abierto** (WNS < 0, TNS != 0, LUT
+95,68 % > 95 %). La peor ruta ahora es I/O del wrapper (depth_tready del
+pin), no la logica interna del decode (la familia lv_eq -> lv2_mode de
+31 niveles desaparecio del top-10).
+
+**Iter 9 (ultima del loop)**: addendum en spec - (a) guard de aceptacion
+movido de ST_APPLY a ST_EMIT_C (la ruta tready -> we de la URAM
+desaparece), (b) find-first de emision precomputado en la etapa A
+(sm_bsel/sm_asel por first_one en arbol; la B selecciona por indice) y
+(c) pines bbo_tready/depth_tready registrados en el wrapper (corta
+input delay + skew del pin).

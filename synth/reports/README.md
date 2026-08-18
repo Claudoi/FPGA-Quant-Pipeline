@@ -25,6 +25,17 @@ DRC 0. Peor ruta interna `lv_eq → lv2_mode` (31 niveles, escaneo etapa B)
 y peor absoluta I/O del wrapper (`msg_len → s_axis_tready`). El criterio
 10 sigue abierto (WNS < 0, TNS ≠ 0, LUT > 95 %).
 
+**Re-run iter 8 (2026-08-18 15:55, decode partido 2a/2b + FIFO/rst_n_c del
+wrapper, commit `7d728de`, mismo tcl)**: gate abortó de nuevo
+(`FASE3 TIMING FAIL: WNS=-4.052 ns`); los informes de este directorio son
+los de este run: WNS **-4,052 ns** (+3,34 ns), TNS **-213.040,636 ns**
+(+217 µs), 176.945 endpoints failing, LUT as Logic **95,68 %** (-0,81 pp),
+URAM 32/48 conservada, DRC 0. Las 10 peores rutas son todas el mismo
+patrón de pin (`depth_tready` → URAM/FDRE, 12 niveles, input delay 1 ns +
+skew 2,2 ns); pre-route la interna dominante es la prioridad serial de la
+emisión (`sm_cap_nzb → sm_changed`, 31 niveles). Criterio 10 sigue
+abierto; iter 9 (última del loop) en curso según el addendum de la spec.
+
 **Loop en curso (iter 8)**: candidatos documentados en el verify-report de
 fase 3 — registrar los puertos de salida del wrapper y/o partir la etapa B
 del escaneo en dos registros (spec antes de tocar RTL), y cerrar rojo→verde
