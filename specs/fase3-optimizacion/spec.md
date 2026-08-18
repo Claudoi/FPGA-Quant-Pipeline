@@ -496,3 +496,71 @@ dirigido adicional: p. ej. registro de `lv_cand_newq` en la etapa 1 o
 árbol de muxes para el depth pack). Al agotar el límite con WNS < 0 o
 LUT > 95 %, escala al owner con la evidencia del run (el gate del tcl
 nunca se rebaja).
+
+### Addendum iter 9 (2026-08-18) - ultima iteracion del loop
+
+**Diagnostico del re-run iter 8 (evidencia en verify-report)**: gate FAIL
+`FASE3 TIMING FAIL: WNS=-4,052 ns` (antes -7,395), TNS -213.040,636 ns
+(antes -430.582,411), LUT as Logic 95,68 % (antes 96,49), URAM 32/48 igual.
+Dos familias de rutas violadas:
+
+1. **Pines del wrapper -> tabla** (las 10 peores, todas el mismo patron):
+   `depth_tready` (pin) -> `o_mem CAS_IN_DIN_B` / FDRE, 12 niveles con
+   7 URAM288 en cascade (write por cascade height 8), input delay 1 ns +
+   skew del pin 2,2 ns. El camino existe porque el guard de aceptacion del
+   par BBO/depth vive en la **entrada de ST_APPLY** (espera `bbo_tready &&
+   depth_tready` antes de aplicar/reescribir la tabla): el `tready` entra
+   en la ruta de decision del write de la URAM.
+2. **Prioridad serial de la emision**: `sm_cap_nzb_reg[2]_rep` ->
+   `sm_changed_reg` con **31 niveles** (CARRY8=2 LUT5=16 LUT6=12 MUXF7=1):
+   los bucles `for (i = 0; i < P && !bdone; i++)` del find-first de la
+   etapa B (P=32) sintetizan la cadena serial de prioridad que la iter 8
+   elimino del decode de niveles pero quedo en la emision.
+
+**Cambios (los tres en el mismo bloque; es la ultima iteracion):**
+
+- **a. Guard de aceptacion movido (solo tvalid)**: el par BBO/depth se
+  emite en ST_EMIT_C solo cuando el bus esta vacio
+  (!bbo_tvalid && !depth_tvalid); la cola (apply/swap/writes de la
+  tabla) avanza sin esperar el pin. El tready NO participa en ninguna
+  decision de avance: la ruta tready -> we de la URAM desaparece.
+  Enmienda de diseno (ver c): un tready registrado (aceptacion diferida
+  1 ciclo) duplicaria el par para el consumidor cuando levanta tready un
+  ciclo despues de la emision (el par retenido queda visible dos ciclos
+  con tvalid=1 y tready=1); por eso el guard mira solo los tvalid y el
+  tready del pin se conecta directo a la retencion (linea 501), como en
+  fase 3: sin perdida ni duplicado (SEC-BP-01), la emision del evento
+  siguiente espera el bus vacio y la retirada del par previo (1 ciclo
+  tras su aceptacion, inobservable).
+- **b. Find-first de emision precomputado en la etapa A**: la captura
+  computa tambien `sm_bsel = first_one(nzb_next)` y `sm_asel =
+  first_one(nza_next)` (misma funcion arbol de la iter 8, registrada); la
+  etapa B selecciona por indice: `bp = sm_cap_px[sm_bsel]` (mux directo,
+  sin cadena). Equivalencia: el mux por el primer slot no vacio es la misma
+  operacion del bucle `!bdone`; con todos los slots vacios
+  `first_one = 0` y `sm_cap_px[0] = 0` (igual que el bucle con `bdone=0`).
+- **c. (enmendado) Sin registro de tready en el wrapper**: el analisis
+  del duplicado (ver a) descarta registrar bbo_tready/depth_tready; los
+  pines quedan directos. La familia del pin del run 8 muere por el guard
+  (a): el tready ya no alimenta ninguna ruta al write de la URAM.
+**Objetivos**: WNS >= 0 y TNS = 0 post-route (gate del tcl intacto),
+LUT <= 95 % (95,68 % actual, margen 0,68 pp), URAM 32/48 conservada.
+Latencia de la cadena: sin cambio en esta iteracion (la seleccion por
+indice vive dentro de la etapa A/B existentes).
+
+**Equivalencia y regresion**: la semantica observada del par BBO/depth no
+cambia (orden, retencion, atomicidad); los writes adelantados respecto a
+la aceptacion del pin son inobservables en los puertos. Rojo->verde de
+RTM-01..04/RTM-LAT-01/RTM-REG-01 contra el RTL final de la 9 en la maquina
+con cocotb (la 8 y la 9 se validan juntas en ese red).
+
+**Mutantes**: EMIT-FINDFIRST-INV se migra al objetivo nuevo
+(`sm_bsel <= first_one(nzb_next)` -> `first_one(~nzb_next)`, prioridad
+invertida: el BBO elige el ultimo slot no vacio); los demas objetivos se
+revalidan por coincidencia unica (30/30) y parse xvlog antes del run.
+Sin escenarios Gherkin nuevos (gate F sin cambios).
+
+**Stop**: esta es la ultima iteracion del loop. Si el run no cierra
+WNS >= 0 / TNS = 0 / LUT <= 95 %, el criterio 10 queda abierto y se escala
+al owner con la evidencia del run (WNS/TNS/LUT/URAM + rutas criticas
+residuales); el gate del tcl no se rebaja.

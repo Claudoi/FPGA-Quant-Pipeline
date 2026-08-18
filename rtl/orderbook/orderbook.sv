@@ -349,6 +349,11 @@ localparam ST_UADD       = 4'd5;
     reg [PXW-1:0] sm_cap_px [0:2*P-1] /* verilator public */;
     reg [QW-1:0]  sm_cap_qt [0:2*P-1] /* verilator public */;
     reg [P-1:0]   sm_cap_nzb, sm_cap_nza;  // qty != 0 por slot, por lado
+    // iter 9: primer slot no vacío por lado, precomputado en la etapa A
+    // (árbol first_one) — la selección de la B es un mux directo por índice;
+    // el bucle serial !bdone de P=32 era la ruta de 31 niveles sm_cap_nzb ->
+    // sm_changed del re-run iter 8
+    reg [LOGP-1:0] sm_bsel, sm_asel;
     reg [PXW-1:0] sm_bp, sm_ap;
     reg [QW-1:0]  sm_bq, sm_aq;
     reg           sm_changed;
@@ -448,6 +453,7 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                 sm_cap_px[i] <= 0; sm_cap_qt[i] <= 0;
             end
             sm_cap_nzb <= 0; sm_cap_nza <= 0;
+            sm_bsel <= 0; sm_asel <= 0;
             sm_bp <= 0; sm_ap <= 0; sm_bq <= 0; sm_aq <= 0;
             sm_changed <= 1'b0; sm_dacc <= 0; sm_cross <= 1'b0;
             bbo_tvalid <= 1'b0; bbo_locate <= 0; bbo_tdata <= 0; bbo_changed <= 1'b0;
@@ -734,35 +740,33 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     // cola del mensaje en curso: acepta el mensaje siguiente
                     // (jamás con nx_done: over-fill del doble buffer)
                     if (s_axis_tvalid && !nx_done) nx_recv();
-                    // el par BBO/depth se acepta solo con ambos tready; mientras
-                    // el par pendiente no se acepte, el pipeline se frena aquí
-                    // (SEC-BP-01: retención sin pérdida ni duplicado)
-                    if ((!bbo_tvalid || bbo_tready) &&
-                        (!depth_tvalid || depth_tready)) begin
-                        if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
-                        if (m_idx == 32'hffffffff) error <= 1'b1;  // idx sane
-                        if (bad_sym) begin
-                            // mensaje de un símbolo fuera del subset: descartado
-                            do_uadd <= 1'b0;
-                            // swap atómico (iter 4): con word del mensaje
-                            // siguiente en el bus (nx aún sin completar), se
-                            // consume en nx (ya se llamó a nx_recv arriba) y el
-                            // swap se difiere un ciclo (ST_SWAP) — decidir el
-                            // swap en este mismo ciclo sobre un nx recién
-                            // escrito (NB invisible) era la race que mandaba el
-                            // FSM a ST_W0 y perdía la word (hallazgo iter 4)
-                            if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
-                            else swap_next(st);
-                        end else begin
-                            apply_one(do_uadd, lv_en);
-                            lv_uadd <= do_uadd;   // el U pide la mitad add tras la 1ª op
-                            if (do_uadd || lv_en) st <= ST_LV2;
-                            else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
-                                     m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
-                                     m_type == 8'h55) st <= ST_EMIT_A;
-                            else if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
-                            else swap_next(st);
-                        end
+                    // iter 9: el guard de aceptación del par BBO/depth vive en
+                    // ST_EMIT_C — la cola (apply/swap) ya no espera el tready
+                    // del pin: la ruta tready -> write de la URAM era la
+                    // crítica del re-run iter 8 (depth_tready -> CAS_IN_DIN_B)
+if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
+                    if (m_idx == 32'hffffffff) error <= 1'b1;  // idx sane
+                    if (bad_sym) begin
+                        // mensaje de un símbolo fuera del subset: descartado
+                        do_uadd <= 1'b0;
+                        // swap atómico (iter 4): con word del mensaje
+                        // siguiente en el bus (nx aún sin completar), se
+                        // consume en nx (ya se llamó a nx_recv arriba) y el
+                        // swap se difiere un ciclo (ST_SWAP) — decidir el
+                        // swap en este mismo ciclo sobre un nx recién
+                        // escrito (NB invisible) era la race que mandaba el
+                        // FSM a ST_W0 y perdía la word (hallazgo iter 4)
+                        if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
+                        else swap_next(st);
+                    end else begin
+                        apply_one(do_uadd, lv_en);
+                        lv_uadd <= do_uadd;   // el U pide la mitad add tras la 1ª op
+                        if (do_uadd || lv_en) st <= ST_LV2;
+                        else if (m_type == 8'h41 || m_type == 8'h46 || m_type == 8'h45 ||
+                                 m_type == 8'h43 || m_type == 8'h58 || m_type == 8'h44 ||
+                                 m_type == 8'h55) st <= ST_EMIT_A;
+                        else if (s_axis_tvalid && !nx_done) st <= ST_SWAP;
+                        else swap_next(st);
                     end
                 end
                 ST_LV2: begin
@@ -820,9 +824,18 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                 end
                 ST_EMIT_C: begin
                     // etapa C (iter 7): emisión con la semántica del ST_EMIT de
-                    // fase 3 — par BBO/depth atómico con retención AXI (la
-                    // backpressure la gobierna el guard de ST_APPLY)
-                    if (emit_ok) begin
+                    // fase 3 — par BBO/depth atómico con retención AXI.
+                    // iter 9: el guard de aceptación vive aquí y mira SOLO los
+                    // tvalid (el par se emite con el bus vacío; la cola avanza
+                    // sin esperar el pin). El tready NO participa en ninguna
+                    // decisión de avance: la ruta pin -> write de la URAM del
+                    // guard de ST_APPLY era la crítica del re-run iter 8, y un
+                    // tready registrado (aceptación diferida) duplicaría el
+                    // par para el consumidor si levanta tready un ciclo
+                    // después de la emisión (análisis en el addendum iter 9).
+                    // La retención de la línea 501 sigue con el tready directo
+                    // del pin: sin pérdida ni duplicado (SEC-BP-01).
+                    if (emit_ok && !bbo_tvalid && !depth_tvalid) begin
                         bbo_locate <= m_locate;
                         bbo_tdata  <= {sm_bp[31:0], sm_bq[31:0],
                                        sm_ap[31:0], sm_aq[31:0]};
@@ -831,18 +844,35 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         depth_tdata <= sm_dacc;
                         depth_tvalid <= 1'b1;
                         if (sm_cross) cross_events <= cross_events + 1;
-                    end
-                    // swap atómico (iter 4): con word del mensaje siguiente en
-                    // el bus (nx aún sin completar), se consume en nx y el
-                    // swap se difiere un ciclo (ST_SWAP); sin word (o con nx
-                    // completo — la word sostenida sería un w0 de M+2, no se
-                    // toca), el swap se decide ya — nunca sobre un nx a medio
-                    // escribir ni sobre un nx completo
-                    if (s_axis_tvalid && !nx_done) begin
-                        nx_recv();
-                        st <= ST_SWAP;
+                        // swap atómico (iter 4): con word del mensaje
+                        // siguiente en el bus (nx aún sin completar), se
+                        // consume en nx y el swap se difiere un ciclo
+                        // (ST_SWAP); sin word (o con nx completo — la word
+                        // sostenida sería un w0 de M+2, no se toca), el swap
+                        // se decide ya — nunca sobre un nx a medio escribir
+                        // ni sobre un nx completo
+                        if (s_axis_tvalid && !nx_done) begin
+                            nx_recv();
+                            st <= ST_SWAP;
+                        end else begin
+                            swap_next(st);
+                        end
+                    end else if (emit_ok) begin
+                        // bus ocupado: la emisión espera (el nx sí puede
+                        // seguir recibiendo, como hacía ST_APPLY)
+                        if (s_axis_tvalid && !nx_done) nx_recv();
+                        st <= ST_EMIT_C;
                     end else begin
-                        swap_next(st);
+                        // sin emisión (tipo emisor pero anomalía: do_emit=0):
+                        // la cola avanza igual y el bus no se toca — el swap
+                        // incondicional del ST_EMIT_C original (el st nunca
+                        // puede quedarse congelado en la C)
+                        if (s_axis_tvalid && !nx_done) begin
+                            nx_recv();
+                            st <= ST_SWAP;
+                        end else begin
+                            swap_next(st);
+                        end
                     end
                 end
                 ST_SWAP: begin
@@ -1154,16 +1184,24 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         // 2*P niveles del símbolo del evento + flags de no-vacío por lado.
         // Solo un mux indexado por m_loc_idx; la selección/depth viven en la
         // etapa B (select_emit_b)
+        // iter 9: el primer slot no vacío por lado se precomputa aquí en
+        // árbol (first_one, misma función que la etapa 2a del decode) y se
+        // registra en sm_bsel/sm_asel — la B ya no encadena P=32 condiciones
         integer i;
+        logic [P-1:0] nzb_next, nza_next;
         begin
             for (i = 0; i < P; i = i + 1) begin
+                nzb_next[i] = (lv_qty[m_loc_idx*2*P + i] != 0);
+                nza_next[i] = (lv_qty[m_loc_idx*2*P + P + i] != 0);
                 sm_cap_px[i]    <= lv_price[m_loc_idx*2*P + i];
                 sm_cap_qt[i]    <= lv_qty[m_loc_idx*2*P + i];
-                sm_cap_nzb[i]   <= (lv_qty[m_loc_idx*2*P + i] != 0);
+                sm_cap_nzb[i]   <= nzb_next[i];
                 sm_cap_px[P+i]  <= lv_price[m_loc_idx*2*P + P + i];
                 sm_cap_qt[P+i]  <= lv_qty[m_loc_idx*2*P + P + i];
-                sm_cap_nza[i]   <= (lv_qty[m_loc_idx*2*P + P + i] != 0);
+                sm_cap_nza[i]   <= nza_next[i];
             end
+            sm_bsel <= first_one(nzb_next);
+            sm_asel <= first_one(nza_next);
         end
     endtask
     task automatic select_emit_b;
@@ -1174,26 +1212,15 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         // en la etapa C (ST_EMIT_C)
         reg [PXW-1:0] bp, ap;
         reg [QW-1:0] bq, aq;
-        reg bdone;
         reg [2*ND*64-1:0] dacc;
         integer i, di;
         begin
-            bp = 0; bq = 0;
-            bdone = 1'b0;
-            for (i = 0; i < P && !bdone; i = i + 1) begin
-                if (sm_cap_nzb[i]) begin
-                    bp = sm_cap_px[i]; bq = sm_cap_qt[i];
-                    bdone = 1'b1;
-                end
-            end
-            ap = 0; aq = 0;
-            bdone = 1'b0;
-            for (i = 0; i < P && !bdone; i = i + 1) begin
-                if (sm_cap_nza[i]) begin
-                    ap = sm_cap_px[P+i]; aq = sm_cap_qt[P+i];
-                    bdone = 1'b1;
-                end
-            end
+            // iter 9: mux directo por el índice precomputado en la etapa A
+            // (first_one en árbol) — semántica idéntica al bucle !bdone de
+            // fase 3: primer slot con qty != 0 (lista ordenada, mejor nivel);
+            // con todos los slots vacíos sm_bsel=0 y sm_cap_px[0]=0.
+            bp = sm_cap_px[sm_bsel]; bq = sm_cap_qt[sm_bsel];
+            ap = sm_cap_px[P + sm_asel]; aq = sm_cap_qt[P + sm_asel];
             sm_bp <= bp; sm_bq <= bq; sm_ap <= ap; sm_aq <= aq;
             sm_changed <= (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||
                           (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);

@@ -443,8 +443,10 @@ pin), no la logica interna del decode (la familia lv_eq -> lv2_mode de
 31 niveles desaparecio del top-10).
 
 **Iter 9 (ultima del loop)**: addendum en spec - (a) guard de aceptacion
-movido de ST_APPLY a ST_EMIT_C (la ruta tready -> we de la URAM
-desaparece), (b) find-first de emision precomputado en la etapa A
-(sm_bsel/sm_asel por first_one en arbol; la B selecciona por indice) y
-(c) pines bbo_tready/depth_tready registrados en el wrapper (corta
-input delay + skew del pin).
+movido de ST_APPLY a ST_EMIT_C mirando SOLO los tvalid (el tready ya no
+alimenta ninguna ruta al write de la URAM; el par se emite con el bus
+vacio, sin perdida ni duplicado), (b) find-first de emision precomputado
+en la etapa A (sm_bsel/sm_asel por first_one en arbol; la B selecciona
+por indice) y (c, enmendado) sin registro de tready en el wrapper (un
+tready registrado duplicaria el par para el consumidor; los pines
+quedan directos).
