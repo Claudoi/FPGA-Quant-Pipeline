@@ -41,20 +41,33 @@ DRC: 0 errores en todos los runs. IOB: 222 en todos.
   mueve los FFs de salida del book (se releen en la retención y los lee el
   guard del FSM): solo los FFs del wrapper sin fanout (como `tready_ff`) se
   replican al IOB.
-- **Candidato documentado (sin aplicar)**: pipeline de salida en el wrapper —
-  FFs propios `bbo_*_o`/`depth_*_o` con retención del lado del pin
-  (`tvalid_o <= tvalid_o && !tready`), captura con `tvalid_interno &&
-  !tvalid_o`, `(* IOB = "TRUE" *)` en esos FFs. Régimen del par idéntico al
-  del book (visible 1 ciclo tras la aceptación, sin duplicado), +1 ciclo solo
-  en el pin del wrapper (RTM-LAT mide la cadena, no el wrapper). Ver addendum
-  iter 10 de `specs/fase3-optimizacion/spec.md`.
+- **Candidato documentado y ejecutado (iter 11)**: pipeline de salida en el
+  wrapper — FFs propios `bbo_*_o`/`depth_*_o` con retención del lado del pin
+  (`tvalid_o <= tvalid_o && !tready`), captura con `tvalid_i && !tvalid_o`,
+  `(* IOB = "TRUE" *)` en esos FFs (ver addendum iter 11 de la spec). Mejoró
+  a WNS **-3,319 ns** (el mejor histórico) pero **no cerró**: los buses anchos
+  (`bbo_locate_o_reg`, `depth_tdata_o_reg`, `bbo_tdata_o_reg`) no se replican
+  al IOB; solo los FFs de 1 bit (`bbo_tvalid_o`, `depth_tvalid_o`,
+  `tready_ff`) y la ruta FF_IOB→pin ancha sigue con skew ~2,7 ns + output
+  delay 1,0 ns.
 
 ## Estado del criterio 10
 
-**ABIERTO**: WNS < 0, TNS ≠ 0, LUT > 95 % en los 5 runs; URAM 32/48
-conservada y DRC 0. No se declara timing cerrado sin WNS ≥ 0 y TNS = 0 en un
-run post-route. Las lecciones de síntesis que evitan repetir runs: sección 7
-de `docs/writeup/lecciones-aprendidas.md`.
+**ABIERTO**: WNS < 0, TNS ≠ 0, LUT > 95 % en los 5 runs (más iter 11
+WNS -3,319); URAM 32/48 conservada y DRC 0. No se declara timing cerrado sin
+WNS ≥ 0 y TNS = 0 en un run post-route. **Limitación estructural del modelo
+I/O del wrapper de síntesis**: cualquier FF→pin de un bus ancho pierde el
+skew del árbol (~2,7 ns, LUT al 96 %) + el output delay (1,0 ns); el IOB
+packing solo replica FFs de 1 bit; un PHY/IOB registrado con el reloj del
+pin no existe en un wrapper. Cerrar 322 MHz exigiría bajar el output delay
+del XDC (rechazado: trampa del gate).
+
+**Camino del CV / variante industrial**: **DW=64 @ 156,25 MHz** (periodo
+6,400 ns, mismo 10G lineal) con el mismo RTL: holgura sobrada con el
+residual actual (~3,3 ns). El 322 MHz queda documentado como capítulo de
+optimización no cerrado; el gate del tcl no se rebaja. Las lecciones de
+síntesis que evitan repetir runs: sección 7 de
+`docs/writeup/lecciones-aprendidas.md`.
 
 ## Artefactos adicionales (en `synth/`)
 

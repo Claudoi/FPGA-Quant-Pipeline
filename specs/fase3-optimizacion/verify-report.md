@@ -623,3 +623,49 @@ sim-chain   TESTS=4 PASS=3 FAIL=0 SKIP=1
 
 Los SKIP son por pcap real ausente en WSL (replays reales / subconjunto de
 fase 3). El gate A sintetico de fase 3 queda verde.
+### Re-run Vivado 2026-08-19 (01:18) - iter 11 (pipeline de salida del wrapper): mejoro al mejor historico, no cierra
+
+Run completo con el mismo `synth/fase3_synth.tcl` (gate sin cambios; log
+`synth/fase3_run_iter11.log`). El gate aborto como esta disenado:
+
+```text
+FASE3 TIMING FAIL: WNS=-3.319 ns (se exige WNS>=0 y TNS=0)
+INFO: [Common 17-206] Exiting Vivado at Wed Aug 19 01:18:21 2026...
+```
+
+| Metrica | Iter 10 (19:45) | Iter 11 (01:18) | Delta 11 vs 10 |
+|---|---|---|---|
+| WNS (setup) | -3,748 ns | **-3,319 ns** | +0,429 ns |
+| TNS (setup) | -221.038,368 ns | **-227.683,006 ns** | -6.645 ns |
+| Endpoints failing (setup) | 178.310 | **181.680** | +3.370 |
+| LUT as Logic | 155.876 (95,79 %) | **155.887 (95,80 %)** | +0,01 pp |
+| URAM288 | 32 (66,67 %) | **32 (66,67 %)** | = |
+| Bonded IOB | 222 | **222** | = |
+
+Rutas criticas post-route (timing_impl.txt): las 10 peores son ahora los
+**FFs `_o_reg` del wrapper -> pin** (`u_wrapper... bbo_locate_o_reg[15] ->
+bbo_locate` (pin), `depth_tdata_o_reg[0/1]` -> pin), 1 nivel (OBUF=1),
+Data Path 2,703 ns, Output Delay 1,0 ns, **Clock Path Skew -2,684 ns**.
+El pipeline de salida funciono: los FFs de 1 bit (`bbo_tvalid_o_reg`,
+`depth_tvalid_o_reg`, `tready_ff_reg`) se replicaron al IOB
+(`INFO: [Synth 8-4163] Replicating register ... IOB=TRUE`), pero los
+**buses anchos** (`bbo_locate_o_reg[15:0]`, `depth_tdata_o_reg[31:0]`,
+`bbo_tdata_o_reg[127:0]`) NO se movieron del area y siguen con la SCD
+(~2,7 ns) + output delay 1,0 ns.
+
+**Conclusion del loop iter 11 (gate G):** el criterio 10 a 322,265625
+MHz queda **ABIERTO** por una limitacion estructural del modelo I/O del
+wrapper de sintesis, no por logica del book (ya retimeada):
+CUALQUIER FF -> pin de un bus ancho pierde ~2,7 ns de skew del arbol
+(LUT al 96 %) + 1,0 ns de output delay; el IOB packing solo replica los
+FF de 1 bit. Cerrar exigiria un PHY/IOB registrado con el reloj del
+propio pin (no existe en un wrapper de sintesis) o bajar el output delay
+del XDC (rechazado: seria trampa del gate). WNS -3,319 es el mejor
+historico (base -10,492).
+
+**Candidato documentado (P5, decision del owner)**: variante **DW=64 @
+156,25 MHz** (periodo 6,400 ns, mismo 10G) con el mismo RTL: con el
+residual actual de ~3,3 ns a 322 MHz, esa variante tiene holgura sobrada
+para cerrar y es el liston industrial real (32-bit/156,25 tambien vale si
+se prefiere el mismo datapath estrecho). El 322 MHz queda documentado
+como capitulo de optimizacion no cerrado; no se rebaja el gate del tcl.
