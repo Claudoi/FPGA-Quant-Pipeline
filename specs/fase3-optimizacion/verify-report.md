@@ -16,8 +16,10 @@ Gate F se actualizaron con sus outputs nuevos.
 NO CERRADA.** La cadena real compara ahora las 30.729 palabras BBO y las
 30.729 palabras depth para ND=5 y ND=3. Quedan dos bloqueadores: REP-02 aún no
 mide el umbral `<=24` sobre un tramo A/U real derivado reproduciblemente del
-pcap, y no existe un informe Vivado real con WNS, TNS, endpoints restringidos
-y utilización LUT/FF/BRAM/URAM.
+pcap, y el **primer run Vivado real (2026-08-18) NO cierra timing ni cabe en
+LUT**: WNS = **-10,492 ns** sobre un periodo de 3,103 ns y LUT al **100,33 %**
+(163.259/162.720). La tabla `o_mem` sí se infiere en **32 URAM288 (66,67 % del
+part)**.
 
 `synth_check.py` solo demuestra coherencia estática entre RTL, Tcl y XDC. La
 latencia de 44,318 ciclos es una medición de simulación; convertirla usando el
@@ -45,7 +47,7 @@ vivado: no instalado
 | D — cobertura | CHAIN-01 real cubre BBO+depth completos con no-vacío y longitudes para ND=5/3; P32-01/02 y framing mantienen sus espejos; REP-02 no aísla aún el tramo line-rate real | **PARCIAL por REP-02** |
 | E — mutación | delta de entrada heredado del parser: 19/19 mutantes compilables y muertos; no se presenta la mutación histórica del order book como fresca | **PASS para el delta `tkeep`** |
 | F — completitud | checker versionado: 12 IDs/3 campañas, unicidad por campaña, spec/test/report y rutas; negativos controlados; excepción externa URAM/CHAIN-01 verificada | **PASS** |
-| G — rigor/timing | pcaps fuera de Git, golden independiente, `synth_check.py` 22/22 estático; sin Vivado WNS/TNS/utilización y con line-rate real REP-02 pendiente | **ABIERTO** |
+| G — rigor/timing | pcaps fuera de Git, golden independiente, `synth_check.py` 24/24 estático; **run Vivado 2026-08-18 completo (synth+place+route) con WNS = -10,492 ns, TNS = -590.856,875 ns y LUT 100,33 % — criterio 10 NO CERRADO**; REP-02 line-rate real pendiente | **ABIERTO** |
 
 ## Gate A — salida fresca desde builds limpios
 
@@ -125,14 +127,15 @@ exit 0; cero warnings
 Gate C NO EJECUTADO: verible-verilog-lint no instalado
 
 $ python3 scripts/verify/synth_check.py
-22 PASS; 0 FAIL
+24 PASS; 0 FAIL
 synth_check: OK — tcl/constraints coherentes con el RTL y la spec
 exit 0
 ```
 
-Los 22 checks incluyen periodo XDC de 3,103 ns, puertos/delays min-max,
-lectura registrada de `o_mem` y comandos de informes/aborto del Tcl. No
-ejecutan síntesis, place ni route.
+Los 24 checks (reenumerados el 2026-08-18 al apuntar al wrapper
+`itch_chain_synth.sv`) incluyen periodo XDC de 3,103 ns, puertos/delays
+min-max, lectura registrada de `o_mem` y comandos de informes/aborto del Tcl.
+No ejecutan síntesis, place ni route.
 
 ## Gates D/E/F
 
@@ -169,15 +172,83 @@ ejecución fresca del commit documental anterior. Tampoco se ejecutó
 `mutate_orderbook.py`; sus resultados históricos no se usan para cerrar el
 gate físico.
 
-## Bloqueador físico
+## Evidencia física — run Vivado 2026-08-18 (synth + place + route)
 
-No se encontraron `vivado`, `timing_impl.txt` ni `util_impl.txt` producidos
-por un run vigente. Para cerrar fase 3 siguen siendo obligatorios, como mínimo:
+Primer run real de la campaña: `vivado -mode batch -source synth/fase3_synth.tcl`
+(Vivado ML 2023.2, Windows), part `xcku3p-ffva676-2L-e`, top de síntesis
+`synth/itch_chain_synth.sv` (223 pins del contrato AXI; el `itch_chain.sv`
+completo tiene 896 puertos de debug y no entra en el paquete FFVA676 de 256
+I/O — Place 30-415, por eso el wrapper, hallazgo 2026-08-18).
 
-- WNS y TNS post-route;
-- endpoints sin constraint y clocking efectivo;
-- utilización LUT/FF/BRAM/URAM e inferencia real de URAM;
-- confirmación de que los budgets I/O del XDC corresponden al wrapper/PHY.
+### Utilización post-route (`util_impl.txt`)
+
+```text
+| CLB LUTs                | 163259 |     0 |          0 |    162720 | 100.33 |
+| CLB Registers           |  91001 |     0 |          0 |    325440 |  27.96 |
+| CARRY8                  |   1270 |     0 |          0 |     27120 |   4.68 |
+| F7 Muxes                |  20275 |     0 |          0 |    108480 |  18.69 |
+| F8 Muxes                |   8930 |     0 |          0 |     54240 |  16.46 |
+```
+
+**El diseño NO cabe: LUT al 100,33 %.** El exceso está en la lógica de
+niveles/BBO desplegada por símbolo (20.275 F7 + 8.930 F8 muxes) más la
+congestión asociada.
+
+### RAM (`ram_impl.txt`)
+
+```text
+| URAM                     |         32 |        48 | 66.67 |    100.00 |
+|  URAM288                 |         32 |           |       |    100.00 |
+| BlockRAM                 |          0 |       360 |  0.00 |      0.00 |
+```
+
+**La tabla `o_mem` se infiere íntegra en 32 URAM288** (cascade height 8,
+Synth 8-5780) tras el fix 2026-08-18: la escritura vía `task mem_wr` rompía la
+inferencia (Synth 8-7186 → array a flops → hang de optimización); se sustituyó
+por una única sentencia síncrona `if (wr_en) o_mem[wr_addr] <= wr_data;`
+(Bisect de smokes V6-V14: el patrón con task reproduce el fallo, el de
+sentencia única infiere con reset de `rd_addr` incluido).
+
+### Timing post-route (`timing_impl.txt`)
+
+```text
+clk_pipeline      -10.492  -590856.875                 181711               275646       -1.145   -65317.000                  90439               275646        0.851        0.000                       0                 91034
+```
+
+- WNS = **-10,492 ns** (periodo 3,103 ns → peor camino ~13,6 ns, ~74 MHz
+  efectivos); TNS = -590.856,875 ns; **181.711 de 275.646 endpoints fallan**.
+- WHS = -1,145 ns (hold también violado, secundario a la congestión).
+- PW sin violaciones. `check_timing` sin errores de constraint; `report_drc`:
+  **0 errores**.
+- Rutas críticas (todas internas al book):
+  - `u_book/m_loc_idx_reg[1]_replica_6/C → bbo_changed_reg/D`: 13,672 ns,
+    **41 niveles de lógica** (2 CARRY8 + 37 LUT), route 72,9 % (congestión).
+  - `u_book/m_loc_idx_reg[1]_replica_170/C → bbo_tdata_reg[111]/D`: 13,207 ns,
+    37 niveles.
+  - El parser está lejos del límite: `u_parser/st_reg[0]/C → s_axis_tready`:
+    9,029 ns, 12 niveles (incluye OBUF).
+
+### Diagnóstico y siguiente loop
+
+El cuello está en la **generación de BBO/depth a partir de la lista de
+niveles** (37-41 niveles de LUT encadenados + congestión al 100 % de LUT), no
+en la URAM ni en el parser. El criterio 10 (322,265625 MHz sobre el part)
+**NO está cerrado**; el siguiente loop necesita un cambio estructural de esa
+lógica (p. ej. pipeline/retiming del escaneo de niveles o generación de BBO
+sombra incremental) con spec nueva antes de tocar RTL.
+
+El gate del tcl aborta correctamente con slack negativo (`FASE3 TIMING FAIL:
+WNS=-10.492 ns`), así que un run futuro verde es reproducible y verificable
+por el mismo script.
+
+## Bloqueador funcional restante
+
+- **REP-02 line-rate**: seleccionar desde el pcap, sin índices manuales, un
+  tramo real de cuatro A/U consecutivos y contar stalls con el downstream
+  siempre listo (umbral `<=24`); el agregado de 15.023 stalls no lo sustituye.
+- Reejecutar las suites de simulación (orderbook/phase3/uram/mdp3) sobre el
+  fix de `o_mem` (la máquina con cocotb/Verilator no es este PC; queda
+  pendiente tras commitear).
 
 Hasta adjuntar esa evidencia y cerrar la medición line-rate real de REP-02,
 **fase 3 permanece NO CERRADA**.

@@ -26,8 +26,13 @@ rinde igual que el -2 según DS922; se documenta aquí, no en el RTL).
 
 Idoneidad medida:
 
-- La tabla de órdenes es un array único de 65.536×86 bits ≈ 5,64 Mb ≈ **21
-  URAM**. El XCKU3P dispone de **360 URAM (36 Mb)** → sobra un factor ~17.
+- La tabla de órdenes es un array único de 65.536×86 bits ≈ 5,64 Mb.
+- **ENMIENDA 2026-08-18 (dato del propio Vivado, no del datasheet):** el
+  XCKU3P tiene **48 URAM** (288 Kb c/u ≈ 13,8 Mb) y 360 BRAM36K; el conteo
+  original «360 URAM (36 Mb)» era erróneo (360 es el BRAM). La inferencia
+  real de `o_mem` con `(* ram_style = "ultra" *)` mapea **32 URAM288**
+  (16 de profundidad × 2 de ancho; cascade height 8) → 32/48 = 67 % de los
+  URAM del part: cabe, pero con margen ~1,5×, no ~17×.
 - LUTs: el diseño usa miles de LUT; el XCKU3P tiene 162.720 CLB LUTs.
 - Misma arquitectura UltraScale+ y mismo régimen de reloj (322,265625 MHz /
   periodo 3,103 ns): el reto de timing es idéntico al del VU9P.

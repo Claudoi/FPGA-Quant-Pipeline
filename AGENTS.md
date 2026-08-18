@@ -22,14 +22,14 @@
 El documento maestro, el alcance por fase y los riesgos viven en
 `Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`.
 
-## Estado actual — 2026-08-15
+## Estado actual — 2026-08-18
 
 | Fase | Estado verificable |
 |---|---|
 | 0 — golden ITCH | Cerrada. Golden Python, 22 tipos validados y evidencia de día real. |
 | 1 — parser RTL | **No cerrada**: framing `s_axis_tkeep`, gaps, backpressure, 91/91 `tlast` y replay real bit a bit están verdes; REP-02 aún no mide `<=24` stalls en un tramo A/U real seleccionado de forma reproducible. |
 | 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
-| 3 — DW=32/URAM | **No cerrada**: cadena BBO/depth real verde para ND=5/3, pero hereda el gate line-rate real pendiente de REP-02 y falta adjuntar Vivado (WNS/TNS y recursos). |
+| 3 — DW=32/URAM | **No cerrada**: cadena BBO/depth real verde para ND=5/3. Run Vivado 2026-08-18 (synth+place+route, wrapper `itch_chain_synth.sv`): tabla inferida en **32 URAM288 (66,67 %)**, DRC 0, pero **WNS = -10,492 ns** (periodo 3,103 ns), TNS = -590.856,875 ns y **LUT al 100,33 %** — el cuello es la generación de BBO/depth (37-41 niveles de lógica), no la URAM ni el parser; el siguiente loop (retiming del escaneo de niveles) está pendiente de spec. REP-02 (tramo A/U real `<=24` stalls) sigue abierto. |
 | 4 — CME MDP3 | **Reabierta funcionalmente**: falta cerrar framing `s_axis_tkeep`; schema/version, límite de tamaño y backpressure de salida se tratarán en loops separados. Sin Vivado no se acredita timing. |
 
 No presentar las fases 1, 3 o 4 como cerradas mientras sus criterios reabiertos

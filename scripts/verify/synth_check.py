@@ -5,11 +5,13 @@ Sin Vivado, verifica que `synth/fase3_synth.tcl` y
 `synth/constraints/fase3_322mhz.xdc` son coherentes con el RTL y la spec:
 
 1. part objetivo = xcku3p-ffva676-2L-e (spec, decisión 002; swappable).
-2. top del tcl = módulo de `rtl/itch_chain.sv`.
-3. Ficheros RTL que lee el tcl existen.
+2. top del tcl = módulo de `synth/itch_chain_synth.sv` (wrapper del contrato
+   AXI; rtl/itch_chain.sv tiene 896 I/O y el FFVA676 solo 256 — Place 30-415,
+   hallazgo 2026-08-18).
+3. Ficheros RTL que lee el tcl existen (3 del pipeline + el wrapper).
 4. Periodo del reloj 3,103 ns == 1/322,265625e6 (tolerancia 0,01 %).
 5. Cada puerto referenciado en el xdc (input/output delay) existe en el
-   port list del top.
+   port list del top (el wrapper).
 6. El generic DW=32 de la variante objetivo está fijado en el tcl.
 7. El Tcl genera check_timing/metodología/clocks y aborta si existe slack
    negativo tras route.
@@ -25,7 +27,8 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TCL = os.path.join(REPO, "synth", "fase3_synth.tcl")
 XDC = os.path.join(REPO, "synth", "constraints", "fase3_322mhz.xdc")
-TOP_SV = os.path.join(REPO, "rtl", "itch_chain.sv")
+TOP_SV = os.path.join(REPO, "synth", "itch_chain_synth.sv")
+CHAIN_SV = os.path.join(REPO, "rtl", "itch_chain.sv")
 BOOK_SV = os.path.join(REPO, "rtl", "orderbook", "orderbook.sv")
 
 PART = "xcku3p-ffva676-2L-e"
@@ -65,13 +68,15 @@ def main():
     sv = open(TOP_SV, encoding="utf-8").read()
     sv_nocom = re.sub(r"//.*", "", sv)
     m = re.search(r"module\s+(\w+)\s*(?:#\s*\([^)]*\))?\s*\(", sv_nocom)
-    check("top del tcl == módulo del RTL", m and m.group(1) == top,
-          f"tcl:{top} rtl:{m and m.group(1)}")
-    check("itch_chain propaga ND al orderbook", bool(re.search(r"\.ND\s*\(\s*ND\s*\)", sv)))
+    check("top del tcl == módulo del wrapper de síntesis", m and m.group(1) == top,
+          f"tcl:{top} synth:{m and m.group(1)}")
+    chain = open(CHAIN_SV, encoding="utf-8").read()
+    check("itch_chain propaga ND al orderbook", bool(re.search(r"\.ND\s*\(\s*ND\s*\)", chain)))
+    check("el wrapper instancia itch_chain", "itch_chain" in sv)
 
     rtl_reads = re.findall(r"read_verilog\s+-sv\s+(\S+)", tcl)
-    check("el tcl lee los 3 módulos del pipeline", len(rtl_reads) == 3,
-          f"{len(rtl_reads)} read_verilog")
+    check("el tcl lee los 3 módulos del pipeline + el wrapper",
+          len(rtl_reads) == 4, f"{len(rtl_reads)} read_verilog")
     for r in rtl_reads:
         p = os.path.normpath(os.path.join(os.path.dirname(TCL), r))
         check(f"RTL leído existe: {r}", os.path.exists(p))

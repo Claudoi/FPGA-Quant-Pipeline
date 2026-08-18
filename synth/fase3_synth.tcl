@@ -5,7 +5,11 @@
 # Part objetivo: Kintex UltraScale+ (Vivado ML Standard gratuito). Decisión
 # 002 — docs/decisiones/002-retarget-kintex-xcku3p.md.
 set part xcku3p-ffva676-2L-e
-set top itch_chain
+# Top de SÍNTESIS: itch_chain_synth.sv (wrapper de synth/, hallazgo
+# 2026-08-18): rtl/itch_chain.sv expone 896 I/O (buses de observabilidad) y
+# el FFVA676 solo tiene 256 (Place 30-415). El wrapper recorta a los puertos
+# del contrato AXI; el datapath medido es idéntico (QB=46 efectivo aquí).
+set top itch_chain_synth
 set outdir [file normalize ./reports]
 
 file mkdir $outdir
@@ -18,9 +22,25 @@ create_project -in_memory -part $part
 read_verilog -sv ../rtl/orderbook/orderbook.sv
 read_verilog -sv ../rtl/parser/itch_parser.sv
 read_verilog -sv ../rtl/itch_chain.sv
+read_verilog -sv itch_chain_synth.sv
 set_property generic {DW=32 K=19 QB=46} [current_fileset]
 
 read_xdc constraints/fase3_322mhz.xdc
+
+# El array o_mem (NSLOTxOW = 65.536x86 = 5,64 Mbits) supera el límite soft de
+# elaboración (1 Mbit) y dispara Synth 8-4556. AMD documenta el override:
+#   set_param synth.elaboration.rodinMoreOptions "rt::set_parameter var_size_limit <n>"
+# 6.000.000 deja margen sobre los 5.636.096 bits reales. El fix primario es el
+# atributo (* ram_style = "ultra" *) en o_mem (inferencia URAM temprana); este
+# override queda como red de seguridad. NO se parte el array: el diseño de
+# fase3-uram quiere una sola RAM 86-bit (URAM, packing ideal).
+set_param synth.elaboration.rodinMoreOptions \
+    "rt::set_parameter var_size_limit 6000000"
+
+# Optimización post-elaboración del array o_mem (5,64 Mbit) con todos los
+# cores disponibles (12 físicos en la máquina de desarrollo); el default 2
+# hacía la fase de optimización muy lenta.
+set_param general.maxThreads 8
 
 synth_design -top $top -part $part
 write_checkpoint -force $outdir/post_synth.dcp

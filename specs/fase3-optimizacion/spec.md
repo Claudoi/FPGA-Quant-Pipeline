@@ -45,7 +45,8 @@ para el silicio con timing cerrado a 10G».
   cadena parser→book, commiteado como JSON en `verification/vectors/latency/`.
 - **Pipeline para URAM**: lecturas de la tabla de órdenes **registradas**
   (1 ciclo, patrón de lectura registrada de URAM); documentación del mapeo
-  (≈20 URAM para 65.536×86 bits) y de las técnicas de retiming/pipelining en
+  (**32 URAM288 reales, medido en el run 2026-08-18**, para 65.536×86 bits) y
+  de las técnicas de retiming/pipelining en
   `docs/writeup/`.
 - **Síntesis**: constraints 322,265625 MHz + script tcl de synth/impl
   (part US+ objetivo) commiteados en `synth/`; el owner corre Vivado fuera y
@@ -72,10 +73,18 @@ renombra: solo se añaden parámetros/puertos nuevos y se parametriza lo existen
 ## Constraints
 
 - **Familia/part objetivo:** AMD/Xilinx UltraScale+ **xcku3p-ffva676-2L-e**
-  (Kintex XCKU3P; 360 URAM, 162.720 CLB LUT, 25,1 Mb BRAM). Retarget desde el
-  VU9P por decisión 002 (`docs/decisiones/002-retarget-kintex-xcku3p.md`):
-  soportado en Vivado ML Standard gratuito y reproducible sin licencia de
-  pago — swappable en el tcl/constraints.
+  (Kintex XCKU3P; **48 URAM** (13,8 Mb), 162.720 CLB LUT, 360 BRAM36K — el
+  conteo «360 URAM» de la decisión 002 era erróneo: 360 es el BRAM; corregido
+  2026-08-18 con el dato del propio Vivado, `AVAILABLE_IOBS=256` y URAM=48).
+  Retarget desde el VU9P por decisión 002
+  (`docs/decisiones/002-retarget-kintex-xcku3p.md`): soportado en Vivado ML
+  Standard gratuito y reproducible sin licencia de pago — swappable en el
+  tcl/constraints.
+- **I/O del paquete:** FFVA676 → 256 I/O (`AVAILABLE_IOBS`). El top de
+  síntesis es el wrapper `synth/itch_chain_synth.sv` (contrato AXI, depth
+  recortado a 32 bits de observabilidad): `rtl/itch_chain.sv` expone 896
+  puertos de debug y no entra en el FFVA676 (Place 30-415, hallazgo
+  2026-08-18). El datapath medido es idéntico.
 - **Frecuencia:** 322,265625 MHz (variante 32-bit) y 156,25 MHz (regresión
   64-bit). 32-bit @ 322,265625 = 10,3125 Gbps = line-rate 10G.
 - **Line-rate:** el datapath 32-bit acepta **1 palabra/ciclo en el peor caso**
@@ -186,7 +195,8 @@ hash = nuevo vector de error).
      (re-ejecución idéntica); conversión a ns documentada en `docs/writeup/`.
      — Gherkin: §SEC-LAT-01
 9. [ ] **Pipeline URAM**: las lecturas de la tabla de órdenes están registradas
-     (1 ciclo) y el mapeo (65.536×86 bits ≈ 20 URAM) se documenta en
+     (1 ciclo) y el mapeo (65.536×86 bits = **32 URAM288**, medido en el run
+     2026-08-18) se documenta en
      `docs/writeup/`; no hay ruta O(P·P) en el cálculo del mejor precio.
 10. [ ] **Síntesis**: `synth/` contiene constraints (322,265625 MHz) + script
      tcl (synth/impl, part `xcku3p-ffva676-2L-e`); el owner corre Vivado fuera y
@@ -276,7 +286,14 @@ del backlog estacionario de la cola del parser:
    actualizado; `docs/writeup/revision-exhaustiva-2026-08-14.md` con el
    análisis completo (incl. los bloqueadores de síntesis B1/B2/B3 para el
    criterio 10).
-6. **Pendiente para el criterio 10 (externo)**: la iteración URAM ya está
-   implementada en RTL con lectura registrada, sonda serializada y pipeline de
-   niveles (`docs/writeup/uram.md`). Falta ejecutar Vivado y adjuntar WNS/TNS,
-   endpoints sin constraint y utilización para confirmar el cierre físico.
+6. **Criterio 10 — primer run físico (2026-08-18)**: Vivado 2023.2 ejecutado
+   (synth+place+route, wrapper `itch_chain_synth.sv`, part
+   `xcku3p-ffva676-2L-e`). La tabla se infiere en **32 URAM288** tras el fix
+   de escritura única (la `task mem_wr` rompía la inferencia y colgaba la
+   optimización). **NO cierra**: WNS = -10,492 ns (periodo 3,103 ns), TNS =
+   -590.856,875 ns, 181.711/275.646 endpoints, y **LUT al 100,33 %**
+   (163.259/162.720) — el diseño ni cabe. El cuello es la generación de
+   BBO/depth desde la lista de niveles (37-41 niveles de lógica, route 72,9 %
+   por congestión), no la URAM ni el parser. Evidencia y rutas críticas en
+   `verify-report.md`; el siguiente loop requiere cambio estructural con spec
+   nueva (pipeline/retiming del escaneo de niveles o BBO sombra incremental).

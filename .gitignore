@@ -70,3 +70,8 @@ synth/*.sim/
 *.ltx
 .idea/
 .vscode/
+# Artefactos binarios de Vivado
+*.dcp
+synth/.Xil/
+synth/clockInfo.txt
+synth/tight_setup_hold_pins.txt

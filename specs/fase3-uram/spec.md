@@ -74,10 +74,12 @@ en esta campaña).
 
 ## Constraints
 
-- **Familia/part:** UltraScale+ **xcku3p-ffva676-2L-e** (360 URAM, 162.720 CLB
-  LUT). Retarget desde el VU9P por decisión 002 (`docs/decisiones/002-retarget-kintex-xcku3p.md`):
-  el XCKU3P está soportado en Vivado ML Standard (gratuito); la tabla de
-  órdenes (~21 URAM) cabe con factor ~17 de margen.
+- **Familia/part:** UltraScale+ **xcku3p-ffva676-2L-e** (48 URAM ≈ 13,8 Mb,
+  162.720 CLB LUT, 360 BRAM36K — corregido 2026-08-18 con el dato de Vivado;
+  la «360 URAM» original era el BRAM). Retarget desde el VU9P por decisión 002
+  (`docs/decisiones/002-retarget-kintex-xcku3p.md`): el XCKU3P está soportado
+  en Vivado ML Standard (gratuito); la inferencia real de la tabla (32 URAM288
+  con `(* ram_style = "ultra" *)`) cabe con margen 32/48 ≈ 1,5×.
 - **Frecuencia:** 322,265625 MHz (periodo 3,103 ns) — la razón de ser de la
   campaña es que el RTL RESISTA esa ruta, no solo la simulación.
 - **URAM:** lectura registrada obligatoria (1 ciclo de latencia);

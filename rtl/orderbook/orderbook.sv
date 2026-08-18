@@ -14,11 +14,12 @@
 //     {qty[31:0], price[31:0], side, ref[19:0], valid}. hash(ref) =
 //     ref[SLOT-1:0]; linear probing acotado a PROBE pasos. La lectura es
 //     SÍNCRONA REGISTRADA (patrón de inferencia URAM): un puerto de lectura
-//     (rd_addr -> rd_data 1 ciclo después) y un puerto de escritura
-//     (escritura condicional vía la tarea mem_wr, 1 write máx por ciclo,
-//     nunca en el mismo ciclo que una lectura de la sonda). NUNCA indexación
-//     combinacional de la tabla (bloqueador B1 del criterio 10, documentado
-//     en docs/writeup/revision-exhaustiva-2026-08-14.md).
+//     (rd_addr -> rd_data 1 ciclo después) y un puerto de escritura (UNA sola
+//     sentencia o_mem[wr_addr] <= wr_data al final del always_ff — escribir
+//     vía task rompía la inferencia, Synth 8-7186, hallazgo 2026-08-18; 1
+//     write máx por ciclo, nunca en el mismo ciclo que una lectura de la
+//     sonda). NUNCA indexación combinacional de la tabla (bloqueador B1 del
+//     criterio 10, documentado en docs/writeup/revision-exhaustiva-2026-08-14.md).
 //   - La sonda (probe engine) serializa el lookup a ≤1 slot/ciclo y arranca
 //     DURANTE ST_BODY (prefetch del grupo de hash: la order_ref viaja en las
 //     primeras words del cuerpo y el hash se conoce antes de ST_APPLY):
@@ -147,7 +148,12 @@ module orderbook #(
     // (65.536 x 86 ≈ 20 URAM del XCKU3P). SIN reset de contenido (patrón de
     // inferencia); la invalidación post-reset corre en ST_INVAL.
     // Entrada: {valid[0], ref[REFW:1], side[21], price[PXW+22-1:22], qty[85:54]}
-    // ---------------------------------------------------------------
+//    ram_style="ultra": fuerza inferencia URAM en la elaboración. El
+//    bloqueador real de la inferencia era la escritura vía task (bisect
+//    2026-08-18); el atributo fija la familia de memoria y evita el pase
+//    patológico de optimización sobre 5,64 M de flops.
+//    ---------------------------------------------------------------
+    (* ram_style = "ultra" *)
     reg [OW-1:0] o_mem [NSLOT-1:0];
     // puerto de lectura de la sonda (registrado: rd_data <= o_mem[rd_addr])
     reg [SLOT-1:0] rd_addr /* verilator public */;
@@ -174,16 +180,15 @@ module orderbook #(
         entry_new = {q, px, side, REFW'(r), 1'b1};
     endfunction
 
-    // escritura de la tabla: la tarea escribe el ARRAY directamente (patrón de
-    // la fase 3 con lv_price: un solo driver, la tarea — un puerto scalares
-    // + tarea dispararía MULTIDRIVEN en Verilator). Cada camino de apply_one
-    // emite a lo sumo UN write por ciclo; la sonda NUNCA lee durante
-    // ST_APPLY/ST_UADD (URAM 1R+1W sin colisión)
-    task automatic mem_wr(input [SLOT-1:0] a, input [OW-1:0] d);
-        begin
-            o_mem[a] <= d;
-        end
-    endtask
+// escritura de la tabla: NO hay task mem_wr — escribir el array vía task
+    // rompía la inferencia URAM (Synth 8-7186, bisect 2026-08-18: patrón
+    // directo infiere 32 URAM288, patrón vía task no). Cada camino computa
+    // wr_en/wr_addr/wr_data con asignaciones bloqueantes y el always_ff emite
+    // UNA sola sentencia al final (un solo driver, 1 write máx por ciclo;
+    // la sonda NUNCA lee durante ST_APPLY/ST_UADD — URAM 1R+1W sin colisión).
+    reg wr_en;
+    reg [SLOT-1:0] wr_addr;
+    reg [OW-1:0] wr_data;
 
     // ---------------------------------------------------------------
     // probe engine (sonda serializada + prefetch, fase3-uram).
@@ -350,13 +355,17 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
     endfunction
 
     // devuelve el índice del locate o 31 si no está registrado
+    // (exit temprano con flag: asignar ii en el cuerpo del loop no converge
+    // en la elaboración de Vivado — Synth 8-3380)
     function automatic logic [4:0] loc_lookup(input [15:0] l);
         integer ii;
+        logic done;
         loc_lookup = 5'd31;
-        for (ii = 0; ii < NSYM; ii = ii + 1) begin
+        done = 1'b0;
+        for (ii = 0; ii < NSYM && !done; ii = ii + 1) begin
             if (loc_map[ii] == l) begin
                 loc_lookup = 5'(ii);
-                ii = NSYM;
+                done = 1'b1;
             end
         end
     endfunction
@@ -426,6 +435,13 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             bbo_tvalid <= bbo_tvalid && !bbo_tready;
             depth_tvalid <= depth_tvalid && !depth_tready;
             error <= 1'b0;
+
+            // defaults del puerto de escritura de la tabla: cada camino puede
+            // sobrescribirlos con asignaciones bloqueantes; la sentencia única
+            // o_mem[wr_addr] <= wr_data se emite al final del always_ff
+            wr_en = 1'b0;
+            wr_addr = 0;
+            wr_data = 0;
 
             // ---- probe engine (sonda serializada): avanza 1 slot/ciclo
             // aunque el FSM esté recibiendo el cuerpo (prefetch). La lectura
@@ -523,7 +539,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                 ST_INVAL: begin
                     // invalidación post-reset: los 65.536 slots a valid=0
                     // (jamás reset global del array: mataría la URAM)
-                    mem_wr(st_inval_cnt, {OW{1'b0}});
+                    wr_en = 1'b1;
+                    wr_addr = st_inval_cnt;
+                    wr_data = {OW{1'b0}};
                     if (st_inval_cnt == NSLOT-1) st <= ST_W0;
                     else st_inval_cnt <= st_inval_cnt + 1;
                 end
@@ -703,7 +721,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     // en la ST_LV3 previa)
                     if (s_axis_tvalid && !nx_done) nx_recv();
                     launch_lv(u_side, u_price, u_shares);
-                    mem_wr(u_nidx, entry_new(u_newref, u_side, u_price, u_shares));
+                    wr_en = 1'b1;
+                    wr_addr = u_nidx;
+                    wr_data = entry_new(u_newref, u_side, u_price, u_shares);
                     lv_uadd <= 1'b0;
                     st <= ST_LV2;
                 end
@@ -733,6 +753,10 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                 end
                 default: st <= ST_W0;
             endcase
+
+            // ÚNICA sentencia de escritura de la tabla (patrón de inferencia
+            // URAM — ver declaración de wr_en/wr_addr/wr_data)
+            if (wr_en) o_mem[wr_addr] <= wr_data;
         end
     end
 
@@ -1022,22 +1046,27 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
         reg [PXW-1:0] bp, ap;
         reg [QW-1:0] bq, aq;
         reg changed;
+        reg bdone;
         reg [2*ND*64-1:0] dacc;
         integer i, di;
         begin
             // mejor nivel por lado = primer slot con qty>0 (lista ordenada)
+            // (exit temprano con flag: asignar i en el cuerpo no converge en
+            // Vivado — Synth 8-3380)
             bp = 0; bq = 0;
-            for (i = 0; i < P; i = i + 1) begin
+            bdone = 1'b0;
+            for (i = 0; i < P && !bdone; i = i + 1) begin
                 if (lv_qty[m_loc_idx*2*P + i] != 0) begin
                     bp = lv_price[m_loc_idx*2*P + i]; bq = lv_qty[m_loc_idx*2*P + i];
-                    i = P;
+                    bdone = 1'b1;
                 end
             end
             ap = 0; aq = 0;
-            for (i = 0; i < P; i = i + 1) begin
+            bdone = 1'b0;
+            for (i = 0; i < P && !bdone; i = i + 1) begin
                 if (lv_qty[m_loc_idx*2*P + P + i] != 0) begin
                     ap = lv_price[m_loc_idx*2*P + P + i]; aq = lv_qty[m_loc_idx*2*P + P + i];
-                    i = P;
+                    bdone = 1'b1;
                 end
             end
             if (market_open && tstate[m_loc_idx] == 8'h54 && bp != 0 && ap != 0 && bp >= ap)
@@ -1092,7 +1121,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     end else if (pr_full) begin
                         error <= 1'b1;      // tabla llena (SEC-HASH-02)
                     end else begin
-                        mem_wr(pr_empty, entry_new(oref, ask, price, shares));
+                        wr_en = 1'b1;
+                        wr_addr = pr_empty;
+                        wr_data = entry_new(oref, ask, price, shares);
                         launch_lv(ask, price, shares);
                         out_lv = 1'b1;
                         do_emit = 1'b1;
@@ -1110,13 +1141,17 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                         else if (rest == 0) begin
                             launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
                                       -$signed(qty_old));
-                            mem_wr(pr_slot, {OW{1'b0}});   // valid=0
+                            wr_en = 1'b1;
+                            wr_addr = pr_slot;
+                            wr_data = {OW{1'b0}};   // valid=0
                             out_lv = 1'b1;
                             do_emit = 1'b1;
                         end else begin
-                            mem_wr(pr_slot, {rest[31:0], e_price(pr_entry[REFW+PXW+1:REFW+2]),
-                                             e_side(pr_entry[REFW+1]), e_ref(pr_entry[REFW:1]),
-                                             1'b1});
+                            wr_en = 1'b1;
+                            wr_addr = pr_slot;
+                            wr_data = {rest[31:0], e_price(pr_entry[REFW+PXW+1:REFW+2]),
+                                       e_side(pr_entry[REFW+1]), e_ref(pr_entry[REFW:1]),
+                                       1'b1};
                             launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
                                       -32'(b32(8)));
                             out_lv = 1'b1;
@@ -1130,7 +1165,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     else begin
                         launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
                                   -$signed(e_qty(pr_entry[OW-1:OW-QW])));
-                        mem_wr(pr_slot, {OW{1'b0}});
+                        wr_en = 1'b1;
+                        wr_addr = pr_slot;
+                        wr_data = {OW{1'b0}};
                         out_lv = 1'b1;
                         do_emit = 1'b1;
                     end
@@ -1147,7 +1184,9 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
                     else begin
                         launch_lv(e_side(pr_entry[REFW+1]), e_price(pr_entry[REFW+PXW+1:REFW+2]),
                                   -$signed(e_qty(pr_entry[OW-1:OW-QW])));
-                        mem_wr(pr_slot, {OW{1'b0}});
+                        wr_en = 1'b1;
+                        wr_addr = pr_slot;
+                        wr_data = {OW{1'b0}};
                         u_newref <= newref;
                         u_side <= e_side(pr_entry[REFW+1]);
                         u_price <= price;
