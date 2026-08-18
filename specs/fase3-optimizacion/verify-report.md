@@ -315,6 +315,26 @@ SEC-URAM-01).
 - Regresión completa de las suites (orderbook/phase3/uram/mdp3) por la
   enmienda de latencia y el FSM de emisión.
 
+### Actualización de patrones de mutación para la iter 8 (2026-08-18)
+
+Los tres mutantes que apuntaban al `decode_lv2` original (un solo bloque
+combinacional) fueron migrados a los objetivos del RTL iter 8 en
+`scripts/verify/mutate_orderbook.py`; cada objetivo nuevo tiene coincidencia
+única verificada (30/30) y los 30 mutantes parsean con xvlog (0 errores,
+mismo parche de `nx_done` que la validación del run anterior):
+
+- `OV-EMPTY`: objetivo `fnd == -1 && emp == -1` → `!lv2_afnd && !lv2_aemp`
+  (overflow sin error, `lverr` flip en `decode_lv2b`).
+- `PIPE-SKIP-STAGE`: objetivo `decode_lv2()` → `decode_lv2b()` (saltar la
+  etapa 2b deja los registros `lv2_*` stale: la op se descarta).
+- `LV-NEGWRAP`: objetivo `fnd == -1 && lv_delta[31]` →
+  `!lv2_afnd && lv_delta[31]` (reduce sobre nivel ausente con
+  `LV_MODE_INSERT`, phantom ~4,29e9).
+
+El kill de estos tres mutantes debe reejecutarse contra el RTL iter 8 en la
+máquina con cocotb (gate E pendiente); los 27 restantes no cambiaron de
+objetivo.
+
 ### Re-run Vivado 2026-08-18 (14:11) — pipeline A/B/C: mejoró, no cierra
 
 Run completo con el mismo `synth/fase3_synth.tcl` (gate del tcl sin
