@@ -348,7 +348,6 @@ localparam ST_UADD       = 4'd5;
     // exponen public para la sonda estructural de RTM-01 (estilo SEC-URAM-01).
     reg [PXW-1:0] sm_cap_px [0:2*P-1] /* verilator public */;
     reg [QW-1:0]  sm_cap_qt [0:2*P-1] /* verilator public */;
-    reg [P-1:0]   sm_cap_nzb, sm_cap_nza;  // qty != 0 por slot, por lado
     // iter 9: primer slot no vacío por lado, precomputado en la etapa A
     // (árbol first_one) — la selección de la B es un mux directo por índice;
     // el bucle serial !bdone de P=32 era la ruta de 31 niveles sm_cap_nzb ->
@@ -452,7 +451,6 @@ reg [SLOT-1:0] u_nidx;      // slot pre-verificado de la mitad add (U atómico)
             for (int i = 0; i < 2*P; i++) begin
                 sm_cap_px[i] <= 0; sm_cap_qt[i] <= 0;
             end
-            sm_cap_nzb <= 0; sm_cap_nza <= 0;
             sm_bsel <= 0; sm_asel <= 0;
             sm_bp <= 0; sm_ap <= 0; sm_bq <= 0; sm_aq <= 0;
             sm_changed <= 1'b0; sm_dacc <= 0; sm_cross <= 1'b0;
@@ -1149,9 +1147,9 @@ if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
         reg lverr;
         begin
             lverr = 1'b0;
-            lv2_found <= lv2_afnd ? lv2_fnd : 32'hFFFFFFFF;
-            lv2_empty <= lv2_aemp ? lv2_emp : 32'hFFFFFFFF;
-            lv2_ins   <= (lv2_abtx ? lv2_btx : lv2_emp);
+            lv2_found <= lv2_afnd ? 32'(lv2_fnd) : 32'hFFFFFFFF;
+            lv2_empty <= lv2_aemp ? 32'(lv2_emp) : 32'hFFFFFFFF;
+            lv2_ins   <= (lv2_abtx ? 32'(lv2_btx) : 32'(lv2_emp));
             if (!lv2_afnd && !lv2_aemp) begin
                 // overflow de niveles (SEC-OV-01): la op se descarta
                 lv2_mode <= LV_MODE_NONE;
@@ -1195,10 +1193,8 @@ if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
                 nza_next[i] = (lv_qty[m_loc_idx*2*P + P + i] != 0);
                 sm_cap_px[i]    <= lv_price[m_loc_idx*2*P + i];
                 sm_cap_qt[i]    <= lv_qty[m_loc_idx*2*P + i];
-                sm_cap_nzb[i]   <= nzb_next[i];
                 sm_cap_px[P+i]  <= lv_price[m_loc_idx*2*P + P + i];
                 sm_cap_qt[P+i]  <= lv_qty[m_loc_idx*2*P + P + i];
-                sm_cap_nza[i]   <= nza_next[i];
             end
             sm_bsel <= first_one(nzb_next);
             sm_asel <= first_one(nza_next);
@@ -1213,14 +1209,14 @@ if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
         reg [PXW-1:0] bp, ap;
         reg [QW-1:0] bq, aq;
         reg [2*ND*64-1:0] dacc;
-        integer i, di;
+        integer di;
         begin
             // iter 9: mux directo por el índice precomputado en la etapa A
             // (first_one en árbol) — semántica idéntica al bucle !bdone de
             // fase 3: primer slot con qty != 0 (lista ordenada, mejor nivel);
             // con todos los slots vacíos sm_bsel=0 y sm_cap_px[0]=0.
-            bp = sm_cap_px[sm_bsel]; bq = sm_cap_qt[sm_bsel];
-            ap = sm_cap_px[P + sm_asel]; aq = sm_cap_qt[P + sm_asel];
+            bp = sm_cap_px[32'(sm_bsel)]; bq = sm_cap_qt[32'(sm_bsel)];
+            ap = sm_cap_px[P + 32'(sm_asel)]; aq = sm_cap_qt[P + 32'(sm_asel)];
             sm_bp <= bp; sm_bq <= bq; sm_ap <= ap; sm_aq <= aq;
             sm_changed <= (bp != prev_bp[m_loc_idx]) || (bq != prev_bq[m_loc_idx]) ||
                           (ap != prev_ap[m_loc_idx]) || (aq != prev_aq[m_loc_idx]);

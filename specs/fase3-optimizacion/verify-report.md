@@ -539,3 +539,87 @@ output delay. **El criterio 10 sigue abierto** (WNS < 0, TNS != 0, LUT
 95,79 % > 95 %); la unica via documentada restante es el pipeline de
 salida en el wrapper (FFs propios con retencion del lado del pin + IOB),
 sin rebajar el gate del tcl.
+## Rojo->verde de iter 7/8/9 en WSL (2026-08-18, cocotb 2.0.1 + Verilator 5.046)
+
+Pasada fresh desde `make clean-all` en WSL2 Ubuntu 26.04 (Python 3.12.13).
+Destapo y resolvio el red pendiente de los tests RTM (nunca habian corrido
+en cocotb con el RTL final de la iter 9):
+
+### Gate A - sim-rtm (DW=32), sim-rtm64 (DW=64), sim-lat
+
+```text
+=== sim-rtm DW=32 ===
+test_rtm01_escaneo_registrado_en_etapas        PASS
+test_rtm02_bbo_consistente_con_la_captura      PASS
+test_rtm03_changed_sobre_la_captura            PASS
+test_rtm04_handshake_retiene_evento_pipelined  PASS
+TESTS=4 PASS=4 FAIL=0 SKIP=0
+
+RTM-01 OK: 4 eventos con recorrido A->B->C, emision solo en ST_EMIT_C,
+           captura espejo del depth, bit a bit vs golden
+RTM-02 OK: BBO consistente con la captura, evento vacio a cero
+           (4 eventos, bit a bit vs golden)
+RTM-03 OK: changed=[1, 1, 1, 1] sobre la captura (identico -> 0, distinto -> 1)
+RTM-04 OK: 7 eventos entregados exactamente una vez tras dos ciclos de
+           retencion estable (handshake pipelined)
+
+=== sim-rtm64 DW=64 ===
+RTM-REG-01 OK: DW=64, 6 eventos bit a bit vs golden (regresion de la
+               parametrizacion con el pipeline de emision)
+TESTS=1 PASS=1 FAIL=0 SKIP=0
+
+=== sim-lat ===
+TESTS=2 PASS=2 FAIL=0 SKIP=0
+SEC-LAT-01 OK: 4 eventos, determinista (2 ejecuciones identicas);
+               evidencia en verification/vectors/latency/latency_dw32.json
+RTM-LAT-01 OK: media 44.500 ciclos (138.1 ns) <= 48, determinista
+               (4 eventos, corpus sintetico - env sin pcap local)
+```
+
+### Hallazgos del rojo (tests corregidos, RTL intacto funcionalmente)
+
+1. RTM-01/02/03 asumian una semantica de la iter 7 que la iter 9 cambio:
+   - RTM-01: el handshake se observa en el ciclo POSTERIOR a ST_EMIT_C (el
+     dato se registra en C y es visible 1 ciclo despues, cuando el FSM ya
+     avanzo, p. ej. a ST_WAIT_PROBE o ST_SWAP). El test ahora acepta
+     `st_seq[cycle-1]==ST_EMIT_C or st_seq[cycle]==ST_EMIT_C`.
+   - RTM-02: esperaba 1 evento con ambas puertas vacias, pero el tramo
+     (D elimina solo la orden ask) deja el bid vivo; el golden produce
+     2 eventos con ask vacio. Ahora se compara contra el oraculo.
+   - RTM-03: hardcodeaba `changed==[1,0,1,0]`, pero el golden da
+     `[1,1,1,1]` (los 4 eventos cambian la cantidad del BBO: 100->200->160
+     ->260). Ahora se compara contra `expected`.
+2. WIDTHEXPAND en Verilator 5.046: 6 warnings del RTL (indices de 5 bits
+   sobre arrays [0:63] y COND con 32 bits). Cast explicito `32'(
+   lv2_fnd/lv2_emp/lv2_btx)` y `sm_cap_px[32'(sm_bsel)]`; sin cambio de
+   comportamiento (senales acotadas por first_one).
+3. SkipTest de cocotb 1.x: el codigo `raise cocotb.SkipTest` no existe en
+   cocotb 2.0.1 (solo bool estatico en el decorador). RTM-REG-01 se movio a
+   `test_rtm64.py` (la elaboracion sim-rtm64 usa su propio modulo); los
+   tests de sim-rtm ya no usan SkipTest.
+
+### Gates B/E de fase 3 (WSL)
+
+```text
+verilator --lint-only --Wall --top-module itch_chain
+  rtl/itch_chain.sv rtl/parser/itch_parser.sv rtl/orderbook/orderbook.sv
+residual: 8x %Warning-BLKSEQ (asignaciones bloqueantes deliberadas de la
+inferencia URAM, comentadas en orderbook.sv) -- excluye los UNUSEDSIGNAL
+muertos que se limpiaron (sm_cap_nzb/nza, i del select_emit_b).
+
+mutate_orderbook.py:
+TODOS LOS MUTANTES MUERTOS. Gate E PASS.
+```
+
+### Regresion del area (gate A completo)
+
+```text
+sim         TESTS=5 PASS=4 FAIL=0 SKIP=1   (SKIP: pcap real ausente)
+sim-depth   TESTS=3 PASS=2 FAIL=0 SKIP=1
+sim-hash    TESTS=8 PASS=8 FAIL=0 SKIP=0
+sim-hard    TESTS=2 PASS=2 FAIL=0 SKIP=0
+sim-chain   TESTS=4 PASS=3 FAIL=0 SKIP=1
+```
+
+Los SKIP son por pcap real ausente en WSL (replays reales / subconjunto de
+fase 3). El gate A sintetico de fase 3 queda verde.

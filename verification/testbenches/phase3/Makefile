@@ -75,7 +75,7 @@ sim-rtm:
 	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_rtm32 EXTRA_ARGS="-GDW=32" SIM_BUILD=sim_build_rtm
 
 sim-rtm64:
-	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_rtm32 EXTRA_ARGS="-GDW=64" SIM_BUILD=sim_build_rtm64
+	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_rtm64 EXTRA_ARGS="-GDW=64" SIM_BUILD=sim_build_rtm64
 
 # limpia todos los builds del área (el clean de cocotb solo borra SIM_BUILD)
 clean-all:

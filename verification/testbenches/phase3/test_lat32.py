@@ -17,7 +17,9 @@ from cocotb.clock import Clock
 from cocotb.handle import Immediate
 from cocotb.triggers import RisingEdge
 
-from test_orderbook import run_book, _pcap_msgs_subset, _fields_from_body, iter_records
+from test_orderbook import (
+    S, A, E, D, X,
+    run_book, _pcap_msgs_subset, _fields_from_body, iter_records)
 from test_itch_parser import (_check_input_stability, _packet_seq,
                               _present_beat, packet_beats)
 from golden_model.src import book as book_golden
