@@ -669,3 +669,44 @@ residual actual de ~3,3 ns a 322 MHz, esa variante tiene holgura sobrada
 para cerrar y es el liston industrial real (32-bit/156,25 tambien vale si
 se prefiere el mismo datapath estrecho). El 322 MHz queda documentado
 como capitulo de optimizacion no cerrado; no se rebaja el gate del tcl.
+### Run variante DW=64 @ 156,25 MHz (2026-08-19 04:28) - CRITERIO DE 10G CERRADO
+
+Run completo con `synth/fase3_156mhz.tcl` (generic `DW=64 BBO_W=64 K=19
+QB=46`; XDC `fase3_156mhz.xdc` con periodo 6,400 ns; log
+`synth/fase3_run_156mhz.log`). El gate del tcl NO aborto:
+
+```text
+== FASE3 SYNTH/IMPL OK ==
+INFO: [Common 17-206] Exiting Vivado at Wed Aug 19 04:28:19 2026...
+```
+
+| Metrica | Valor | Criterio | Estado |
+|---|---|---|---|
+| Setup failing endpoints | **0** | 0 | PASS |
+| **WNS (setup)** | **+0,015 ns** | >= 0 | **PASS** |
+| **TNS (setup)** | **0,000 ns** | = 0 | **PASS** |
+| LUT as Logic | 150.212 (92,31 %) | <= 95 % | PASS |
+| URAM288 | 32 (66,67 %) | 32 | PASS |
+| Bonded IOB | 194 (75,78 %) | <= 256 | PASS |
+| DRC | 0 errores | 0 | PASS |
+
+Ruta critica: `u_book/body_acc_reg[1][56]/C -> ...` Slack (MET) **+0,015
+ns** (ruta interna del book, no I/O). La variante a 156,25 MHz (periodo
+6,400 ns) cierra con margen positivo el datapath completo:
+parser(64)->book(64) con la tabla en 32 URAM.
+
+**Nota de presupuesto de I/O**: a DW=64 la observabilidad completa del
+wrapper (bbo_tdata 128 bits) exponia 258 pines > 256 del FFVA676 y el
+placer abortaba (`Place 30-58`). Se parametrizo `BBO_W` (128
+default/64 variante) recortando bbo_tdata al pin a los precios
+bid/ask (bits [127:64]); el datapath medido es identico (addendum iter
+11b de la spec). Es el mismo patron de recorte de observabilidad ya
+documentado (depth_tdata 32 bits, cross_events sin pin).
+
+**Estado del criterio 10 / variantes**:
+- **32b/322,265625 MHz**: ABIERTO (mejor WNS -3,319 ns, iter 11) - cap
+  de optimizacion no cerrado, limitacion del modelo I/O del wrapper.
+- **64b/156,25 MHz**: **CERRADO** (WNS +0,015, TNS 0, LUT 92,31 %, URAM
+  32/48, DRC 0) - mismo throughput de 10G, liston industrial del
+  documento maestro (seccion 0.1). Este es el cierre que sustenta la
+  frase de CV "pipeline de 10G con cierre de timing en UltraScale+".

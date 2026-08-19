@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date              : Wed Aug 19 00:34:52 2026
+| Date              : Wed Aug 19 03:37:46 2026
 | Host              : atini running 64-bit major release  (build 9200)
 | Command           : report_timing_summary -check_timing_verbose -report_unconstrained -max_paths 10 -file <local-build-path>/synth/reports/timing_synth.txt
 | Design            : itch_chain_synth
@@ -42,10 +42,9 @@ Timing Summary Report
 | ------------------
 ------------------------------------------------------------------------------------------------
 
-Rule       Severity  Description            Violations  
----------  --------  ---------------------  ----------  
-TIMING-15  Warning   Large hold violation   105         
-TIMING-16  Warning   Large setup violation  1000        
+Rule       Severity  Description           Violations  
+---------  --------  --------------------  ----------  
+TIMING-15  Warning   Large hold violation  189         
 
 Note: This report is based on the most recent report_methodology run and may not be up-to-date. Run report_methodology on the current design for the latest report.
 
@@ -144,7 +143,7 @@ Table of Contents
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
     -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-     -2.685    -4481.451                   3799               287064       -2.760     -931.763                  20238               287064       -0.092      -16.560                     180                 94822  
+      0.612        0.000                      0               286594       -2.760    -1047.101                  17101               286594        1.762        0.000                       0                 94679  
 
 
 Timing constraints are not met.
@@ -157,7 +156,7 @@ Timing constraints are not met.
 
 Clock         Waveform(ns)         Period(ns)      Frequency(MHz)
 -----         ------------         ----------      --------------
-clk_pipeline  {0.000 1.551}        3.103           322.269         
+clk_pipeline  {0.000 3.200}        6.400           156.250         
 
 
 ------------------------------------------------------------------------------------------------
@@ -167,7 +166,7 @@ clk_pipeline  {0.000 1.551}        3.103           322.269
 
 Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
 -----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-clk_pipeline       -2.685    -4481.451                   3799               287064       -2.760     -931.763                  20238               287064       -0.092      -16.560                     180                 94822  
+clk_pipeline        0.612        0.000                      0               286594       -2.760    -1047.101                  17101               286594        1.762        0.000                       0                 94679  
 
 
 ------------------------------------------------------------------------------------------------
@@ -217,27 +216,27 @@ Path Group    From Clock    To Clock
 From Clock:  clk_pipeline
   To Clock:  clk_pipeline
 
-Setup :         3799  Failing Endpoints,  Worst Slack       -2.685ns,  Total Violation    -4481.451ns
-Hold  :        20238  Failing Endpoints,  Worst Slack       -2.760ns,  Total Violation     -931.762ns
-PW    :          180  Failing Endpoints,  Worst Slack       -0.092ns,  Total Violation      -16.560ns
+Setup :            0  Failing Endpoints,  Worst Slack        0.612ns,  Total Violation        0.000ns
+Hold  :        17101  Failing Endpoints,  Worst Slack       -2.760ns,  Total Violation    -1047.101ns
+PW    :            0  Failing Endpoints,  Worst Slack        1.762ns,  Total Violation        0.000ns
 ---------------------------------------------------------------------------------------------------
 
 
 Max Delay Paths
 --------------------------------------------------------------------------------------
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_changed_o_reg/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_changed
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -258,7 +257,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_changed_o_reg/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_changed_o_reg/Q
@@ -269,29 +268,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[0]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[0]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -312,7 +311,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[0]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[0]/Q
@@ -323,29 +322,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[10]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[10]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -366,7 +365,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[10]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[10]/Q
@@ -377,29 +376,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[11]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[11]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -420,7 +419,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[11]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[11]/Q
@@ -431,29 +430,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[12]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[12]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -474,7 +473,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[12]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[12]/Q
@@ -485,29 +484,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[13]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[13]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -528,7 +527,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[13]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[13]/Q
@@ -539,29 +538,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[14]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[14]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -582,7 +581,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[14]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[14]/Q
@@ -593,29 +592,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[15]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[15]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -636,7 +635,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[15]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[15]/Q
@@ -647,29 +646,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[1]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[1]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -690,7 +689,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[1]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[1]/Q
@@ -701,29 +700,29 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
-Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
+Slack (MET) :             0.612ns  (required time - arrival time)
   Source:                 bbo_locate_o_reg[2]/C
-                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            bbo_locate[2]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Max at Slow Process Corner
-  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
   Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
   Logic Levels:           1  (OBUF=1)
   Output Delay:           1.000ns
   Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
     Clock Pessimism Removal (CPR):    0.000ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
@@ -744,7 +743,7 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
                          FDRE                                         r  bbo_locate_o_reg[2]/C
   -------------------------------------------------------------------    -------------------
                          FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[2]/Q
@@ -755,15 +754,15 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
-                                                      3.103     3.103 r  
-                         clock pessimism              0.000     3.103    
-                         clock uncertainty           -0.035     3.068    
-                         output delay                -1.000     2.068    
+                                                      6.400     6.400 r  
+                         clock pessimism              0.000     6.400    
+                         clock uncertainty           -0.035     6.365    
+                         output delay                -1.000     5.365    
   -------------------------------------------------------------------
-                         required time                          2.068    
+                         required time                          5.365    
                          arrival time                          -4.752    
   -------------------------------------------------------------------
-                         slack                                 -2.685    
+                         slack                                  0.612    
 
 
 
@@ -772,10 +771,114 @@ Slack (VIOLATED) :        -2.685ns  (required time - arrival time)
 Min Delay Paths
 --------------------------------------------------------------------------------------
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
+  Source:                 s_axis_tkeep[2]
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            f_keep_reg_0_3_0_7/RAMB/I
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.673ns  (logic 0.331ns (49.191%)  route 0.342ns (50.809%))
+  Logic Levels:           2  (IBUFCTRL=1 INBUF=1)
+  Input Delay:            0.000ns
+  Clock Path Skew:        3.355ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    3.355ns
+    Source Clock Delay      (SCD):    0.000ns
+    Clock Pessimism Removal (CPR):    -0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+                         input delay                  0.000     0.000    
+                                                      0.000     0.000 r  s_axis_tkeep[2] (IN)
+                         net (fo=0)                   0.000     0.000    s_axis_tkeep_IBUF[2]_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     0.331 r  s_axis_tkeep_IBUF[2]_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     0.331    s_axis_tkeep_IBUF[2]_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     0.331 r  s_axis_tkeep_IBUF[2]_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.342     0.673    f_keep_reg_0_3_0_7/DIB0
+                         RAMD32                                       r  f_keep_reg_0_3_0_7/RAMB/I
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.582     0.582 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     0.582    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.161     0.743    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
+                         net (fo=94678, unplaced)     2.584     3.355    f_keep_reg_0_3_0_7/WCLK
+                         RAMD32                                       r  f_keep_reg_0_3_0_7/RAMB/CLK
+                         clock pessimism              0.000     3.355    
+                         RAMD32 (Hold_RAMD32_CLK_I)
+                                                      0.078     3.433    f_keep_reg_0_3_0_7/RAMB
+  -------------------------------------------------------------------
+                         required time                         -3.433    
+                         arrival time                           0.673    
+  -------------------------------------------------------------------
+                         slack                                 -2.760    
+
+Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
+  Source:                 s_axis_tkeep[4]
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            f_keep_reg_0_3_0_7/RAMC/I
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.673ns  (logic 0.331ns (49.191%)  route 0.342ns (50.809%))
+  Logic Levels:           2  (IBUFCTRL=1 INBUF=1)
+  Input Delay:            0.000ns
+  Clock Path Skew:        3.355ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    3.355ns
+    Source Clock Delay      (SCD):    0.000ns
+    Clock Pessimism Removal (CPR):    -0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+                         input delay                  0.000     0.000    
+                                                      0.000     0.000 r  s_axis_tkeep[4] (IN)
+                         net (fo=0)                   0.000     0.000    s_axis_tkeep_IBUF[4]_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     0.331 r  s_axis_tkeep_IBUF[4]_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     0.331    s_axis_tkeep_IBUF[4]_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     0.331 r  s_axis_tkeep_IBUF[4]_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.342     0.673    f_keep_reg_0_3_0_7/DIC0
+                         RAMD32                                       r  f_keep_reg_0_3_0_7/RAMC/I
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.582     0.582 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     0.582    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.161     0.743    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
+                         net (fo=94678, unplaced)     2.584     3.355    f_keep_reg_0_3_0_7/WCLK
+                         RAMD32                                       r  f_keep_reg_0_3_0_7/RAMC/CLK
+                         clock pessimism              0.000     3.355    
+                         RAMD32 (Hold_RAMD32_CLK_I)
+                                                      0.078     3.433    f_keep_reg_0_3_0_7/RAMC
+  -------------------------------------------------------------------
+                         required time                         -3.433    
+                         arrival time                           0.673    
+  -------------------------------------------------------------------
+                         slack                                 -2.760    
+
+Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[2]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_0_13/RAMB/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -812,7 +915,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -825,9 +928,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[4]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_0_13/RAMC/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -864,7 +967,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -877,9 +980,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[10]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_0_13/RAMF/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -916,7 +1019,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMF/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -929,9 +1032,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[12]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_0_13/RAMG/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -968,7 +1071,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMG/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -981,9 +1084,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[16]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_14_27/RAMB/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -1020,7 +1123,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1033,9 +1136,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[18]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_14_27/RAMC/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -1072,7 +1175,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1085,9 +1188,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[24]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_14_27/RAMF/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -1124,7 +1227,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMF/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1137,9 +1240,9 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 
 Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
   Source:                 s_axis_tdata[26]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Destination:            f_mem_reg_0_3_14_27/RAMG/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
   Path Type:              Hold (Min at Slow Process Corner)
   Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
@@ -1176,115 +1279,11 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMG/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
                                                       0.078     3.433    f_mem_reg_0_3_14_27/RAMG
-  -------------------------------------------------------------------
-                         required time                         -3.433    
-                         arrival time                           0.673    
-  -------------------------------------------------------------------
-                         slack                                 -2.760    
-
-Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
-  Source:                 s_axis_tdata[30]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            f_mem_reg_0_3_28_31/RAMB/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Path Group:             clk_pipeline
-  Path Type:              Hold (Min at Slow Process Corner)
-  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        0.673ns  (logic 0.331ns (49.191%)  route 0.342ns (50.809%))
-  Logic Levels:           2  (IBUFCTRL=1 INBUF=1)
-  Input Delay:            0.000ns
-  Clock Path Skew:        3.355ns (DCD - SCD - CPR)
-    Destination Clock Delay (DCD):    3.355ns
-    Source Clock Delay      (SCD):    0.000ns
-    Clock Pessimism Removal (CPR):    -0.000ns
-
-    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
-  -------------------------------------------------------------------    -------------------
-                         (clock clk_pipeline rise edge)
-                                                      0.000     0.000 r  
-                         input delay                  0.000     0.000    
-                                                      0.000     0.000 r  s_axis_tdata[30] (IN)
-                         net (fo=0)                   0.000     0.000    s_axis_tdata_IBUF[30]_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     0.331 r  s_axis_tdata_IBUF[30]_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     0.331    s_axis_tdata_IBUF[30]_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     0.331 r  s_axis_tdata_IBUF[30]_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.342     0.673    f_mem_reg_0_3_28_31/DIB0
-                         RAMD32                                       r  f_mem_reg_0_3_28_31/RAMB/I
-  -------------------------------------------------------------------    -------------------
-
-                         (clock clk_pipeline rise edge)
-                                                      0.000     0.000 r  
-                                                      0.000     0.000 r  clk (IN)
-                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.582     0.582 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     0.582    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.161     0.743    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_28_31/WCLK
-                         RAMD32                                       r  f_mem_reg_0_3_28_31/RAMB/CLK
-                         clock pessimism              0.000     3.355    
-                         RAMD32 (Hold_RAMD32_CLK_I)
-                                                      0.078     3.433    f_mem_reg_0_3_28_31/RAMB
-  -------------------------------------------------------------------
-                         required time                         -3.433    
-                         arrival time                           0.673    
-  -------------------------------------------------------------------
-                         slack                                 -2.760    
-
-Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
-  Source:                 s_axis_tkeep[0]
-                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Destination:            f_mem_reg_0_3_28_31/RAMC/I
-                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
-  Path Group:             clk_pipeline
-  Path Type:              Hold (Min at Slow Process Corner)
-  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        0.673ns  (logic 0.331ns (49.191%)  route 0.342ns (50.809%))
-  Logic Levels:           2  (IBUFCTRL=1 INBUF=1)
-  Input Delay:            0.000ns
-  Clock Path Skew:        3.355ns (DCD - SCD - CPR)
-    Destination Clock Delay (DCD):    3.355ns
-    Source Clock Delay      (SCD):    0.000ns
-    Clock Pessimism Removal (CPR):    -0.000ns
-
-    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
-  -------------------------------------------------------------------    -------------------
-                         (clock clk_pipeline rise edge)
-                                                      0.000     0.000 r  
-                         input delay                  0.000     0.000    
-                                                      0.000     0.000 r  s_axis_tkeep[0] (IN)
-                         net (fo=0)                   0.000     0.000    s_axis_tkeep_IBUF[0]_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.331     0.331 r  s_axis_tkeep_IBUF[0]_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     0.331    s_axis_tkeep_IBUF[0]_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     0.331 r  s_axis_tkeep_IBUF[0]_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.342     0.673    f_mem_reg_0_3_28_31/DIC0
-                         RAMD32                                       r  f_mem_reg_0_3_28_31/RAMC/I
-  -------------------------------------------------------------------    -------------------
-
-                         (clock clk_pipeline rise edge)
-                                                      0.000     0.000 r  
-                                                      0.000     0.000 r  clk (IN)
-                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
-                         INBUF (Prop_INBUF_PAD_O)     0.582     0.582 r  clk_IBUF_inst/INBUF_INST/O
-                         net (fo=1, unplaced)         0.000     0.582    clk_IBUF_inst/OUT
-                         IBUFCTRL (Prop_IBUFCTRL_I_O)
-                                                      0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
-                         net (fo=1, unplaced)         0.161     0.743    clk_IBUF
-                         BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    f_mem_reg_0_3_28_31/WCLK
-                         RAMD32                                       r  f_mem_reg_0_3_28_31/RAMC/CLK
-                         clock pessimism              0.000     3.355    
-                         RAMD32 (Hold_RAMD32_CLK_I)
-                                                      0.078     3.433    f_mem_reg_0_3_28_31/RAMC
   -------------------------------------------------------------------
                          required time                         -3.433    
                          arrival time                           0.673    
@@ -1298,41 +1297,41 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
 Pulse Width Checks
 --------------------------------------------------------------------------------------
 Clock Name:         clk_pipeline
-Waveform(ns):       { 0.000 1.551 }
-Period(ns):         3.103
+Waveform(ns):       { 0.000 3.200 }
+Period(ns):         6.400
 Sources:            { clk }
 
 Check Type        Corner  Lib Pin  Reference Pin  Required(ns)  Actual(ns)  Slack(ns)  Location  Pin
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_changed_o_reg/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[0]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[10]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[11]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[12]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[13]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[14]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[15]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[1]/C
-Min Period        n/a     FDRE/C   n/a            3.195         3.103       -0.092               bbo_locate_o_reg[2]/C
-Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_changed_o_reg/C
-Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_changed_o_reg/C
-Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[0]/C
-Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[0]/C
-Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[10]/C
-Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[10]/C
-Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[11]/C
-Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[11]/C
-Low Pulse Width   Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[12]/C
-Low Pulse Width   Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[12]/C
-High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_changed_o_reg/C
-High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_changed_o_reg/C
-High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[0]/C
-High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[0]/C
-High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[10]/C
-High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[10]/C
-High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[11]/C
-High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[11]/C
-High Pulse Width  Slow    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[12]/C
-High Pulse Width  Fast    FDRE/C   n/a            1.438         1.551       0.113                bbo_locate_o_reg[12]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_changed_o_reg/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[0]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[10]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[11]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[12]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[13]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[14]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[15]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[1]/C
+Min Period        n/a     FDRE/C   n/a            3.195         6.400       3.205                bbo_locate_o_reg[2]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_changed_o_reg/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_changed_o_reg/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[0]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[0]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[10]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[10]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[11]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[11]/C
+Low Pulse Width   Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[12]/C
+Low Pulse Width   Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[12]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_changed_o_reg/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_changed_o_reg/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[0]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[0]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[10]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[10]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[11]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[11]/C
+High Pulse Width  Slow    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[12]/C
+High Pulse Width  Fast    FDRE/C   n/a            1.438         3.200       1.762                bbo_locate_o_reg[12]/C
 
 
 
@@ -1352,7 +1351,7 @@ Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[17]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[17]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
@@ -1398,14 +1397,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[17]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[17]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
@@ -1451,14 +1450,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_24/CAS_OUT_DIN_A[17]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_31/CAS_IN_DIN_A[17]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
@@ -1504,14 +1503,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[17]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_7/CAS_IN_DIN_A[17]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
@@ -1557,14 +1556,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[25]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[25]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
@@ -1610,14 +1609,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[25]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[25]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
@@ -1663,14 +1662,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_24/CAS_OUT_DIN_A[25]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_31/CAS_IN_DIN_A[25]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
@@ -1716,14 +1715,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[25]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_7/CAS_IN_DIN_A[25]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
@@ -1769,14 +1768,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[22]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[22]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.219ns  (logic 1.212ns (99.426%)  route 0.007ns (0.574%))
@@ -1822,14 +1821,14 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[22]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[22]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Setup (Max at Slow Process Corner)
   Data Path Delay:        1.219ns  (logic 1.212ns (99.426%)  route 0.007ns (0.574%))
@@ -1875,7 +1874,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 
@@ -1888,7 +1887,7 @@ Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_ADDR_B[19]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_ADDR_B[19]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -1916,14 +1915,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[28]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[28]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -1951,14 +1950,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[32]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[32]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -1986,14 +1985,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[34]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[34]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2021,14 +2020,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[36]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[36]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2056,14 +2055,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[42]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[42]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2091,14 +2090,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[52]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[52]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2126,14 +2125,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[64]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[64]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2161,14 +2160,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[68]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[68]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2196,14 +2195,14 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
   Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[6]
                             (internal pin)
   Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[6]
-                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             (none)
   Path Type:              Hold (Min at Slow Process Corner)
   Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
@@ -2231,7 +2230,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94821, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 

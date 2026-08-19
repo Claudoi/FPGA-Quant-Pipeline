@@ -63,10 +63,13 @@ pin no existe en un wrapper. Cerrar 322 MHz exigiría bajar el output delay
 del XDC (rechazado: trampa del gate).
 
 **Camino del CV / variante industrial**: **DW=64 @ 156,25 MHz** (periodo
-6,400 ns, mismo 10G lineal) con el mismo RTL: holgura sobrada con el
-residual actual (~3,3 ns). El 322 MHz queda documentado como capítulo de
-optimización no cerrado; el gate del tcl no se rebaja. Las lecciones de
-síntesis que evitan repetir runs: sección 7 de
+6,400 ns, mismo 10G lineal) con el mismo RTL: **CERRADO (2026-08-19)** — WNS
+**+0,015 ns**, TNS 0, LUT 92,31 %, URAM 32/48, DRC 0 (run `fase3_156mhz.tcl`,
+XDC `fase3_156mhz.xdc`). A DW=64 la observabilidad completa excede el
+presupuesto de I/O del FFVA676 (258 > 256) y se parametrizó `BBO_W` a 64
+(solo precios al pin); datapath idéntico. El 322 MHz queda documentado como
+capítulo de optimización no cerrado; el gate del tcl no se rebaja. Las
+lecciones de síntesis que evitan repetir runs: sección 7 de
 `docs/writeup/lecciones-aprendidas.md`.
 
 ## Artefactos adicionales (en `synth/`)

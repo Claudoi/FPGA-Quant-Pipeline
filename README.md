@@ -22,7 +22,7 @@ MoldUDP64 → parser ITCH → order book (URAM) → BBO/top-N
 | **0** | Golden model Python (parser ITCH + order book + vectores y tooling) | **Cerrada**; 22 tipos y replay de día real |
 | **1** | Parser RTL MoldUDP64/ITCH contra golden | **No cerrada**: framing `s_axis_tkeep` verde (91/91 `tlast`, gaps, backpressure, replay real bit a bit); pendiente REP-02 (medir `<=24` stalls en un tramo A/U real seleccionado del pcap sin índices manuales) |
 | **2** | Order book RTL del subset de 20 símbolos | **Cerrada funcionalmente**; 14/14 tests y replay real |
-| **3** | Variante DW=32, top-N y arquitectura URAM | **No cerrada**: criterio 10 abierto (5 runs Vivado, mejor WNS -3,527 ns, LUT 95,80 %, URAM 32/48 — detalle en `synth/reports/README.md`); rojo→verde de iter 7/8/9 y gates A/E/B/C pendientes en la máquina con cocotb; REP-02 pendiente |
+| **3** | Variante DW=32, top-N y arquitectura URAM | **CERRADA la variante 64b/156,25 MHz (10G)**: WNS +0,015 ns, TNS 0, LUT 92,31 %, URAM 32/48 (run `fase3_156mhz.tcl`). 322 MHz sigue como capítulo de optimización abierto (mejor WNS -3,319). Evidencia de simulación verde en WSL (sim-rtm 4/4, sim-rtm64 1/1, sim-lat media 44,5 ≤ 48, gate E 30/30). REP-02 pendiente de pcap real. Detalle en `synth/reports/README.md` |
 | **4** | Parser CME MDP3/SBE | **No cerrada**: framing `s_axis_tkeep` implementado en RTL (commit `62e4e46`); rojo→verde de M3-FRM-05 y gates pendientes en la máquina con cocotb; timing no acreditado |
 
 ### Evidencia de la fase 0 (día Nasdaq 2019-12-30, 3,5 GB reales)

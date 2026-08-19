@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 --------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date              : Wed Aug 19 00:33:57 2026
+| Date              : Wed Aug 19 03:36:48 2026
 | Host              : atini running 64-bit major release  (build 9200)
 | Command           : report_clocks -file <local-build-path>/synth/reports/clocks_synth.txt
 | Design            : itch_chain_synth
@@ -24,7 +24,7 @@ Attributes
   S: Pin phase-shifted with Latency mode
 
 Clock         Period(ns)  Waveform(ns)   Attributes  Sources
-clk_pipeline  3.103       {0.000 1.551}  P           {clk}
+clk_pipeline  6.400       {0.000 3.200}  P           {clk}
 
 
 ====================================================
