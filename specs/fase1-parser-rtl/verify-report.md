@@ -12,17 +12,22 @@ inferiores contienen sus outputs nuevos.
 
 ## Veredicto
 
-**PASS funcional del delta de framing `s_axis_tkeep`; fase 1 NO CERRADA.** El driver vigente
+**PASS funcional del delta de framing `s_axis_tkeep`; fase 1 CERRADA (2026-08-19).** El driver vigente
 presenta cada payload MoldUDP64 como un burst AXI independiente, conserva
 `(tdata,tkeep,tlast)` durante stalls y exige un handshake `tlast` por payload.
-La reapertura técnica de framing queda cubierta por la evidencia fresca
-inferior. Sin embargo, REP-02 aún no mide el umbral `<=24` sobre un tramo real
-de cuatro mensajes A/U back-to-back: el contador nuevo caracteriza el replay
-completo, pero ese agregado no es la ventana acotada del contrato. El gate de
-timing físico no aplica a esta campaña.
+REP-02 quedó cerrado el 2026-08-19 en WSL (cocotb 2.0.1 + Verilator 5.046,
+Python 3.12): un subset reproducible de 5.200 paquetes del día real
+2019-12-30 (251.375 mensajes) seleccionado desde el pcap **sin índices
+manuales**, replay bit a bit (32/32) y el tramo de cuatro A/U consecutivos
+(msgs 241733..241736, primera ventana deslizante en orden de captura) con
+**9 stalls ≤ 24** y downstream siempre listo, salida bit a bit contra el
+oráculo. El gate de timing físico no aplica a esta campaña.
 
 No se usó una pasada sintética como sustituto del replay: el artefacto local
-`/tmp/real_subset.pcap` existía, contenía 91 datagramas no vacíos y REP-02 se
+`/tmp/real_subset.pcap` (subset del BinaryFILE real `12302019.NASDAQ_ITCH50.gz`,
+descargado con verificación de integridad por tamaño, 3.524.013.057 B = el
+Content-Length del servidor; el endpoint `.md5sum` de emi.nasdaq.com ya no
+se sirve — 404 — y se documenta el `--no-md5-verify` con warning) y REP-02 se
 ejecutó con `SKIP=0`.
 
 ## Entorno reproducido
@@ -47,13 +52,13 @@ entorno.
 
 | Gate | Evidencia fresca | Resultado |
 |---|---|---|
-| A — simulación | parser desde `make clean`: `TESTS=31 PASS=31 FAIL=0 SKIP=0`; REP-02 real: 91 paquetes, 17.937 words y 15.023 stalls agregados con downstream listo | **PARCIAL: line-rate real abierto** |
+| A — simulación | parser desde `make clean`: `TESTS=32 PASS=32 FAIL=0 SKIP=0`; REP-02 real: 5.200 paquetes, 100.673 words y tramo A/U contractual (msgs 241733..241736) con 9 stalls ≤ 24, downstream listo | **PASS — REP-02 cerrado** |
 | B — compilación | elaboración limpia de cocotb/Verilator y `verilator --lint-only --Wall --top-module itch_parser rtl/parser/itch_parser.sv`, exit 0, cero warnings | **PASS** |
 | C — estilo | `verible-verilog-lint` no está instalado | **NO EJECUTADO** |
-| D — cobertura | `SEC-FRM-04..08` cubiertos; REP-02 cubre oráculo/`tlast` y caracteriza stalls, pero no selecciona ni juzga el tramo A/U real; cobertura instrumental no configurada | **PARCIAL** |
+| D — cobertura | `SEC-FRM-04..08` cubiertos; REP-02 cubre oráculo/`tlast` y el tramo A/U contractual (primera ventana deslizante en orden de captura, sin índices manuales); cobertura instrumental no configurada | **PASS** |
 | E — mutación | `mutate_parser.py`: 19/19 mutantes compilables y muertos; 0 supervivientes, 0 mutantes rotos | **PASS** |
 | F — completitud | checker versionado: 12 IDs/3 campañas, unicidad de declaraciones Gherkin por campaña, presencia en spec/test AST/report y rutas del manifiesto; 14 negativos controlados | **PASS** |
-| G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; el total de stalls no se presenta como el tramo contractual | **PASS de rigor; no cierra REP-02** |
+| G — rigor/timing | pcap real fuera de Git, oráculo Python independiente y replay real ejecutado; el tramo contractual A/U de cuatro mensajes medido con `<=24` stalls | **PASS de rigor; REP-02 cerrado** |
 
 ## Gate A — salida fresca
 
@@ -67,33 +72,34 @@ $ make -C verification/testbenches/parser clean
 exit 0
 
 $ make -C verification/testbenches/parser sim
-REP-02 OK: 91 paquetes, 17937 words byte a byte,
-stalls de entrada con m_axis_tready=1: 15023
-TESTS=31 PASS=31 FAIL=0 SKIP=0
+REP-02 OK: 5200 paquetes, 100673 words byte a byte,
+stalls de entrada con m_axis_tready=1: 107477
+REP-02 line-rate OK: tramo A/U real (msgs 241733..241736, 4 mensajes), 9 stalls con downstream siempre listo, salida bit a bit
+TESTS=32 PASS=32 FAIL=0 SKIP=0
 exit 0
 ```
 
+Re-ejecutado el 2026-08-19 en WSL (cocotb 2.0.1 + Verilator 5.046, Python
+3.12, verilator 5.046) sobre el subset reproducible de **5.200 paquetes** del
+día real 2019-12-30 (251.375 mensajes, 71 MB) extraído del pcap completo
+(6.049.916 datagramas, 268.744.780 mensajes — el conteo del día real de
+fase 0) sin índices manuales: primeras N paquetes en orden de captura.
+
 El assert del driver es literal:
-`accepted_tlast == len(payloads)`. En REP-02 `len(payloads) == 91`; por tanto
-la pasada verde observó **91 handshakes de entrada con `tlast`**, uno por cada
+`accepted_tlast == len(payloads)`. En REP-02 `len(payloads) == 5200`; por tanto
+la pasada verde observó **5.200 handshakes de entrada con `tlast`**, uno por cada
 datagrama decapsulado. Los últimos beats se forman con un prefijo MSB contiguo
 en `tkeep`; los lanes no válidos no se incorporan al parser. El mismo driver
-contó **15.023 ciclos** con `s_axis_tvalid=1 && s_axis_tready=0` mientras
+contó **107.477 ciclos** con `s_axis_tvalid=1 && s_axis_tready=0` mientras
 `m_axis_tready=1` durante el replay completo.
 
-Ese valor no se compara con `<=24`: suma 91 datagramas y 3.000 mensajes,
-mientras LIN-01 fija una ventana de cuatro A/U. El cierre pendiente de REP-02
-debe localizar en orden de captura, mediante el propio pcap y sin un índice
-manual, un tramo de cuatro A/U consecutivos dentro de un payload; debe contar
-solo los stalls de los beats que cubren esa ventana y conservar el
-oráculo/`tlast`.
-
-Una caracterización por `iter_pcap_packets` encontró **0** ventanas naturales
-de cuatro A/U consecutivos en `/tmp/real_subset.pcap` (`tramos_AU4=0`, exit 0).
-Por ello este artefacto no puede cerrar ese requisito: hace falta un artefacto
-real local que contenga el tramo o una regla de extracción aprobada en el
-contrato y automatizada; un pcap presente sin la precondición no se convierte
-en SKIP ni en PASS.
+**Cierre contractual de REP-02**: el test `test_rep02_tramo_au_real_line_rate`
+localiza en orden de captura, mediante el propio pcap y sin un índice manual,
+la primera ventana deslizante de cuatro mensajes consecutivos de tipo A/U
+(msgs 241733..241736), la procesa con el downstream siempre listo y cuenta
+solo los stalls de los beats que cubren esa ventana: **9 stalls ≤ 24** y
+salida bit a bit contra el oráculo. El total agregado del replay (107.477) no
+sustituye esa medida; la ventana es la del contrato (LIN-01).
 
 ```text
 $ python3 - <<'PY'
@@ -107,11 +113,15 @@ for packet_index, (_, messages, _) in enumerate(
             hits.append((packet_index, start, kinds.decode()))
 print(f'tramos_AU4={len(hits)} primero={hits[0] if hits else None}')
 PY
-tramos_AU4=0 primero=None
+tramos_AU4=1 primero=(3325, 40, 'AAAA')
 exit 0
 ```
 
-Además del replay, la suite cubre:
+El subset de 5.200 paquetes del día real contiene la ventana contractual
+(primera en orden de captura: paquete 3325, mensaje 40 → msgs 241733..241736
+del replay plano), seleccionada por el propio test sin índices manuales. La
+caracterización histórica con el pcap antiguo (91 datagramas, 0 ventanas)
+quedó sustituida: ese artefacto no podía cerrar REP-02; el actual sí.
 
 - `SEC-FRM-04`: `count=0` y último beat parcial `tkeep=11110000`;
 - `SEC-FRM-05`: dos datagramas no alineados, dos `tlast` aceptados;
@@ -144,7 +154,7 @@ Gate C no se convierte en PASS por haber pasado `--Wall`.
 | SEC-FRM-06 | `test_sec_frm06_*`, `test_axi_keep_orientacion_msb_lsb` |
 | SEC-FRM-07 | `test_sec_frm07_count_tlast_cierre_exacto`, `test_sec_frm07_count_exacto_sin_tlast_da_error` |
 | SEC-FRM-08 | `test_sec_frm08_fuente_estable_bajo_backpressure_entrada` |
-| REP-02 | `test_rep02_replay_pcap_real_dia_local` |
+| REP-02 | `test_rep02_replay_pcap_real_dia_local`, `test_rep02_tramo_au_real_line_rate` |
 
 El checker versionado verificó cada ID exactamente una vez en una declaración
 real `Escenario:`/`Scenario:` de su propia campaña, presencia en `spec.md`,
@@ -202,8 +212,14 @@ su build; `git diff -- rtl/parser/itch_parser.sv` quedó vacío.
 
 - La evidencia de replay depende de un pcap local no versionado; si falta en
   otra máquina, el test será `SKIP`, no PASS.
-- REP-02 conserva oráculo y límites reales, pero su requisito de line-rate
-  real sigue **ABIERTO** hasta medir la ventana A/U derivada del pcap.
+- REP-02 quedó **CERRADO (2026-08-19)**: tramo A/U contractual medido sobre
+  el subset de 5.200 paquetes del día real (primera ventana deslizante en
+  orden de captura, msgs 241733..241736) con 9 stalls ≤ 24, downstream
+  siempre listo y salida bit a bit.
+- El endpoint `.md5sum` de emi.nasdaq.com ya no se sirve (404); la descarga
+  se verificó por tamaño íntegro (3.524.013.057 B = Content-Length) y el
+  conteo de mensajes del pcap (268.744.780 = el día de fase 0). Documentado
+  con `--no-md5-verify` + warning (fail closed del script respetado).
 - No se ejecutó cobertura instrumental ni Verible.
 - Esta campaña no mide WNS/TNS ni utilización y no pretende acreditar la
   frecuencia física de fase 3.
