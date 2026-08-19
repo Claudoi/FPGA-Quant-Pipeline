@@ -77,7 +77,7 @@ class CheckItchGherkinTest(unittest.TestCase):
 
     def test_detecta_id_ausente_de_spec(self):
         spec = self.root / "specs/fase1-parser-rtl/spec.md"
-        spec.write_text(spec.read_text().replace("REP-02", ""), encoding="utf-8")
+        spec.write_text(spec.read_text(encoding="utf-8").replace("REP-02", ""), encoding="utf-8")
 
         self.assertIn(
             "fase1-parser-rtl/REP-02: ausente de spec.md",
@@ -86,7 +86,7 @@ class CheckItchGherkinTest(unittest.TestCase):
 
     def test_detecta_id_ausente_de_verify_report(self):
         report = self.root / "specs/fase3-optimizacion/verify-report.md"
-        report.write_text(report.read_text().replace("P32-02", ""), encoding="utf-8")
+        report.write_text(report.read_text(encoding="utf-8").replace("P32-02", ""), encoding="utf-8")
 
         self.assertIn(
             "fase3-optimizacion/P32-02: ausente de verify-report.md",
@@ -96,7 +96,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_detecta_id_gherkin_duplicado_en_su_campana(self):
         feature = self.root / "specs/fase3-uram/gherkin/campaign.feature"
         feature.write_text(
-            feature.read_text() + "\nEscenario: CHAIN-01 — duplicado\n",
+            feature.read_text(encoding="utf-8") + "\nEscenario: CHAIN-01 — duplicado\n",
             encoding="utf-8",
         )
 
@@ -126,7 +126,7 @@ class CheckItchGherkinTest(unittest.TestCase):
 
     def test_detecta_ruta_gherkin_inexistente(self):
         manifest = self.root / "specs/gherkin-espejos.json"
-        data = json.loads(manifest.read_text())
+        data = json.loads(manifest.read_text(encoding="utf-8"))
         data["specs/campana-inexistente/gherkin"] = \
             "verification/testbenches/parser"
         manifest.write_text(json.dumps(data), encoding="utf-8")
@@ -140,7 +140,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         gherkin = self.root / "specs/campana-extra/gherkin"
         gherkin.mkdir(parents=True)
         manifest = self.root / "specs/gherkin-espejos.json"
-        data = json.loads(manifest.read_text())
+        data = json.loads(manifest.read_text(encoding="utf-8"))
         data["specs/campana-extra/gherkin"] = \
             "verification/testbenches/inexistente"
         manifest.write_text(json.dumps(data), encoding="utf-8")
@@ -154,7 +154,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_detecta_cero_escenarios_para_un_id(self):
         feature = self.root / "specs/fase1-parser-rtl/gherkin/campaign.feature"
         feature.write_text(
-            feature.read_text().replace("  Escenario: REP-02 — espejo", ""),
+            feature.read_text(encoding="utf-8").replace("  Escenario: REP-02 — espejo", ""),
             encoding="utf-8",
         )
 
@@ -166,7 +166,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_ignora_id_solo_en_comentario_gherkin(self):
         feature = self.root / "specs/fase1-parser-rtl/gherkin/campaign.feature"
         feature.write_text(
-            feature.read_text().replace(
+            feature.read_text(encoding="utf-8").replace(
                 "  Escenario: REP-02 — espejo",
                 "  # Escenario: REP-02 — solo comentario",
             ),
@@ -181,7 +181,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_ignora_async_test_comentado(self):
         test_path = self.root / "verification/testbenches/parser/test_parser.py"
         test_path.write_text(
-            test_path.read_text().replace(
+            test_path.read_text(encoding="utf-8").replace(
                 "async def test_rep_02(): pass",
                 "# async def test_rep_02(): pass",
             ),
@@ -197,7 +197,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_ignora_string_que_parece_def_test(self):
         test_path = self.root / "verification/testbenches/parser/test_parser.py"
         test_path.write_text(
-            test_path.read_text().replace(
+            test_path.read_text(encoding="utf-8").replace(
                 "async def test_rep_02(): pass",
                 "'''async def test_rep_02(): pass'''",
             ),
@@ -213,7 +213,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_no_acepta_id_embebido_en_nombre_de_test(self):
         test_path = self.root / "verification/testbenches/parser/test_parser.py"
         test_path.write_text(
-            test_path.read_text().replace(
+            test_path.read_text(encoding="utf-8").replace(
                 "async def test_rep_02(): pass",
                 "async def test_helper_rep_02(): pass",
             ),
@@ -229,7 +229,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_detecta_ausencia_de_test_ordinario(self):
         test_path = self.root / "verification/testbenches/phase3/test_chain32.py"
         test_path.write_text(
-            test_path.read_text().replace(
+            test_path.read_text(encoding="utf-8").replace(
                 "def test_p32_01(): pass", "def helper_p32_01(): pass"),
             encoding="utf-8",
         )
@@ -243,7 +243,7 @@ class CheckItchGherkinTest(unittest.TestCase):
     def test_comprueba_el_espejo_externo_de_chain01_uram(self):
         test_path = self.root / "verification/testbenches/phase3/test_chain32.py"
         test_path.write_text(
-            test_path.read_text().replace(
+            test_path.read_text(encoding="utf-8").replace(
                 "async def test_chain_01(): pass", "async def test_chain_externo(): pass"),
             encoding="utf-8",
         )

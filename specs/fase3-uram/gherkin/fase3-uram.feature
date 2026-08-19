@@ -42,7 +42,8 @@ Funcionalidad: Order book sobre URAM sintetizable a 322,265625 MHz
     Dado 33 adds que desbordan P=32 y un delete posterior sobre un nivel ausente
     Cuando el book procesa la secuencia
     Entonces jamás aparece un precio stale ni una cantidad envuelta
-    Y cada operación de nivel consume a lo sumo 2 ciclos extra
+    Y cada operación de nivel consume a lo sumo 3 ciclos extra (2 + 1 de la
+    etapa LV2B partida en la iter 8 de fase 3)
 
   Escenario: REG-01 — la regresión completa sigue verde con el RTL nuevo
     Dado el RTL refactorizado (URAM + sonda serializada + pipeline + Anexo recortado)

@@ -19,7 +19,7 @@ from test_orderbook32 import anexo_words32
 
 # espejo de los localparams del RTL (orderbook.sv)
 ST_W0, ST_TS, ST_BODY, ST_APPLY, ST_EMIT, ST_UADD, ST_WAIT_PROBE, ST_INVAL = range(8)
-ST_LV2, ST_LV3 = 8, 9        # pipeline de niveles (iteración 3)
+ST_LV2, ST_LV2B, ST_LV3 = 8, 14, 9   # pipeline de niveles (iter 3; LV2B = iter 8)
 PR_IDLE, PR_WARM, PR_WALK = 0, 1, 2
 
 
@@ -188,12 +188,14 @@ async def test_sec_uram_02_el_prefetch_del_grupo_de_hash_ocurre_durante_st_body(
 
 def _split_lv_runs(trace):
     """Parte los ciclos en los estados del pipeline de niveles en runs
-    contiguos (un run = la operación de nivel de un mensaje)."""
+    contiguos (un run = la operación de nivel de un mensaje). El FSM vigente
+    (iter 8 de fase 3) recorre LV2 -> LV2B -> LV3: los tres estados forman
+    parte del mismo run de operación."""
     runs = []
     cur = []
     prev = None
     for i, (st, *_rest) in enumerate(trace):
-        in_lv = st == ST_LV2 or st == ST_LV3
+        in_lv = st == ST_LV2 or st == ST_LV2B or st == ST_LV3
         if in_lv:
             if prev is None or i == prev + 1:
                 cur.append(i)
@@ -229,22 +231,26 @@ async def test_sec_uram_03_el_pipeline_de_niveles_no_crea_burbujas_ni_fantasmas(
     assert out[-1] == (393, (100031, 100, 0, 0), 0), (
         f"SEC-URAM-03: el reduce fantasma no cambia el BBO (sin wrap): "
         f"out[-1]={out[-1]} exp=(100031@100, changed=0)")
-    # burbuja <= 2 ciclos por operación: 35 operaciones de nivel (33 adds +
-    # 2 deletes), cada una un run contiguo de a lo sumo 2 ciclos, estrictamente
-    # hacia adelante (LV2->LV3, jamás repetición ni retroceso)
+    # burbuja <= 3 ciclos por operación (iter 8 de fase 3: el decode se
+    # partió en LV2+LV2B, +1 sobre los 2 del Gherkin original; spec
+    # fase3-optimizacion iter 8): 35 operaciones de nivel (33 adds +
+    # 2 deletes), cada una un run contiguo de a lo sumo 3 ciclos, estrictamente
+    # hacia adelante (LV2->LV2B->LV3, jamás repetición ni retroceso)
     runs = _split_lv_runs(trace)
     assert len(runs) == 35, (
         f"SEC-URAM-03: {len(runs)} runs de pipeline de niveles exp=35 — "
         f"sin pipeline registrado (o con burbujas) no hay un run por operación")
     for r in runs:
-        assert len(r) <= 2, (
-            f"SEC-URAM-03: run de niveles de {len(r)} ciclos > 2 (burbuja)")
+        assert len(r) <= 3, (
+            f"SEC-URAM-03: run de niveles de {len(r)} ciclos > 3 (burbuja)")
         seq = [trace[i][0] for i in r]
-        assert seq == sorted(seq) and len(set(seq)) == len(seq), (
-            f"SEC-URAM-03: el pipeline de niveles retrocede o se repite: {seq}")
+        assert seq == [ST_LV2, ST_LV2B, ST_LV3], (
+            f"SEC-URAM-03: el pipeline de niveles no recorre LV2,LV2B,LV3 "
+            f"estrictamente: {seq}")
     cocotb.log.info(
         f"SEC-URAM-03 OK: 35 operaciones de nivel, {sum(len(r) for r in runs)} "
-        f"ciclos de pipeline (<=2 por op), sin precio stale ni cantidad envuelta")
+        f"ciclos de pipeline (<=3 por op, iter 8), sin precio stale ni "
+        f"cantidad envuelta")
 
 
 @cocotb.test()
@@ -273,8 +279,8 @@ async def test_inv_uram_03_replace_u_doble_run_pipeline(dut):
         f"INV/SEC-URAM-03: {len(runs)} runs de niveles exp=4 (2 adds + "
         f"delete + add del replace U)")
     for r in runs:
-        assert len(r) <= 2, (
-            f"INV/SEC-URAM-03: run de niveles de {len(r)} ciclos > 2 (burbuja)")
+        assert len(r) <= 3, (
+            f"INV/SEC-URAM-03: run de niveles de {len(r)} ciclos > 3 (burbuja)")
     # el replace U encadena sus DOS operaciones: delete (run LV2->LV3) y add
     # (lanzada en ST_UADD — el ciclo del medio, igual que en fase 3 — y luego
     # LV2->LV3). El add arranca 2 ciclos después del final del delete:
