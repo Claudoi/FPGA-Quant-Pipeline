@@ -72,6 +72,9 @@ async def _reset(dut):
     dut.m_axis_tready.value = 1
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
     dut.rst_n.value = 1
 
 
@@ -514,3 +517,59 @@ async def test_m3size01_02_limite_256_acepta_257_rechaza(dut):
         dut, [p257, recovery])
     assert errors >= 1, "M3-SIZE-02: faltó el error por msg_size=257"
     assert_bytes_equal(got, expected_for(schema, [recovery]), "M3-SIZE-02")
+
+
+@cocotb.test(skip=True)
+async def test_m3inv04a_mascara_con_huecos(dut):
+    """Espejo M3-INV-04 (criterio 7, addendum 2026-08-19): una máscara
+    tkeep con huecos (no MSB-contigua) debe pulsar error y descartar el
+    paquete. LOOP ABIERTO (2026-08-19): la validación de máscara MSB-
+    contigua y el descarte del paquete inválido aún no están implementados
+    en el RTL; skip estático mientras el criterio 7 no se cierra."""
+    schema = load_schema(SCHEMA_PATH)
+    msg = literal_template47(schema)
+    packet = encode_packet(schema, 81, 1, [msg])
+    recovery = encode_packet(schema, 82, 2, [msg])
+    b = len(dut.s_axis_tdata) // 8
+
+    # A) máscara con huecos: sustituyo un beat NO-final (índice 1) por una
+    # máscara no MSB-contigua (p. ej. 0b0110 en un byte, huecos)
+    beats_ok = beat_list([packet], b)
+    beats_bad = list(beats_ok)
+    if len(beats_bad) > 2:
+        holes_mask = (1 << (b - 1)) | (1 << (b - 4))
+        beats_bad[1] = (beats_bad[1][0], False, holes_mask)
+        await _reset(dut)
+        dut._log.info("M3-INV-04a: holes_mask=%#x b=%d len(beats)=%d" %
+                      (holes_mask, b, len(beats_bad)))
+        got, _, errors, _ = await drive_and_collect(
+            dut, [packet, recovery],
+            beats_override=beats_bad + beat_list([recovery], b))
+        assert errors >= 1, "M3-INV-04a: faltó el error por máscara con huecos"
+        dut._log.info("M3-INV-04a got=%s exp=%s" % (got.hex(), expected_for(schema, [recovery]).hex()))
+        assert_bytes_equal(got, expected_for(schema, [recovery]),
+                           "M3-INV-04a")
+
+
+@cocotb.test(skip=True)
+async def test_m3inv04b_parcial_sin_tlast(dut):
+    """Espejo M3-INV-04 (criterio 7): una palabra parcial sin tlast debe
+    pulsar error. LOOP ABIERTO (2026-08-19): ibidem 04a — la validación de
+    máscara y el descarte no están implementados; skip estático."""
+    schema = load_schema(SCHEMA_PATH)
+    msg = literal_template47(schema)
+    packet = encode_packet(schema, 81, 1, [msg])
+    recovery = encode_packet(schema, 82, 2, [msg])
+    b = len(dut.s_axis_tdata) // 8
+    beats_ok = beat_list([packet], b)
+    beats_part = list(beats_ok)
+    if len(beats_part) > 2:
+        part_mask = ((1 << (b - 2)) - 1) << 2   # MSB-contigua, b-2 bytes
+        beats_part[1] = (beats_part[1][0], False, part_mask)
+        await _reset(dut)
+        got, _, errors, _ = await drive_and_collect(
+            dut, [packet, recovery],
+            beats_override=beats_part + beat_list([recovery], b))
+        assert errors >= 1, "M3-INV-04b: faltó el error por parcial sin tlast"
+        assert_bytes_equal(got, expected_for(schema, [recovery]),
+                           "M3-INV-04b")

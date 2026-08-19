@@ -421,3 +421,38 @@ Regla del golden: `decode_message` devuelve `{}` (passthrough) si
 `template_id not in SUBSET_TEMPLATES or schema_id != SCHEMA_ID or
 version != SCHEMA_VERSION`. `oracle_bytes` usa `passthrough_record` en esos
 casos. El RTL replica exactamente esa puerta en `DS_HDR`.
+
+## Addendum criterio 7 (2026-08-19) — validación de máscara tkeep
+
+El criterio 7 exige que las **máscaras inválidas** de `s_axis_tkeep` pulsan
+`error` y descartan el paquete (loop separado del framing tkeep del
+addendum 2026-08-18, que solo restringía a máscaras MSB-contiguas sin
+validarlas). Contrato:
+
+1. **Máscara con huecos** (no MSB-contigua, p. ej. `0b0101` en DW=32): en
+   cualquier beat pulsa `error` y descarta el paquete actual, drenándolo
+   hasta `tlast` (el beat inválido no final) o aceptando el nuevo
+   inmediatamente (si lleva `tlast`).
+2. **Palabra parcial sin `tlast`**: una máscara MSB-contigua con
+   `nv < DW/8` en un beat NO final (sin `tlast`) es framing inválido →
+   `error` y descarte del paquete.
+3. **`tkeep == 0` completo**: permitido (se consume sin aportar, sin
+   `error`; es un beat vacío válido del framing tkeep).
+4. Las máscaras MSB-contiguas con `tlast` son el caso nominal (el beat
+   final parcial declara solo sus bytes reales).
+
+Validación RTL: `tkeep` es MSB-contigua si no existe ningún `0` entre dos
+`1` (leyendo del MSB al LSB); equivale a `tkeep & (tkeep >> 1)` no "parte"
+el bloque de unos — o, computacionalmente,
+`tkeep` no tiene la forma `...0...1...` con un `1` a la derecha de un `0`.
+Implementación simple y sintetizable: `mask_invalida = |(tkeep & (~tkeep +
+1)) & ...` NO — usar la propiedad del popcount: `tkeep` es contigua MSB si
+`tkeep == (({DW/8{1'b1}} >> (DW/8 - tk_cnt)) << (DW/8 - tk_cnt))`... mejor:
+`tkeep` contigua ⟺ `(tkeep | (tkeep - 1)) == {DW/8{1'b1}}` (el OR con
+`tkeep-1` rellena los huecos internos del bloque de unos hasta llegar al
+LSB del bloque; si hay un hueco, queda un `0`). Un parcial sin `tlast`:
+máscara contigua con `tk_cnt < DW/8` y `!s_axis_tlast`.
+
+Test: `M3-INV-04` (máscara con huecos → error + recuperación; parcial sin
+`tlast` → error). El driver inyecta `beats_override` con `tkeep` inválido
+en medio de un burst válido.
