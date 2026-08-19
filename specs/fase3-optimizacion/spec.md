@@ -669,3 +669,24 @@ IOB 222 conservado.
 **Equivalencia**: el contrato AXI-S del pin se mantiene; +1 ciclo de
 latencia de pin (documentada). Sin escenarios Gherkin nuevos; sin mutantes
 nuevos (el wrapper no se muta).
+
+## Addendum iter 11b (2026-08-19) — presupuesto de pines de la variante 156 MHz
+
+La variante **DW=64 @ 156,25 MHz** (periodo 6,400 ns) con el wrapper
+completo expone **258 pines > 256 disponibles** del FFVA676 (entrada 64+8,
+bbo_tdata 128, depth_tdata 32) y el placer aborta con `Place 30-58`
+(unplaced IO 257 > 256). No es un problema de timing: es el presupuesto de
+I/O del paquete con la observabilidad completa a DW=64.
+
+**Decisión**: el wrapper de síntesis ya recorta observabilidad (depth_tdata
+a [31:0], cross_events/anomaly/error sin pin). Para la variante 156 se
+parametriza el ancho de salida `bbo_tdata` a **64 bits** (`BBO_W=64`, solo
+los precios bid/ask — bits [127:64] del bus del book) y la entrada se queda
+igual. Total: **194 pines <= 256**. El datapath del book/parser NO cambia
+(la lógica medida es idéntica); solo se recorta el bus de observabilidad al
+pin, mismo patrón que el recorte de depth_tdata.
+
+El tcl `fase3_156mhz.tcl` fija `generic {DW=64 BBO_W=64 K=19 QB=46}` y usa
+`constraints/fase3_156mhz.xdc` (periodo 6,400). El wrapper lo acepta via el
+nuevo `parameter BBO_W = 128` (default) / 64 (variante). La variante 322
+MHz no cambia (BBO_W=128 por defecto).

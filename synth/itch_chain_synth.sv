@@ -24,7 +24,10 @@ module itch_chain_synth #(
     parameter ND   = 5,
     parameter NSYM = 20,
     parameter PXW  = 32,
-    parameter QW   = 32
+    parameter QW   = 32,
+    parameter BBO_W = 128   // ancho del bus bbo_tdata al pin (recorte de
+                            // observabilidad para el presupuesto de I/O del
+                            // paquete; la variante 156 MHz usa 64)
 ) (
 input  wire              clk,
     input  wire              rst_n,
@@ -35,7 +38,7 @@ input  wire              clk,
     output reg               s_axis_tready,
     input  wire              s_axis_tlast,
     output wire [15:0]       bbo_locate,
-    output wire [127:0]      bbo_tdata,
+    output wire [BBO_W-1:0]  bbo_tdata,
     output wire              bbo_tvalid,
     input  wire              bbo_tready,
     output wire              bbo_changed,
@@ -61,7 +64,7 @@ input  wire              clk,
     (* IOB = "TRUE" *)
     reg  [15:0]  bbo_locate_o;
     (* IOB = "TRUE" *)
-    reg  [127:0] bbo_tdata_o;
+    reg  [BBO_W-1:0] bbo_tdata_o;
     (* IOB = "TRUE" *)
     reg          bbo_tvalid_o, bbo_changed_o, depth_tvalid_o;
     (* IOB = "TRUE" *)
@@ -184,7 +187,7 @@ input  wire              clk,
             // captura de un par nuevo del book (solo si el pin está libre)
             if (bbo_tvalid_i && !bbo_tvalid_o) begin
                 bbo_locate_o  <= bbo_locate_i;
-                bbo_tdata_o   <= bbo_tdata_i;
+                bbo_tdata_o   <= bbo_tdata_i[127 -: BBO_W];
                 bbo_changed_o <= bbo_changed_i;
                 bbo_tvalid_o  <= 1'b1;
             end
