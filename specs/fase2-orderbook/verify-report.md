@@ -156,3 +156,25 @@ aplicables están en PASS; C y cobertura instrumentada están declarados NO
 EJECUTADOS. El replay real aporta 30.729 comparaciones bit a bit. El gate E
 integral compartido permanece abierto hasta cerrar los tres supervivientes de
 fase 3, registrados sin convertirlos en PASS.
+
+## Re-ejecución WSL (2026-08-19) — evidencia fresca de regresión
+
+Cocotb 2.0.1 + Verilator 5.046 + Python 3.12 sobre el HEAD tras el cierre de
+REP-02 (fase 1) y el fix de SEC-URAM-03 (fase 3-uram): el RTL vigente
+(iter 8: FSM LV2→LV2B→LV3) mantiene el contrato de fase 2.
+
+```text
+$ make -C verification/testbenches/orderbook sim
+** TESTS=14 PASS=13 FAIL=0 SKIP=1 **
+```
+
+- El único SKIP es `test_replay01_feed_real_bbo` (replay del feed real del
+  book): requiere un pcap local no presente en la máquina WSL; la evidencia
+  del replay real del book ya consta en esta campaña (30.729 comparaciones
+  bit a bit). La omisión se informa; no se sustituye por una pasada sintética.
+- Sin cambios de contrato: el FSM con LV2B y el +1 de latencia (iter 8 de
+  fase 3) no alteran el BBO ni los invariantes de fase 2 (los tests de esta
+  campaña comparan contra el golden `book.py`).
+
+Suites de fase 3 re-ejecutadas en la misma pasada (misma máquina WSL):
+sim-rtm 4/4, sim-rtm64 1/1, sim-lat 2/2 (media 44,5 ≤ 48) y sim-uram 4/4.
