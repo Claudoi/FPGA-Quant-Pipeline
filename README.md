@@ -23,7 +23,10 @@ MoldUDP64 → parser ITCH → order book (URAM) → BBO/top-N
 | **1** | Parser RTL MoldUDP64/ITCH contra golden | **No cerrada**: framing `s_axis_tkeep` verde (91/91 `tlast`, gaps, backpressure, replay real bit a bit); pendiente REP-02 (medir `<=24` stalls en un tramo A/U real seleccionado del pcap sin índices manuales) |
 | **2** | Order book RTL del subset de 20 símbolos | **Cerrada funcionalmente**; 14/14 tests y replay real |
 | **3** | Variante DW=32, top-N y arquitectura URAM | **CERRADA la variante 64b/156,25 MHz (10G)**: WNS +0,015 ns, TNS 0, LUT 92,31 %, URAM 32/48 (run `fase3_156mhz.tcl`). 322 MHz sigue como capítulo de optimización abierto (mejor WNS -3,319). Evidencia de simulación verde en WSL (sim-rtm 4/4, sim-rtm64 1/1, sim-lat media 44,5 ≤ 48, gate E 30/30). REP-02 pendiente de pcap real. Detalle en `synth/reports/README.md` |
-| **4** | Parser CME MDP3/SBE | **No cerrada**: framing `s_axis_tkeep` implementado en RTL (commit `62e4e46`); rojo→verde de M3-FRM-05 y gates pendientes en la máquina con cocotb; timing no acreditado |
+| **4** | Parser CME MDP3/SBE | **No cerrada**: framing `s_axis_tkeep` verde y **criterios 5 y 10 cerrados (2026-08-19)** en WSL (suite DW=32/DW64 12/12 PASS + 2 SKIP, gate B limpio, gate E 9/9); **criterio 7 (máscaras con huecos) abierto**; timing no acreditado (sin Vivado MDP3) |
+
+El documento de presentación del proyecto (arquitectura, hazards, latencia,
+timing y límites honestos) está en `docs/writeup/pipeline-itch-uram.md`.
 
 ### Evidencia de la fase 0 (día Nasdaq 2019-12-30, 3,5 GB reales)
 
