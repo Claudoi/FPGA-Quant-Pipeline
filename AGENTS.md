@@ -30,13 +30,15 @@ El documento maestro, el alcance por fase y los riesgos viven en
 | 1 — parser RTL | **No cerrada**: framing `s_axis_tkeep`, gaps, backpressure, 91/91 `tlast` y replay real bit a bit están verdes; REP-02 aún no mide `<=24` stalls en un tramo A/U real seleccionado de forma reproducible. El test del tramo (`test_rep02_tramo_au_real_line_rate`, primera ventana de 4 A/U desde el pcap sin índices manuales, stalls con downstream siempre listo) y la enmienda del criterio en la spec fase 1 están preparados y validados estáticamente (py_compile + gate F); **pendiente el rojo→verde en la máquina con cocotb**. |
 | 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
 | 3 — DW=32/URAM | **VARIANTE 64b/156,25 MHz CERRADA (2026-08-19)**: run `fase3_156mhz.tcl` → **WNS +0,015 ns, TNS 0, LUT 92,31 % (150.212), URAM 32/48, DRC 0, IOB 194** — cierre de timing del datapath completo (parser 64 → book 64, tabla en 32 URAM) a 156,25 MHz = **10G**, el listón industrial del documento maestro (§0.1). A DW=64 la observabilidad completa excedía el I/O del FFVA676 (258 > 256) y se parametrizó `BBO_W` a 64 (recorte de bbo_tdata al pin; datapath idéntico). El **criterio 10 a 322 MHz sigue ABIERTO** (mejor WNS -3,319 ns, iter 11 `bbd3b6c`; limitación estructural del modelo I/O del wrapper, capítulo de optimización). Evidencia de simulación verde en WSL (2026-08-18): sim-rtm 4/4, sim-rtm64 1/1, sim-lat 2/2 (media 44,5 ≤ 48), regresión área, gate E 30/30. **P1 REP-02**: pendiente de `/tmp/real_subset.pcap` (test listo; sin pcap no se cierra). Detalles en `specs/fase3-optimizacion/verify-report.md` y `synth/reports/README.md`. |
-| 4 – CME MDP3 | **No cerrada**: framing `s_axis_tkeep` verde y **criterios 5 y 10 cerrados (2026-08-19)** en WSL (cocotb 2.0.1 + Verilator 5.046): suite MDP3 DW=32/DW64 **12/12 PASS + 2 SKIP**, gate B limpio, gate E 9/9. Criterio 5: puerta `DS_HDR` (schema_id==1 && version==12, resto passthrough) + MAX_MSG 256/257 (`M3-PASS-02`, `M3-SIZE-01/02`). Criterio 10: backpressure de salida estable (`M3-BP-01`). **Queda ABIERTO**: criterio 7 (máscaras con huecos / parcial sin tlast — loop de robustez, tests `M3-INV-04a/04b` en skip estático) y timing (sin Vivado MDP3). Gate C (verible) NO EJECUTADO (no instalado). |
+| 4 – CME MDP3 | **Cerrada funcionalmente (2026-08-19)**: suite MDP3 DW=32/DW64 **14/14 PASS** en WSL (cocotb 2.0.1 + Verilator 5.046), gate B limpio, gate E **14/14** mutantes, gate C verible **0 hallazgos**. Criterio 5: puerta `DS_HDR` (schema_id==1 && version==12, resto passthrough) + MAX_MSG 256/257 (`M3-PASS-02`, `M3-SIZE-01/02`). Criterio 10: backpressure de salida estable (`M3-BP-01`). **Criterio 7 CERRADO**: validación tkeep MSB-contigua + descarte del paquete inválido (sin apend de beats inválidos, estado `CS_DISCARD` que drena hasta tlast y resetea colas; `M3-INV-04a/04a2/04b` activos; sub-caso 04a2 con huecos en el último beat y aporte intacto, nv=3). **Queda ABIERTO solo el timing** (sin proyecto Vivado MDP3: WNS/TNS/utilización NO EJECUTADOS) y el checker XML↔RTL pendiente. Hallazgo documentado: `literal_subset` del test (vector m53 de 87 B) es incoherente con el layout del template 53 y nunca se usó en la suite. |
 
-No presentar las fases 1, 3 o 4 como cerradas mientras sus criterios reabiertos
-no tengan evidencia vigente en el `verify-report.md` correspondiente. Para
-REP-02, el siguiente cierre debe seleccionar desde el pcap, sin índices
-manuales, un tramo real de cuatro A/U consecutivos y contar sus stalls con el
-downstream siempre listo; el total agregado del replay no sustituye esa medida.
+No presentar la fase 3 como cerrada en el criterio 10 a 322 MHz (sigue
+abierto por la limitación estructural del I/O del wrapper; la variante
+156,25 MHz sí está cerrada con evidencia vigente). Las fases 1, 2 y 4
+tienen sus criterios cerrados con evidencia vigente en el
+`verify-report.md` correspondiente; cualquier criterio reabierto vuelve a
+exigir rojo→verde y evidencia fresca antes de volver a presentarse como
+cerrado.
 
 ## Fuentes de verdad
 

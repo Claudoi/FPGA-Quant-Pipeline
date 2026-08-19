@@ -40,6 +40,21 @@ MUTANTS = [
     ("TKCNT-ALWAYS", "el beat avanza siempre BYTES (la máscara no limita el aporte)",
      "qw <= 8'((32'(qw) + 32'(tk_cnt)) % 32'(MAX_MSG));",
      "qw <= 8'((32'(qw) + 32'(BYTES)) % 32'(MAX_MSG));"),
+    ("TKINV-HUECOS", "la máscara con huecos deja de invalidar (solo parcial sin tlast)",
+     "wire tk_huecos = (s_axis_tkeep != 0) &&\n                     ((s_axis_tkeep | (s_axis_tkeep - 1)) != {BYTES{1'b1}});",
+     "wire tk_huecos = 1'b0 &&\n                     ((s_axis_tkeep | (s_axis_tkeep - 1)) != {BYTES{1'b1}});"),
+    ("TKINV-PARTIAL", "el parcial sin tlast deja de invalidar (solo huecos)",
+     "wire tk_parcial_no_tlast = (tk_cnt != 0) && (tk_cnt < BYTES) &&\n                               !s_axis_tlast;",
+     "wire tk_parcial_no_tlast = (tk_cnt != 0) && (tk_cnt < BYTES) &&\n                               s_axis_tlast && !s_axis_tlast;"),
+    ("ERR-INV", "el beat inválido se descarta sin pulsar error",
+     "if (in_hs && tk_invalido && cst != CS_DISCARD) begin\n                error <= 1;",
+     "if (in_hs && tk_invalido && cst != CS_DISCARD) begin\n                error <= 0;"),
+    ("DISCARD-NOHDRPOS", "el descarte no restaura hdr_pos al tlast del burst inválido",
+     "CS_DISCARD: begin\n                    if (pkt_end_eff) begin\n                        qh <= 0; qw <= 0; pkt_end <= 0;\n                        hdr_pos <= 0; cap_len <= 0;",
+     "CS_DISCARD: begin\n                    if (pkt_end_eff) begin\n                        qh <= 0; qw <= 0; pkt_end <= 0;\n                        hdr_pos <= hdr_pos; cap_len <= 0;"),
+    ("DISCARD-NOSTATE", "el descarte no drena: vuelve a CS_HDR sin consumir el resto del burst",
+     "end else begin\n                    gap_check <= 0;\n                    cst <= CS_DISCARD;\n                end",
+     "end else begin\n                    gap_check <= 0;\n                    cst <= CS_HDR;\n                end"),
 ]
 
 

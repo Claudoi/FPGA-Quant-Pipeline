@@ -1,16 +1,17 @@
 # verify-report — fase4-mdp3-parser
 
-> **Estado vigente (2026-08-19): NO CERRADA — framing, criterio 5 y
-> criterio 10 verdes; criterio 7 abierto.**
+> **Estado vigente (2026-08-19): CERRADA FUNCIONALMENTE — framing, criterios
+> 5, 7 y 10 verdes; queda el timing (sin Vivado MDP3).**
 > El framing `s_axis_tkeep` del RTL `mdp3_parser` quedó implementado y
 > verificado en WSL (cocotb 2.0.1 + Verilator 5.046, Python 3.12): suite
-> DW=32 y DW=64 con 12/12 PASS + 2 SKIP (criterio 7 abierto), gate B
-> (verilator `--Wall`) limpio y gate E 9/9 mutantes. En la pasada de
-> 2026-08-19 se cerraron además los criterios **5** (schemaId/version no
-> soportados → passthrough) y **10** (backpressure de salida): detalles en
-> la iteración 6, y se ejecutó el **gate C (verible): 0 hallazgos** sobre
-> `mdp3_parser.sv`. Sigue **abierto**: el criterio 7 (máscaras con huecos /
-> parcial sin tlast, loop de robustez) y el timing (sin Vivado).
+> DW=32 y DW=64 **14/14 PASS + 0 SKIP** (criterio 7 cerrado en la iteración
+> 7), gate B (verilator `--Wall`) limpio y gate E **14/14 mutantes**. En la
+> pasada de 2026-08-19 se cerraron además los criterios **5**
+> (schemaId/version no soportados → passthrough) y **10** (backpressure de
+> salida): detalles en la iteración 6, y se ejecutó el **gate C (verible):
+> 0 hallazgos** sobre `mdp3_parser.sv`. Sigue **abierto** solo el timing
+> (sin proyecto Vivado MDP3: sin WNS/TNS/utilización no se presenta
+> timing-closed).
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
@@ -357,6 +358,105 @@ reabiertos. Evidencia en commits `0250200` (criterio 5) y `345d7af`
   inválido (consumir el paquete hasta tlast sin emitir records parciales).
 - Evidencia honesta: suite verde sin el criterio 7 (12/12 + 2 SKIP both DW);
   el criterio 7 NO se presenta cerrado.
+
+## Iteración 7 (2026-08-19) — criterio 7 CERRADO (máscaras con huecos / parcial sin tlast)
+
+### RTL — validación de tkeep y descarte del paquete inválido
+
+La causa del fallo histórico (got duplicaba el record del paquete inválido:
+144 vs 72) era estructural: el beat inválido se apendaba a la cola y el
+mensaje en curso se completaba igualmente. El fix cierra las tres vías:
+
+- **Detección combinacional** (`tk_invalido`): la máscara debe ser
+  MSB-contigua — `tk_huecos = (tkeep|(tkeep-1)) != {BYTES{1'b1}}` con
+  `tkeep != 0` (el beat vacío `tkeep=0` es legal, M3-FRM-05c) — y un beat
+  parcial solo es legal en el último beat del burst:
+  `tk_parcial_no_tlast = tk_cnt != 0 && tk_cnt < BYTES && !tlast`.
+- **Sin apend**: el beat inválido (y cualquier beat de un paquete en
+  descarte) no escribe bytes en `qbytes` ni avanza `qw` — sus bytes jamás
+  llegan al decodificador.
+- **CS_DISCARD** (estado 5 del FSM de captura): la transición pulsa
+  `error`, limpia `gap_check` (el paquete inválido no debe afectar la
+  secuencia esperada) y drena la entrada hasta el `tlast` sin consumir de
+  la cola; al `tlast` resetea colas (`qh/qw`), `hdr_pos`, `cap_len`,
+  `cap_size`, `skip_left` y vuelve a `CS_HDR`. Si el beat inválido lleva
+  `tlast` (paquete de un solo beat), el reset es inmediato. `tready` se
+  fuerza a 1 para el beat inválido y en `CS_DISCARD` (drenaje) sin romper
+  el régimen de backpressure verificado.
+
+### Tests — M3-INV-04a/04b activados + sub-caso 04a2
+
+- `M3-INV-04a`: máscara con huecos en un beat no-final → `error >= 1` y
+  got == solo el recovery (bit a bit).
+- `M3-INV-04a2` (nuevo): huecos en el **último beat (con tlast) con el
+  mismo aporte de bytes** (nv=3, mask `0b1101`/`0xD0`): solo la
+  validación de máscara lo detecta — el beat es final (no aplica «parcial
+  sin tlast») y el truncado por tlast no lo rescata (el aporte no
+  cambia). Vector: mensaje del corpus seed 31 con `12+ms ≡ 3 mod b`
+  (ms=39 → paquete de 51 B, nv=3 en DW=32 y DW=64); el mensaje se habría
+  completado justo en el beat del hueco y el descarte debe impedir que se
+  emita.
+- `M3-INV-04b`: parcial MSB-contigua sin tlast → `error >= 1` y got ==
+  solo el recovery.
+
+### Gate A — suite MDP3 completa (WSL, cocotb 2.0.1 + Verilator 5.046)
+
+```text
+=== DW=32 ===
+TESTS=14 PASS=14 FAIL=0 SKIP=0
+=== DW=64 ===
+TESTS=14 PASS=14 FAIL=0 SKIP=0
+```
+
+### Gate E — mutación (14 mutantes, incluidos 5 nuevos del criterio 7)
+
+```text
+TKINV-HUECOS   killed (sim, FAIL=1)   # la máscara con huecos deja de invalidar
+TKINV-PARTIAL  killed (sim, FAIL=1)   # el parcial sin tlast deja de invalidar
+ERR-INV        killed (sim, FAIL=2)   # el beat inválido se descarta sin error
+DISCARD-NOHDRPOS killed (sim, FAIL=2) # el descarte no restaura hdr_pos
+DISCARD-NOSTATE killed (sim, FAIL=2)  # el descarte no drena (vuelve a CS_HDR)
+TODOS LOS MUTANTES COMPILAN Y MUEREN. Gate E PASS.
+```
+
+Notas del gate E:
+- `DISCARD-NORESET` (no vaciar la cola al tlast del descarte) se descartó:
+  con los vectores del criterio la cola queda alineada por construcción
+  (la captura consume todo lo apendado antes de la detección) y el mutante
+  no era observable; se sustituyó por `DISCARD-NOHDRPOS`, que rompe la
+  restauración de la captura y muere en 04a/04b.
+- Los mutantes de ramas con `1'b0 ||` no compilan con `--Wall`
+  (UNUSEDSIGNAL): se mutó la definición de la señal manteniéndola leída.
+
+### Hallazgos honestos del sub-caso 04a2
+
+- **El descarte es streaming**: los mensajes ya completados y emitidos
+  ANTES de detectar la máscara inválida no se retractan (están en la FIFO
+  de salida). Con el beat inválido en índice 1 (04a) o en el último beat
+  de un paquete de un solo mensaje (04a2), ningún mensaje del paquete
+  inválido llega a la salida; en un paquete multi-mensaje con el hueco al
+  final, los mensajes previos ya salieron. Límite documentado del diseño
+  streaming, coherente con el contrato del addendum.
+- **`literal_subset` del test nunca se usó en la suite y su vector m53
+  (99 B, msg_size=87) es incoherente con el layout del template 53**
+  (23 + 29·n): el RTL lo rechaza con error sin emitir (comportamiento
+  correcto). El sub-caso 04a2 usa en su lugar un mensaje del corpus
+  (seed 31) para no depender de ese vector.
+
+### Estado final de los criterios de fase 4
+
+| Criterio | Estado |
+|---|---|
+| 1 (golden MDP3) | cerrado (histórico) |
+| 2 (framing) | cerrado (brazo tkeep, 18/18) |
+| 3 (régimen entrada) | cerrado (M3-FRM-03) |
+| 4 (subset decodificado) | cerrado (M3-SUB) |
+| **5 (schema/version + MAX_MSG)** | **CERRADO (2026-08-19)** |
+| 6 (gaps) | cerrado (M3-GAP) |
+| **7 (robustez/máscaras)** | **CERRADO (2026-08-19, iteración 7)** |
+| **8 (regresión)** | **cerrado: suite 14/14 DW=32 y DW=64** |
+| 9 (lint/schema) | gate B verilator limpio; **gate C verible EJECUTADO (0 hallazgos, 2026-08-19)**; checker XML↔RTL pendiente |
+| **10 (backpressure salida)** | **CERRADO (2026-08-19)** |
 
 ### Estado final de los criterios de fase 4
 

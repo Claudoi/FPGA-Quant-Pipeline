@@ -519,13 +519,12 @@ async def test_m3size01_02_limite_256_acepta_257_rechaza(dut):
     assert_bytes_equal(got, expected_for(schema, [recovery]), "M3-SIZE-02")
 
 
-@cocotb.test(skip=True)
+@cocotb.test()
 async def test_m3inv04a_mascara_con_huecos(dut):
     """Espejo M3-INV-04 (criterio 7, addendum 2026-08-19): una máscara
-    tkeep con huecos (no MSB-contigua) debe pulsar error y descartar el
-    paquete. LOOP ABIERTO (2026-08-19): la validación de máscara MSB-
-    contigua y el descarte del paquete inválido aún no están implementados
-    en el RTL; skip estático mientras el criterio 7 no se cierra."""
+    tkeep con huecos (no MSB-contigua) pulsa error y descarta el paquete
+    completo (nada del burst inválido a la salida); el recovery se procesa
+    bit a bit."""
     schema = load_schema(SCHEMA_PATH)
     msg = literal_template47(schema)
     packet = encode_packet(schema, 81, 1, [msg])
@@ -550,12 +549,45 @@ async def test_m3inv04a_mascara_con_huecos(dut):
         assert_bytes_equal(got, expected_for(schema, [recovery]),
                            "M3-INV-04a")
 
+    # A2) huecos en el ÚLTIMO beat (con tlast) con el MISMO aporte de bytes
+    # (nv=3, mask no contigua con 3 unos): solo la validación de máscara
+    # lo detecta (el beat es final: no aplica "parcial sin tlast", y el
+    # truncado por tlast no lo rescata porque el aporte no cambia). Se usa
+    # un mensaje del corpus seed 31 cuyo paquete de un solo mensaje mida
+    # 12+ms ≡ 3 mod b (ms=39: 51 B, nv=3 en DW=32 y DW=64): el mensaje se
+    # completaría justo en el beat del hueco, así que el descarte debe
+    # impedir que se emita.
+    c4 = build_corpus(seed=31, n_packets=6).packets[4]
+    off = 12
+    ms = 0
+    while off + 2 <= len(c4):
+        ms = int.from_bytes(c4[off:off + 2], "little")
+        if (ms % b) == ((3 - 12) % b):
+            break
+        off += ms
+    if off + ms <= len(c4):
+        pkt3 = encode_packet(schema, 81, 1, [c4[off:off + ms]])
+        rec3 = encode_packet(schema, 82, 2, [msg])
+        beats3 = beat_list([pkt3], b)
+        holes_end = (1 << (b - 1)) | (1 << (b - 2)) | (1 << (b - 4))
+        beats3[-1] = (beats3[-1][0], True, holes_end)
+        await _reset(dut)
+        dut._log.info("M3-INV-04a2: holes_end=%#x b=%d nv=3 len=%d" %
+                      (holes_end, b, len(pkt3)))
+        got, _, errors, _ = await drive_and_collect(
+            dut, [pkt3, rec3],
+            beats_override=beats3 + beat_list([rec3], b))
+        assert errors >= 1, "M3-INV-04a2: faltó el error por huecos en tlast"
+        assert_bytes_equal(got, expected_for(schema, [rec3]), "M3-INV-04a2")
+    else:
+        dut._log.warning("M3-INV-04a2: sin mensaje con 12+ms ≡ 3 mod %d; "
+                         "sub-caso omitido" % b)
 
-@cocotb.test(skip=True)
+
+@cocotb.test()
 async def test_m3inv04b_parcial_sin_tlast(dut):
-    """Espejo M3-INV-04 (criterio 7): una palabra parcial sin tlast debe
-    pulsar error. LOOP ABIERTO (2026-08-19): ibidem 04a — la validación de
-    máscara y el descarte no están implementados; skip estático."""
+    """Espejo M3-INV-04 (criterio 7): una palabra parcial sin tlast pulsa
+    error y descarta el paquete completo; el recovery se procesa bit a bit."""
     schema = load_schema(SCHEMA_PATH)
     msg = literal_template47(schema)
     packet = encode_packet(schema, 81, 1, [msg])

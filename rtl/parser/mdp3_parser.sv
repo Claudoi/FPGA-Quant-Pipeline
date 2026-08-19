@@ -89,6 +89,15 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     endfunction
     wire [3:0] tk_cnt = tkeep_cnt(s_axis_tkeep);
 
+    // validación del framing (criterio 7): el tkeep debe ser MSB-contiguo
+    // (los lanes válidos son los altos); un beat parcial solo es legal en
+    // el último beat del burst, con tlast
+    wire tk_huecos = (s_axis_tkeep != 0) &&
+                     ((s_axis_tkeep | (s_axis_tkeep - 1)) != {BYTES{1'b1}});
+    wire tk_parcial_no_tlast = (tk_cnt != 0) && (tk_cnt < BYTES) &&
+                               !s_axis_tlast;
+    wire tk_invalido = s_axis_tvalid && (tk_huecos || tk_parcial_no_tlast);
+
     // offsets dentro del cuerpo (desde byte 10 del mensaje), LE
     localparam logic [31:0] O46_TS=0, O46_MEI=8, O46_DIM=11, O46_ENT=14, O46_BL1=32, O46_BL2=24;
     localparam logic [31:0] O46_PX=0, O46_SZ=8, O46_SEC=12, O46_RPT=16, O46_NO=20, O46_LVL=24,
@@ -157,7 +166,8 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
 
     // ── captura ──────────────────────────────────────────────────────────────
     reg [2:0]  cst;   // CS_WAIT=4 → 3 bits mínimo
-    localparam logic [2:0] CS_HDR=0, CS_SIZE=1, CS_BODY=2, CS_SKIP=3, CS_WAIT=4;
+    localparam logic [2:0] CS_HDR=0, CS_SIZE=1, CS_BODY=2, CS_SKIP=3, CS_WAIT=4,
+                      CS_DISCARD=5;
     reg [7:0]  hdr_pos;
     reg        gap_check;
     reg        first_pkt;
@@ -249,8 +259,12 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
 
             // cola de bytes: apend de los lanes válidos del word entrante
             // (solo tkeep=1; los bytes de los lanes 0 no se escriben ni
-            // avanzan qw — mecánica del addendum framing tkeep)
-            if (s_axis_tvalid && s_axis_tready) begin
+            // avanzan qw — mecánica del addendum framing tkeep). Un beat
+            // con tkeep inválido (criterio 7) o un beat de un paquete en
+            // descarte no se apendan: su bytes no deben llegar al
+            // decodificador jamás.
+            if (s_axis_tvalid && s_axis_tready && !tk_invalido &&
+                cst != CS_DISCARD) begin
                 for (integer k = 0; k < BYTES; k = k + 1)
                     if (k < 32'(tk_cnt))
                         qbytes[(32'(qw) + 32'(k)) % 32'(MAX_MSG)] <=
@@ -261,6 +275,23 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
             end
 
             // ── captura ────────────────────────────────────────────────────
+            // ── descarte por framing inválido (criterio 7) ─────────────────
+            // Un beat con tkeep no MSB-contiguo o parcial sin tlast pulsa
+            // error y descarta el paquete completo: drena la entrada hasta
+            // el tlast sin apendar nada, resetea colas y captura y vuelve a
+            // CS_HDR; el siguiente burst (recovery) se procesa normal.
+            if (in_hs && tk_invalido && cst != CS_DISCARD) begin
+                error <= 1;
+                if (s_axis_tlast) begin
+                    qh <= 0; qw <= 0; pkt_end <= 0;
+                    hdr_pos <= 0; cap_len <= 0;
+                    gap_check <= 0;
+                    cst <= CS_HDR;
+                end else begin
+                    gap_check <= 0;
+                    cst <= CS_DISCARD;
+                end
+            end else begin
             case (cst)
                 CS_HDR: begin
                     if (qavail_eff != 16'd0) begin
@@ -409,21 +440,31 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                         wait_hdr <= 0;
                     end
                 end
+                CS_DISCARD: begin
+                    if (pkt_end_eff) begin
+                        qh <= 0; qw <= 0; pkt_end <= 0;
+                        hdr_pos <= 0; cap_len <= 0;
+                        cap_size <= 0; skip_left <= 0;
+                        cst <= CS_HDR;
+                    end
+                end
                 default: begin
-                    // cst no puede alcanzar 5..7 con la lógica actual; por
+                    // cst 6..7 no se alcanza con la lógica actual; por
                     // robustez se vuelve a CS_HDR (recuperación ante X)
                     error <= 1;
                     hdr_pos <= 0;
                     cst <= CS_HDR;
                 end
             endcase
+            end  // fin del descarte por framing inválido (criterio 7)
 
             // tready del régimen verificado (<= MAX_MSG): la cola admite
             // hasta 256 bytes de mensaje; el mensaje máximo se procesa porque
             // el parser drena a mbuf incrementalmente (12 B/ciclo > 4 B/ciclo
             // de entrada en DW=32). Un slot reservado (<) rompía el régimen
             // de backpressure de M3-FRM-03 (racha > 16 stalls) y M3-INV-03.
-            s_axis_tready <= (16'(qavail) + 16'(tk_cnt) <= 16'(MAX_MSG)) &&
+            s_axis_tready <= ((16'(qavail) + 16'(tk_cnt) <= 16'(MAX_MSG)) ||
+                              tk_invalido || cst == CS_DISCARD) &&
                              (cst != CS_WAIT) && !pkt_end_eff;
 
             // ── decodificación ─────────────────────────────────────────────
