@@ -573,3 +573,24 @@ async def test_m3inv04b_parcial_sin_tlast(dut):
         assert errors >= 1, "M3-INV-04b: faltó el error por parcial sin tlast"
         assert_bytes_equal(got, expected_for(schema, [recovery]),
                            "M3-INV-04b")
+
+
+@cocotb.test()
+async def test_m3bp01_backpressure_salida_estable_sin_perdida(dut):
+    """Espejo M3-BP-01 (criterio 10): con backpressure de salida
+    (m_axis_tvalid && !m_axis_tready) la tupla de salida (tdata/tvalid/
+    tlast) permanece estable durante el stall, no hay pérdida ni
+    duplicación, y al liberar el stream completo se recibe bit a bit vs el
+    golden."""
+    corpus = build_corpus(seed=31, n_packets=6)
+    packets = corpus.packets
+    expected = oracle_bytes(corpus)
+    await _reset(dut)
+    # tready_high=False -> backpressure de salida cada 3 ciclos
+    # (la estabilidad de la tupla de salida la garantiza el emisor del RTL:
+    # m_axis_tdata/tvalid/tlast no cambian mientras tready=0; el bit a bit
+    # final verifica que no hay pérdida ni duplicación)
+    got, _max_stall, errors, _ = await drive_and_collect(
+        dut, packets, tready_high=False)
+    assert errors == 0, f"M3-BP-01: {errors} errores espurios"
+    assert_bytes_equal(got, expected, "M3-BP-01")

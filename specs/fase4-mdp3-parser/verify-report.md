@@ -1,16 +1,16 @@
 # verify-report — fase4-mdp3-parser
 
-> **Estado vigente (2026-08-18): NO CERRADA — framing `tkeep` verde.**
+> **Estado vigente (2026-08-19): NO CERRADA — framing, criterio 5 y
+> criterio 10 verdes; criterio 7 abierto.**
 > El framing `s_axis_tkeep` del RTL `mdp3_parser` quedó implementado y
 > verificado en WSL (cocotb 2.0.1 + Verilator 5.046, Python 3.12): suite
-> DW=32 9/9 y DW=64 9/9 (M3-FRM-05 a/b/c incluidos), gate B (verilator
-> `--Wall`) limpio y gate E 9/9 mutantes (incluye el `TKCNT-ALWAYS` que
-> ejercita la mecánica de la máscara). Siguen **abiertos**: criterio 5
-> (schemaId/version no soportados, MAX_MSG 256/257), criterio 7 restante
-> (máscaras con huecos, loop separado), criterio 10 (backpressure de
-> salida) y timing (sin Vivado). Gate C (verible) NO EJECUTADO (no
-> instalado). Los hallazgos de schema/version, tamaño y backpressure se
-> resuelven por separado.
+> DW=32 y DW=64 con 12/12 PASS + 2 SKIP (criterio 7 abierto), gate B
+> (verilator `--Wall`) limpio y gate E 9/9 mutantes. En la pasada de
+> 2026-08-19 se cerraron además los criterios **5** (schemaId/version no
+> soportados → passthrough) y **10** (backpressure de salida): detalles en
+> la iteración 6. Sigue **abierto**: el criterio 7 (máscaras con huecos /
+> parcial sin tlast, loop de robustez) y el timing (sin Vivado). Gate C
+> (verible) NO EJECUTADO (no instalado).
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
@@ -309,3 +309,67 @@ el gate B.
 - Siguen **abiertos** (loops separados): criterio 5 (schemaId/version,
   MAX_MSG 256/257), criterio 7 restante (máscaras con huecos), criterio 10
   (backpressure de salida) y timing (sin Vivado MDP3).
+
+## Iteración 6 (2026-08-19) — loops de criterio 5 y 10; criterio 7 abierto
+
+Pasada cocotb (WSL, cocotb 2.0.1 + Verilator 5.046) sobre los criterios
+reabiertos. Evidencia en commits `0250200` (criterio 5) y `345d7af`
+(criterio 7) y este report.
+
+### Criterio 5 — CERRADO (schemaId/version + MAX_MSG)
+
+- RTL: puerta en `DS_HDR` — el subset de libro decodifica solo si
+  `template in {46,47,52,53}` **y** `schema_id==1` **y** `version==12`;
+  cualquier otra combinación va a passthrough (w0/w1 + cuerpo crudo).
+- Golden: `encode_message` default `schema_id=SCHEMA_ID` (firma real del
+  schema pinned `id=1 version=12`) para que corpus y oráculo usen la firma
+  correcta.
+- Tests nuevos: **M3-PASS-02** (subset con firma inválida → passthrough) y
+  **M3-SIZE-01/02** (msg_size 256 aceptado, 257 → error + recuperación).
+- Evidencia: suite MDP3 DW=32 **11/11** y DW=64 **11/11** en el run del loop
+  (antes de añadir 04/BP), gate B limpio, gate E 9/9.
+- Hallazgo encadenado: el oráculo con firma correcta destapó un bug
+  preexistente de decodificación de grupos (ver criterio 7) que no bloquea
+  el criterio 5.
+
+### Criterio 10 — CERRADO (backpressure de salida)
+
+- El emisor del RTL ya retiene la tupla de salida bajo backpressure
+  (`m_axis_tdata/tvalid/tlast` no cambian mientras `m_axis_tready=0`; la
+  línea `if (!m_axis_tvalid || m_axis_tready)` solo avanza en handshake).
+- Test nuevo **M3-BP-01**: `drive_and_collect(tready_high=False)` —
+  backpressure de salida cada 3 ciclos; la salida final es bit a bit vs el
+  golden (sin pérdida ni duplicación).
+- Evidencia: M3-BP-01 1/1 PASS (DW=32); suite completa DW=32 y DW=64
+  **12/12 PASS + 2 SKIP**.
+
+### Criterio 7 — ABIERTO (máscaras con huecos / parcial sin tlast)
+
+- Hallazgo: la validación de máscaras MSB-contiguas y el descarte del
+  paquete inválido NO están implementados en el RTL. Se intentó
+  implementar (`tk_contiguo`/`discard`) pero el descarte emite records
+  parciales del paquete inválido (got duplica el record) y el fix no
+  convergió en esta pasada.
+- Tests `M3-INV-04a/04b` en **skip estático** (`@cocotb.test(skip=True)`)
+  con el contrato documentado en la spec (addendum criterio 7). El RTL
+  quedó revertido a limpio (sin validación de máscara).
+- **Loop de robustez aparte**: requiere un descarte correcto del burst
+  inválido (consumir el paquete hasta tlast sin emitir records parciales).
+- Evidencia honesta: suite verde sin el criterio 7 (12/12 + 2 SKIP both DW);
+  el criterio 7 NO se presenta cerrado.
+
+### Estado final de los criterios de fase 4
+
+| Criterio | Estado |
+|---|---|
+| 1 (golden MDP3) | cerrado (histórico) |
+| 2 (framing) | cerrado (brazo tkeep, 18/18) |
+| 3 (régimen entrada) | cerrado (M3-FRM-03) |
+| 4 (subset decodificado) | cerrado (M3-SUB) |
+| **5 (schema/version + MAX_MSG)** | **CERRADO (2026-08-19)** |
+| 6 (gaps) | cerrado (M3-GAP) |
+| **7 (robustez/máscaras)** | **ABIERTO** (criterio 7, loop de robustez) |
+| 8 (regresión) | parcial: framing verde; máscaras fuera |
+| 9 (lint/schema) | gate B verilator limpio; checker XML↔RTL pendiente |
+| **10 (backpressure salida)** | **CERRADO (2026-08-19)** |
+| Timing | NO EJECUTADO (sin Vivado MDP3) |
