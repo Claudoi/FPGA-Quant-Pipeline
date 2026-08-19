@@ -386,3 +386,38 @@ del loop, ya cerrado por sus criterios 2 y 8 en su brazo tkeep:
    (loops separados) el criterio 5 (schema/version, MAX_MSG 256/257), el
    criterio 7 restante (máscaras con huecos, loop separado), el criterio 10
    (backpressure de salida) y el timing (sin Vivado MDP3).
+
+## Addendum criterio 5 (2026-08-19) — passthrough por schema/version + MAX_MSG
+
+El criterio 5 exige dos cosas que hoy no cubre el test M3-PASS-01 (que solo
+prueba un template normal y uno desconocido):
+
+1. **Un template del subset (46/47/52/53) con `schema_id` o `version` no
+   soportados es passthrough, NO decode.** El subset de libro decodificable
+   es: `template_id in {46,47,52,53} AND schema_id == SCHEMA_ID AND
+   version == SCHEMA_VERSION`, con `SCHEMA_ID = 1` y `SCHEMA_VERSION = 12`
+   (schema pinned `templates_FixBinary_v12.xml`, `id=1 version=12`). Cualquier
+   otra combinación de cabecera SBE emite w0/w1 + cuerpo crudo rellenado
+   (mismo `passthrough_record` que un template desconocido). Es un cambio de
+   oráculo+: el golden `decode_message`/`anexo_m_records` debe decidir el
+   subset con estas tres condiciones, y el RTL (`DS_HDR`) debe guardar el
+   decode con `d_sid==1 && d_ver==12`. Contrato de cabecera SBE LE:
+   `block_length(t2)`, `template_id(t2)`, `schema_id(t2)`, `version(t2)`.
+2. **Límite de tamaño de mensaje `MAX_MSG = 256` bytes, inclusive; 257 o más
+   pulsa `error`, no emite record parcial, drena el paquete y recupera el
+   siguiente.** Ya existe `MAX_MSG=256` y la validación de `msg_size`, pero
+   el test debe probar explícitamente 256 B (aceptado) y 257 B (rechazo +
+   recuperación).
+
+Tests:
+- `M3-PASS-02` (espejo §M3-PASS-02): un template 47 con `schema_id=2` y uno
+  46/47/52/53 con schema_id correcto pero `version=13` van a passthrough;
+  sus records son `passthrough_record` (no el Anexo M decodificado).
+- `M3-SIZE-01`/`M3-SIZE-02`: un mensaje de exactamente 256 B se acepta y
+  decodifica; uno de 257 B pulsa `error`, sin record parcial, y el paquete
+  siguiente íntegro se recupera bit a bit.
+
+Regla del golden: `decode_message` devuelve `{}` (passthrough) si
+`template_id not in SUBSET_TEMPLATES or schema_id != SCHEMA_ID or
+version != SCHEMA_VERSION`. `oracle_bytes` usa `passthrough_record` en esos
+casos. El RTL replica exactamente esa puerta en `DS_HDR`.

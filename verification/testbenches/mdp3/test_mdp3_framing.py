@@ -24,7 +24,7 @@ from golden_model.mdp3 import (
     load_schema,
 )
 from golden_model.mdp3.schema import SUBSET_TEMPLATES
-from golden_model.mdp3.codec import MESSAGE_PREFIX_SIZE
+from golden_model.mdp3.codec import MESSAGE_PREFIX_SIZE, SCHEMA_ID, SCHEMA_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = REPO_ROOT / "data" / "mdp3" / "templates_FixBinary_v12.xml"
@@ -443,3 +443,74 @@ async def test_m3frm05_tkeep_bytes_validos_y_truncado_por_mascara(dut):
             dut, [packet], beats_override=beats_c)
         assert_bytes_equal(got, expected_for(schema, [packet]), "M3-FRM-05c")
         assert errors == 0
+
+
+@cocotb.test()
+async def test_m3pass02_subset_con_firma_no_soportada_passthrough(dut):
+    """Espejo §M3-PASS-02 (criterio 5, addendum 2026-08-19): un template del
+    subset 46/47/52/53 con schema_id != 1 o version != 12 es passthrough,
+    NO decode. El RTL replica la puerta en DS_HDR (d_sid==SCHEMA_ID &&
+    d_ver==SCHEMA_VER); el oráculo de este test usa passthrough_record para
+    los mensajes con firma no soportada (el golden decodifica por template;
+    aqui el expected es explicito)."""
+    schema = load_schema(SCHEMA_PATH)
+    msg = literal_template47(schema)  # template 47, firma valida (id=1 ver=12)
+    bad_sid = bytearray(msg)
+    bad_sid[4:6] = (2).to_bytes(2, "little")       # schema_id = 2
+    bad_ver = bytearray(msg)
+    bad_ver[6:8] = (13).to_bytes(2, "little")      # version = 13
+    packets = [
+        encode_packet(schema, 90, 1, [msg]),              # firma correcta
+        encode_packet(schema, 91, 2, [bytes(bad_sid)]),   # schema_id malo
+        encode_packet(schema, 92, 3, [bytes(bad_ver)]),   # version mala
+    ]
+    # oraculo explicito: el primero se decodifica (Anexo M), los otros dos
+    # van a passthrough crudo (firma no soportada por el RTL)
+    expected = b""
+    for p in packets:
+        for pm in iter_packet_messages(p):
+            if pm.template_id in SUBSET_TEMPLATES and \
+                    pm.schema_id == SCHEMA_ID and pm.version == SCHEMA_VERSION:
+                dec = decode_message(schema, pm)
+                for rec in anexo_m_records(schema, pm, dec):
+                    expected += record_bytes(rec)
+            else:
+                expected += record_bytes(passthrough_record(schema, pm))
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(dut, packets)
+    assert errors == 0, f"M3-PASS-02: {errors} errores espurios"
+    assert len(expected) > 0, "M3-PASS-02: oráculo vacío"
+    assert_bytes_equal(got, expected, "M3-PASS-02")
+
+
+@cocotb.test()
+async def test_m3size01_02_limite_256_acepta_257_rechaza(dut):
+    """Espejo §M3-SIZE-01/02 (criterio 5): msg_size <= 256 se acepta y
+    decodifica; msg_size = 257 pulsa error, sin record parcial, y el paquete
+    siguiente íntegro se recupera bit a bit."""
+    schema = load_schema(SCHEMA_PATH)
+    msg0 = literal_template47(schema)  # layout: msg_size(2) + header SBE(8) + body
+    # extender el cuerpo hasta que el mensaje completo mida 256 B, con
+    # msg_size (bytes [0:2]) = 256 (incluye prefijo + header + cuerpo)
+    target_size = 256
+    pad = target_size - len(msg0)
+    assert pad > 0, "template 47 ya excede 256 B?"
+    body = bytes(msg0[10:]) + b"\x00" * pad
+    msg256 = (target_size.to_bytes(2, "little") + bytes(msg0[2:10]) + body)
+    assert len(msg256) == target_size, f"msg256={len(msg256)}"
+    # mensaje de 257 B: msg_size = 257, cuerpo 1 byte mas largo
+    body257 = body + b"\x00"
+    msg257 = ((257).to_bytes(2, "little") + bytes(msg0[2:10]) + body257)
+    assert len(msg257) == 257, f"msg257={len(msg257)}"
+    p256 = encode_packet(schema, 95, 1, [msg256])
+    p257 = encode_packet(schema, 96, 2, [msg257])
+    recovery = encode_packet(schema, 97, 3, [literal_template47(schema)])
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(dut, [p256])
+    assert errors == 0, f"M3-SIZE-01: {errors} errores con msg_size=256"
+    assert_bytes_equal(got, expected_for(schema, [p256]), "M3-SIZE-01")
+    await _reset(dut)
+    got, _, errors, _ = await drive_and_collect(
+        dut, [p257, recovery])
+    assert errors >= 1, "M3-SIZE-02: faltó el error por msg_size=257"
+    assert_bytes_equal(got, expected_for(schema, [recovery]), "M3-SIZE-02")

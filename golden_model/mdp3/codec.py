@@ -14,6 +14,11 @@ from golden_model.mdp3.schema import Schema, MessageDef, GroupDef, FieldDef, SUB
 PACKET_HEADER_SIZE = 12
 MESSAGE_PREFIX_SIZE = 10  # msg_size u16 + cabecera SBE 8 B
 
+# schema pinned templates_FixBinary_v12.xml (id=1 version=12); firma que el
+# corpus sintetico debe usar (criterio 5, addendum 2026-08-19).
+SCHEMA_ID = 1
+SCHEMA_VERSION = 12
+
 PRIMITIVE_SIZES = {
     "int8": 1, "uint8": 1, "char": 1,
     "int16": 2, "uint16": 2,
@@ -97,7 +102,7 @@ def _decode_primitive(primitive: str, buf: bytes, offset: int):
 # ── mensajes ─────────────────────────────────────────────────────────────────
 
 def encode_message(schema: Schema, template_id: int, values: dict,
-                   schema_id: int = 0, version: int | None = None) -> bytes:
+                   schema_id: int = SCHEMA_ID, version: int | None = None) -> bytes:
     """Codifica un mensaje SBE (con su prefijo msg_size + cabecera de 8 B).
 
     `values`: dict con los campos del root por NOMBRE (o tag FIX como str) y

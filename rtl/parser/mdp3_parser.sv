@@ -65,6 +65,11 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     localparam logic [7:0]  EXP_BYTE   = 8'hF7; // PRICE9/PRICENULL9 exponent = -9
 
     localparam logic [15:0] TPL_46 = 16'd46, TPL_47 = 16'd47, TPL_52 = 16'd52, TPL_53 = 16'd53;
+    // firma del schema pinned templates_FixBinary_v12.xml (criterio 5): el
+    // subset decodificable exige template en {46,47,52,53} Y schema_id==1 Y
+    // version==12; cualquier otra combinacion va a passthrough.
+    localparam logic [15:0] SCHEMA_ID = 16'd1;
+    localparam logic [15:0] SCHEMA_VER = 16'd12;
 
     // ── tkeep (addendum framing tkeep, 2026-08-18) ───────────────────────────
     // bytes válidos del beat por s_axis_tkeep; el contrato exige la máscara
@@ -413,6 +418,11 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                 end
             endcase
 
+            // tready del régimen verificado (<= MAX_MSG): la cola admite
+            // hasta 256 bytes de mensaje; el mensaje máximo se procesa porque
+            // el parser drena a mbuf incrementalmente (12 B/ciclo > 4 B/ciclo
+            // de entrada en DW=32). Un slot reservado (<) rompía el régimen
+            // de backpressure de M3-FRM-03 (racha > 16 stalls) y M3-INV-03.
             s_axis_tready <= (16'(qavail) + 16'(tk_cnt) <= 16'(MAX_MSG)) &&
                              (cst != CS_WAIT) && !pkt_end_eff;
 
@@ -430,10 +440,12 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                     d_ver  <= mru16(8, dec_sel);
                     d_size <= mru16(0, dec_sel);
                     p_n    <= 0;   // passthrough vuelve a arrancar en w0
-                    dst <= (mru16(4, dec_sel) == TPL_46 ||
-                            mru16(4, dec_sel) == TPL_47 ||
-                            mru16(4, dec_sel) == TPL_52 ||
-                            mru16(4, dec_sel) == TPL_53) ? DS_ROOT : DS_PASS;
+                    dst <= ((mru16(4, dec_sel) == TPL_46 ||
+                             mru16(4, dec_sel) == TPL_47 ||
+                             mru16(4, dec_sel) == TPL_52 ||
+                             mru16(4, dec_sel) == TPL_53) &&
+                            mru16(6, dec_sel) == SCHEMA_ID &&
+                            mru16(8, dec_sel) == SCHEMA_VER) ? DS_ROOT : DS_PASS;
                 end
                 DS_ROOT: begin
                     case (d_tpl)
@@ -478,7 +490,8 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                         dst <= DS_DONE;
                     end else if (g1_n == 0) begin
                         if (d_tpl == TPL_46) dst <= DS_G2_DIM;
-                        else dst <= DS_DONE;
+                        else dst <= DS_DONE;   // 47/52/53 con grupo vacío: el
+                                               // golden no emite (anexo_m=[])
                     end else
                         dst <= DS_G1_ENT;
                 end
