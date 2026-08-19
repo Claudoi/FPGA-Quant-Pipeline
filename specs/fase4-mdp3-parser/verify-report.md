@@ -8,9 +8,9 @@
 > (verilator `--Wall`) limpio y gate E 9/9 mutantes. En la pasada de
 > 2026-08-19 se cerraron además los criterios **5** (schemaId/version no
 > soportados → passthrough) y **10** (backpressure de salida): detalles en
-> la iteración 6. Sigue **abierto**: el criterio 7 (máscaras con huecos /
-> parcial sin tlast, loop de robustez) y el timing (sin Vivado). Gate C
-> (verible) NO EJECUTADO (no instalado).
+> la iteración 6, y se ejecutó el **gate C (verible): 0 hallazgos** sobre
+> `mdp3_parser.sv`. Sigue **abierto**: el criterio 7 (máscaras con huecos /
+> parcial sin tlast, loop de robustez) y el timing (sin Vivado).
 
 > Régimen de gates de Atenea re-mapeado al flujo HDL. Sin verify-report,
 > `/grade` da FAIL directo. Lo escribe `/verify` campaña a campaña.
@@ -370,6 +370,24 @@ reabiertos. Evidencia en commits `0250200` (criterio 5) y `345d7af`
 | 6 (gaps) | cerrado (M3-GAP) |
 | **7 (robustez/máscaras)** | **ABIERTO** (criterio 7, loop de robustez) |
 | 8 (regresión) | parcial: framing verde; máscaras fuera |
-| 9 (lint/schema) | gate B verilator limpio; checker XML↔RTL pendiente |
+| 9 (lint/schema) | gate B verilator limpio; **gate C verible EJECUTADO (0 hallazgos, 2026-08-19)**; checker XML↔RTL pendiente |
 | **10 (backpressure salida)** | **CERRADO (2026-08-19)** |
+
+### Gate C — verible (2026-08-19, WSL)
+
+Verible `v0.0-4148-g1ea007ec` instalado en el venv del repo (release oficial
+de ChipsAlliance, tarball `linux-static-x86_64`). Ejecutado con la config del
+repo (`--rules_config_search`, `./.rules.verible_lint`):
+
+```text
+$ verible-verilog-lint --rules_config_search rtl/parser/mdp3_parser.sv
+(0 salidas — sin hallazgos)
+```
+
+**Gate C fase 4: PASS** — `mdp3_parser.sv` sin hallazgos de verible. Las fases
+1-3 (RTL cerrado y verificado) conservan hallazgos de convención ya
+documentados en su campaña y no se renombran constantes verificadas
+(política del repo): itch_parser 21, orderbook 75, itch_chain 8 — todos de
+estilo (tipos de parámetros, `always_ff` con bloqueantes para locals,
+line-length), ninguno de funcionalidad.
 | Timing | NO EJECUTADO (sin Vivado MDP3) |
