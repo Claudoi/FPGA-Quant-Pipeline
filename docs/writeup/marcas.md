@@ -115,18 +115,22 @@ Python 3.12.13.
 residuales; quedan 8× BLKSEQ deliberados (asignaciones bloqueantes de la
 inferencia URAM). **Gate C**: verible NO EJECUTADO (no instalado).
 
-### 4.2 Fase 4 (parser CME MDP3, framing tkeep)
+### 4.2 Fase 4 (parser CME MDP3, framing tkeep + criterios 5 y 10)
 
 | Suite | Resultado |
 |---|---|
-| mdp3 DW=32 | **9/9** PASS |
-| mdp3 DW=64 | **9/9** PASS |
+| mdp3 DW=32 y DW=64 (2026-08-19) | **12/12** PASS + 2 SKIP |
+| M3-BP-01 (backpressure de salida) | **1/1** PASS |
 | Gate E (mutación MDP3) | **9/9** mutantes muertos (incl. `TKCNT-ALWAYS`) |
 | Gate B | Verilator 5.046 `--Wall` limpio |
 
-Incluye M3-FRM-05 a/b/c (framing MSB-contiguo, truncado por máscara → error,
-beat vacío sin trabarse). Gate C (verible) NO EJECUTADO. Fase 4 sigue en
-stretch (schema/MAX_MSG/backpressure/timing no cerradas).
+Incluye M3-FRM-05 a/b/c (framing MSB-contiguo), **M3-PASS-02 + M3-SIZE-01/02**
+(criterio 5: schema_id/version no soportados → passthrough; MAX_MSG 256/257)
+y **M3-BP-01** (criterio 10: backpressure de salida sin pérdida/duplicado).
+Los 2 SKIP son del **criterio 7** (máscaras con huecos / parcial sin tlast,
+loop de robustez abierto; tests M3-INV-04a/04b en skip estático — el descarte
+del paquete inválido no converge). Gate C (verible) NO EJECUTADO. Timing sin
+Vivado MDP3 (NO EJECUTADO).
 
 ### 4.3 Fase 0/1/2 (histórico, cerradas)
 
@@ -162,7 +166,8 @@ stretch (schema/MAX_MSG/backpressure/timing no cerradas).
   **pendiente por falta del pcap**: sin `/tmp/real_subset.pcap` no se cierra.
 - La frecuencia de 322 MHz sigue **abierta** (mejor -3,319 ns) por el modelo
   I/O del wrapper; no se declara como timing cerrado.
-- Fase 4 (CME MDP3): solo framing verde; timing/schema/backpressure abiertos.
+- Fase 4 (CME MDP3): framing + criterios 5 y 10 verdes; el criterio 7
+  (máscaras con huecos) y el timing quedan abiertos.
 - Gate C (verible) NO EJECUTADO en fases 1-4 (herramienta no instalada).
 
 ---
