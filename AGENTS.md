@@ -49,6 +49,7 @@ downstream siempre listo; el total agregado del replay no sustituye esa medida.
 | Instalación y problemas del entorno | `docs/DESARROLLO.md` |
 | Plan de cierre ejecutable (qué falta y en qué orden) | `docs/writeup/plan-cierre.md` |
 | Marcas verificables (números de timing/latencia/sim) | `docs/writeup/marcas.md` |
+| Documento de presentación (arquitectura, hazards, latencia, timing, límites) | `docs/writeup/pipeline-itch-uram.md` |
 
 Los informes históricos pueden mencionar el antiguo nombre de una etapa del
 proceso; son evidencia fechada, no instrucciones operativas.
