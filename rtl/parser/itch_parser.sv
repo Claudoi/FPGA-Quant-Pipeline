@@ -53,11 +53,18 @@ module itch_parser #(
     output reg               error
 );
 
-    localparam QQ = QB * 8;
-
     // bytes por palabra y su log2: 64 bits -> 8 B (>>3), 32 bits -> 4 B (>>2)
     localparam BYTES = DW / 8;
     localparam L2B   = $clog2(DW / 8);
+
+    // Cola byte-alineada con margen de un beat (QBUFW): un mensaje de
+    // exactamente 2+len == QB bytes (p. ej. P de 44 B, 2+44=46=QB a DW=32)
+    // solo completaba si la residua previa quedaba ≡ 2 mod 4 con beats
+    // enteros; con un margen de (BYTES-1) el último beat desborda a la cola y
+    // el mensaje siempre completa (hallazgo iter 13: chain01 rojo, ST_LEN
+    // congelado en qn=45 con un P de 2+len=46).
+    localparam QBUFW = QB + BYTES - 1;
+    localparam QQ = QBUFW * 8;
 
     localparam ST_HDR  = 3'd0;
     localparam ST_LEN  = 3'd1;
@@ -66,10 +73,15 @@ module itch_parser #(
     localparam ST_TS   = 3'd4;
     localparam ST_BODY = 3'd5;
     localparam ST_NEXT = 3'd6;
+    localparam ST_DRAIN = 3'd7;  // mensaje oversize (2+len > QB): se drena por
+                                 // el stream sin buffer ni registro (addendum
+                                 // iter 12: ST_LEN deadlockeaba con tready=0
+                                 // porque el mensaje nunca cabe en la cola)
     reg [2:0] st;
 
     reg  [QQ-1:0] q;
     reg  [7:0]    qn;      // 8 bits cubren el QB máximo soportado de 128 bytes
+    reg  [8:0]    drop_left;  // bytes restantes del mensaje oversize (2+len <= 257)
 
     reg  [31:0]   msg_idx;
     reg  [63:0]   exp_seq;
@@ -109,7 +121,7 @@ module itch_parser #(
     wire out_free   = !out_valid_reg || out_take;
 
     function automatic logic [7:0] pbyte(input [QQ-1:0] w, input [6:0] i);
-        pbyte = w[(QB-1-i)*8 +: 8];
+        pbyte = w[(QBUFW-1-i)*8 +: 8];
     endfunction
 
     function automatic [7:0] keep_nbytes(input logic [BYTES-1:0] keep);
@@ -186,17 +198,21 @@ module itch_parser #(
 
     // ------------------------------------------------------------------
     // drenaje de ESTE ciclo (combinacional), en bytes.
-    //   HDR  : 20    (de una vez)
-    //   LEN  : 0     (solo espera y captura)
-    //   CAP  : 2+len (drena el mensaje entero de una vez)
+    //   HDR   : 20    (de una vez)
+    //   LEN   : 0     (solo espera y captura)
+    //   CAP   : 2+len (drena el mensaje entero de una vez)
+    //   DRAIN : min(drop_left, avail) — el oversize se drena incremental por
+    //           la cola (la aceptación en paralelo can_da conserva el
+    //           alineamiento del mensaje siguiente)
     //   W0/TS/BODY/NEXT : 0 (solo emiten desde msg_reg)
     // ------------------------------------------------------------------
-    wire [6:0] drain_need =
-        (st == ST_HDR) ? 7'd20 :
-        (st == ST_CAP) ? 7'(2 + msg_len) :
-        7'd0;
+    wire [7:0] drain_need =
+        (st == ST_HDR) ? 8'd20 :
+        (st == ST_CAP) ? 8'(2 + msg_len) :
+        (st == ST_DRAIN) ? 8'((drop_left < 9'(avail)) ? drop_left : avail) :
+        8'd0;
 
-    wire [7:0] drain_int = (8'(drain_need) <= avail) ? {1'b0, drain_need} : 8'd0;
+    wire [7:0] drain_int = (drain_need <= avail) ? drain_need : 8'd0;
 
     wire [7:0] in_nbytes = keep_nbytes(s_axis_tkeep);
     wire keep_shape_ok = keep_is_msb_prefix(s_axis_tkeep);
@@ -209,17 +225,40 @@ module itch_parser #(
     // ciclo. Durante un descarte se acepta todo hasta el tlast físico.
     wire drain_active = (drain_int > 0) && (qn >= drain_int);
     wire [7:0] base_n = drain_active ? qn - drain_int : qn;
+    // Oversize (ST_DRAIN, addendum iter 14): los beats se saltan por el
+    // stream con la frontera del mensaje. Un beat entero dentro de drop_left
+    // se descarta (drain_drop); el beat que cruza el final del mensaje
+    // conserva solo su cola (drain_strad), bytes del mensaje siguiente. El
+    // conteo drop_left pasa a ser por stream (no se re-sumatiza dentro de la
+    // cola): el diseño previo (iter 13) rellenaba la cola con can_da y el
+    // residuo del último beat quedaba desalineado (chain01 consumía 3 bytes
+    // del mensaje siguiente: loc 14 -> 13).
+    wire in_drain = (st == ST_DRAIN);
+    wire drain_live = in_drain && (drop_left > 0);
+    wire drain_drop  = drain_live && (9'(in_nbytes) <= drop_left);
+    wire drain_strad = drain_live && (9'(in_nbytes) > drop_left);
+    wire [7:0] retain_n = in_nbytes - 8'(drop_left);
+    // Tail retenido en el cruce: los (in_nbytes - drop_left) bytes BAJOS del
+    // beat (en in_compact el byte0 = el primero-recibido = MSB; la cola del
+    // mensaje siguiente son los bytes bajos). El shift anterior
+    // `>> 8*drop_left` retenía los bytes ALTO (los del mensaje a descartar)
+    // -> desalineaba el siguiente mensaje (iter 15: I2 sin size/type).
+    wire [QQ-1:0] tailmask = (QQ'(1) << (8 * (32'(retain_n)))) - 1;
+    wire [QQ-1:0] tailblock = QQ'(in_compact) & tailmask;
+    wire [QQ-1:0] retain_bits = tailblock << (8 * (32'(QBUFW) - 32'(retain_n)));
     // Tras aceptar tlast no se prefetchea el datagrama siguiente hasta cerrar
     // o descartar el actual: la cola no guarda marcadores de frontera internos.
-    wire can_aug = s_axis_tvalid && !eop_seen && !drain_active &&
-                   (qn + in_nbytes <= QB);
+    wire can_aug = s_axis_tvalid && !eop_seen && !drain_live &&
+                   !drain_active &&
+                   (qn + in_nbytes <= QBUFW);
     wire can_da  = s_axis_tvalid && !eop_seen && drain_active &&
-                   (base_n + in_nbytes <= QB);
+                   (base_n + in_nbytes <= QBUFW);
     wire invalid_offer = s_axis_tvalid && !eop_seen && !in_keep_ok;
-    assign s_axis_tready = drop_packet || invalid_offer || can_aug || can_da;
+    assign s_axis_tready = drop_packet || invalid_offer || can_aug || can_da ||
+                           drain_drop || drain_strad;
     wire in_take = s_axis_tvalid && s_axis_tready;
     wire [QQ-1:0] append_bits = QQ'(in_compact) <<
-        (8 * (32'(QB) - 32'(base_n) - 32'(in_nbytes)));
+        (8 * (32'(QBUFW) - 32'(base_n) - 32'(in_nbytes)));
     wire [7:0] qn_post = base_n +
         ((in_take && in_keep_ok) ? in_nbytes : 8'd0);
     wire eop_eff = eop_seen ||
@@ -228,7 +267,7 @@ module itch_parser #(
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
-            st <= ST_HDR; q <= 0; qn <= 0;
+            st <= ST_HDR; q <= 0; qn <= 0; drop_left <= 0;
             msg_idx <= 0; exp_seq <= 64'd1; this_seq <= 0; session_id <= 0;
             pack_left <= 0; pack_count <= 0; msg_len <= 0;
             in_subset <= 1'b0; msg_type <= 0; locate <= 0; ts_ns <= 0; len_ok <= 1'b0;
@@ -270,8 +309,15 @@ module itch_parser #(
 
                 // ------------------------------------------------------------
                 // cola: drena drain_int y acepta entrada válida en paralelo
+                // (durante ST_DRAIN solo se retiene el cruce de frontera)
                 // ------------------------------------------------------------
-                if (can_da) begin
+                if (drain_strad) begin
+                    q <= retain_bits;
+                    qn <= retain_n;
+                end else if (drain_drop) begin
+                    q <= '0;
+                    qn <= 8'd0;
+                end else if (can_da) begin
                     q <= (q << (8*drain_int)) | append_bits;
                     qn <= qn_post;
                 end else if (drain_active) begin
@@ -350,7 +396,7 @@ ST_LEN: begin
                                 7'(((8'({pbyte(q,0), pbyte(q,1)}) - 8'd11) +
                                     8'(BYTES-1)) >> L2B) : 7'd0;
                             bi <= 0;
-                            msg_reg <= q[(QB-2)*8 - 1 -: 352];
+                            msg_reg <= q[(QBUFW-2)*8 - 1 -: 352];
                             // Todo tipo canónico se valida, aunque no emita registro.
                             // Un tipo desconocido (explen=0) sigue como passthrough.
                             len_ok <= (explen(pbyte(q,2)) == 0) ||
@@ -362,6 +408,31 @@ ST_LEN: begin
                                   8'({pbyte(q,0), pbyte(q,1)}))))
                                 error <= 1'b1;
                             st <= ST_CAP;
+end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
+                            // mensaje más grande que la cola (2+len > QB,
+                            // p. ej. I=50 B con QB=46): nunca cabe en el
+                            // buffer — se drena por el stream sin registro
+                            // (addendum iter 12; el ST_LEN previo esperaba
+                            // avance -> tready=0 indefinido, deadlock).
+                            // El contenido de la cola es el prefijo del
+                            // mensaje oversize: se descarta entero y se
+                            // cuentan solo los bytes que faltan. La
+                            // validación de longitud (explen) se conserva.
+                            // iter 14: drop_left descuenta qn_post (avail + el
+                            // beat aceptado en ESTE ciclo por can_aug); el
+                            // diseño previo solo restaba avail y el beat del
+                            // ciclo quedaba sin contabilizar -> el drenado
+                            // consumía un beat de más del mensaje siguiente
+                            // (chain01: loc 14 -> 13, 3 bytes comidos).
+                            if ((explen(pbyte(q,2)) != 8'd0) &&
+                                (explen(pbyte(q,2)) !=
+                                 8'({pbyte(q,0), pbyte(q,1)})))
+                                error <= 1'b1;
+                            drop_left <= 9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) -
+                                         9'(qn_post);
+                            q <= '0;
+                            qn <= '0;
+                            st <= ST_DRAIN;
                         end else if (eop_seen) begin
                             // frame truncado (SEC-FRM-01): el datagrama ya terminó
                             // (tlast) y el mensaje declarado no está completo.
@@ -470,6 +541,50 @@ ST_LEN: begin
                             drop_packet <= !eop_eff;
                             st <= ST_HDR;
                         end
+                    end
+                end
+
+                    // ------------------------------------------------
+                ST_DRAIN: begin
+                    // drenaje incremental del mensaje oversize: los beats del
+                    // stream se saltan con la frontera del mensaje (drain_drop
+                    // / drain_strad, addendum iter 14) — nada se acumula salvo
+                    // la cola del cruce (bytes del mensaje siguiente). Al
+                    // completarse, ST_LEN retoma con la cola alineada.
+                    // El mensaje drenado descuenta pack_left como un mensaje
+                    // más del datagrama (iter 13: sin el descuento, el
+                    // pack_left de la cabecera quedaba desalineado al cierre
+                    // del paquete y ST_NEXT pulsaba error).
+                    if (drop_left == 0) begin
+                        if (pack_left > 1) begin
+                            pack_left <= pack_left - 1;
+                            st <= ST_LEN;
+                        end else if (eop_eff && qn_post == 0) begin
+                            exp_seq <= this_seq + 64'(pack_count);
+                            eop_seen <= 1'b0;
+                            st <= ST_HDR;
+                        end else begin
+                            error <= 1'b1;
+                            q <= '0;
+                            qn <= '0;
+                            eop_seen <= 1'b0;
+                            pack_left <= 0;
+                            st <= ST_HDR;
+                        end
+                    end else if (eop_seen) begin
+                        // datagrama truncado dentro del mensaje de oversize
+                        // (SEC-FRM-01): el stream terminó y el mensaje
+                        // declarado no se completó
+                        error <= 1'b1;
+                        q <= '0;
+                        qn <= '0;
+                        eop_seen <= 1'b0;
+                        pack_left <= 0;
+                        st <= ST_HDR;
+                    end else if (drain_drop) begin
+                        drop_left <= drop_left - 8'(in_nbytes);
+                    end else if (drain_strad) begin
+                        drop_left <= '0;
                     end
                 end
 
