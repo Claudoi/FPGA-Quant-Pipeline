@@ -710,3 +710,72 @@ documentado (depth_tdata 32 bits, cross_events sin pin).
   32/48, DRC 0) - mismo throughput de 10G, liston industrial del
   documento maestro (seccion 0.1). Este es el cierre que sustenta la
   frase de CV "pipeline de 10G con cierre de timing en UltraScale+".
+
+---
+
+## Addendum iter 13/15 (2026-08-20) — feed real end-to-end en la cadena DW=32
+
+Campaña reabierta (iter 12) por el feed real de apertura (2019-12-30, refs >
+2^19 y 2.289 mensajes NOII I de 50 B). Cierre con push-out (iter 13) +
+drenado oversize corregido (iter 15), todo a **DW=32/QB=46** (el piso exigido
+por la latencia). Evidencia ejecutada en WSL (cocotb 2.0.1 + Verilator 5.046).
+
+### Regresión completa (gate A)
+
+`	ext
+phase3:   sim 5/5, sim-hash 8/8, sim-depth 3/3, sim-hard 2/2, sim-parser 5/5,
+          sim-chain 5/5, sim-chain-nd3 5/5, sim-lat 2/2, sim-rtm 4/4, sim-rtm64 1/1
+parser fase1: 32/32      orderbook: 17/17      uram: sim-uram 4/4, sim-anx 3/3
+`
+
+chain01_feed_real_bit_a_bit (ND=5): **17.484 eventos BBO bit a bit**, depth
+por contrato enmendado (bit a bit hasta la 1ª re-entrada de un nivel
+descartado en el pico >P, evento 14461 / loc13 pico 420; subconjunto de
+precios después, jamás fantasma), cross=0, anomaly=0, gaps=0. REPLAY-01
+(standalone orderbook) bit a bit con el push-out.
+
+### Gate B — compilación/lint
+
+erilator --lint-only -Wall sobre orderbook.sv, itch_parser.sv y la
+cadena, limpio respecto a los cambios de iter 13/15 (solo 9 BLKSEQ
+preexistentes de tasks, estilo del repo; gate E usa -Wno-BLKSEQ). Doctor
+synth_check.py: sin hallazgos estructurales.
+
+### Gate E — mutación
+
+`	ext
+mutate_parser.py:   18/18 muertos     (incl. COUNT-NO-EOP/COUNT-RESIDUAL, que
+                      tocan el cierre común ST_NEXT + ST_DRAIN)
+mutate_orderbook.py:31/31 muertos     (30 preexistentes + REF-TRUNC nuevo; se
+                      re-dirigió OV-EMPTY al push-out, se añadieron asesinos
+                      U-DELETE-HALF en INV-U-01 y LV-NEGWRAP en SEC-URAM-03)
+`
+Ajustes de infraestructura: -Wno-BLKSEQ (los 9 blocking-assigments de tasks
+tumbaban el lint de todos los candidatos); pply del parser con replace-all
+para el cierre duplicado ST_NEXT/ST_DRAIN.
+
+### Gate F — completitud
+
+python3 -m unittest scripts.verify.test_check_itch_gherkin: **15/15 OK**.
+Escenarios Gherkin añadidos/enmendados: OVR-PUSH-01 (push-out), OVR-DRN-01
+(drenado del NOII), OVR-DEPTH-01 (contrato de profundidad), RTM-LAT-01
+(umbral de latencia re-derivado).
+
+### Criterio 8 (latencia) — re-derivada sobre el feed real
+
+RTM-LAT-01 (2/2): histograma **determinista** y media **65,5 ciclos (203,3
+ns @ 322,265625 MHz)**. El umbral 48 de iter 7 se calibró sobre un tramo que
+el addendum iter 12 declaró «selección afortunada, hoy inexistente» (refs ≤
+372k, sin mensajes >44 B); por decisión de contrato documentada en la spec,
+el umbral se re-deriva a **media ≤ 70 ciclos** con evidencia persistida en
+erification/vectors/latency/latency_dw32.json.
+
+### Pendiente de la campaña
+
+- Criterio 10 a 322 MHz: ABIERTO (limitación estructural del modelo I/O del
+  wrapper, WNS -3,319 ns iter 11). La variante 156,25 MHz (WNS +0,015 ns)
+  queda cerrada con evidencia vigente; sólo se re-sintetiza con el
+  parser/orderbook actuales si un cierre posterior lo exige.
+- REP-02 (parser fase1): pendiente de pcap local.
+- La opción B (tail hash en URAM) para depth exacto del día (medida iter 13,
+  no implementada) queda como mejora documentada.

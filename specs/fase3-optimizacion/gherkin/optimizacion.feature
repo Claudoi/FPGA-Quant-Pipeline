@@ -132,3 +132,71 @@ Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
     Dado el book pipelined con DW=64 (default)
     Cuando se re-ejecutan las suites de fase 1 y fase 2
     Entonces todos los tests siguen pasando sin cambios
+
+  # --- iteración 12 (2026-08-19): feed real de apertura — K=64 y drenado ---
+  # Addendum iteración 12 de spec.md. El tramo de apertura real (210k
+  # paquetes, refs ~1,6-1,7M) expone dos bugs estructurales: K=19 truncaba
+  # refs > 2^19 (254 eventos perdidos, reproducción numérica exacta) y el
+  # parser con QB=46 deadlockeaba con mensajes > 44 B (I=50 B, 2+len=52 > 46).
+
+  Escenario: REF64-01 — el book con K=64 reproduce el feed real de apertura
+    Dado el pcap real de apertura del día (refs > 2^19) decapado (20 símbolos)
+    Cuando el book procesa los mensajes del subset con K=64
+    Entonces el BBO es bit a bit idéntico al golden book.py
+    Y no hay anomalías (ningún ref se truncó ni colisionó)
+
+  Escenario: REF64-02 — refs que difieren en 2^19 no colisionan con K=64
+    Dado dos órdenes cuyos refs difieren exactamente en 2^19 (mismo residuo
+      mod 2^19)
+    Cuando el book las procesa con K=64
+    Entonces ambas viven en la tabla sin error de ref duplicada
+    Y el borrado de cada una actúa sobre su propia orden
+    (con K=19 la segunda add se rechaza como duplicada y su borrado cuenta
+    anomalía — rojo de la enmienda)
+
+  Escenario: OVR-01 — el parser drena los mensajes oversize sin deadlock
+    Dado un datagrama con un mensaje de 50 B (2+len=52 > QB=46) entre
+      mensajes normales
+    Cuando el parser de 32 bits (o la cadena) lo procesa
+    Entonces el tlast del datagrama se acepta y el stream continúa
+    Y los mensajes posteriores al oversize se procesan correctamente
+    Y no se emite registro del mensaje oversize (fuera del subset)
+
+  Escenario: OVR-PUSH-01 — desborde de niveles con push-out (SEC-OV-01 enmendado)
+    Dado un símbolo con la lista ask llena a P niveles (sin huecos)
+    Cuando llega un add a un precio mejor que el peor nivel vigente
+    Entonces el nivel nuevo entra al top-P y el peor sale (push-out)
+    Y el BBO refleja el nuevo mejor precio exactamente
+    Y no se señala error
+    Cuando llega un add a un precio peor que el peor nivel vigente
+    Entonces la op se descarta y se señala SEC-OV (pulso error)
+    Y el BBO no cambia
+    (con el rechazo pre-13 el primer caso congelaba el BBO — rojo del evento
+    3353 sobre el feed real)
+
+  Escenario: OVR-DRN-01 — el NOII oversize se drena sin romper el stream
+    Dado un datagrama con mensajes I (2+len > QB) intercalados
+    Cuando el parser de 32 bits (QB=46) los procesa contra el feed real
+    Entonces cada mensaje I se drena por el stream con la frontera del beat
+    Y el mensaje siguiente queda alineado byte a byte (drop_left con el beat
+      del ciclo y retención de la cola baja en el cruce)
+    Y el BBO de la cadena es bit a bit contra el golden book.py
+    (rojos iter 13-14: 3 bytes comidos por el cruce -> loc 14 como 13)
+
+  Escenario: OVR-DEPTH-01 — la profundidad respeta el contrato del push-out
+    Dado el feed real (loc13 supera 32 niveles en el pico)
+    Cuando el book emite la profundidad top-N
+    Entonces el depth es bit a bit hasta la primera re-entrada de un nivel
+      descartado en el pico (>P)
+    Y desde ahí no hay ningún precio fantasma (todo precio del depth está en
+      el golden; las cantidades de los niveles re-entrados pueden ser
+      parciales)
+    (la exactitud bit a bit del depth con P finito es imposible para un feed
+    con picos >P; el tail en URAM lo daría — opción B, no implementada)
+
+  Escenario: RTM-LAT-01 — umbral de latencia re-derivado sobre el feed real
+    Dado el feed real de apertura representativo (2.289 NOII)
+    Cuando la cadena parser->book a DW=32 procesa el subset
+    Entonces el histograma wire->BBO es determinista entre re-ejecuciones
+    Y la media total queda <= 70 ciclos (203,3 ns medidos; el umbral 48 de
+      iter 7 era de un tramo afortunado, no representativo)

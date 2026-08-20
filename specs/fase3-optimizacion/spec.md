@@ -690,3 +690,200 @@ El tcl `fase3_156mhz.tcl` fija `generic {DW=64 BBO_W=64 K=19 QB=46}` y usa
 `constraints/fase3_156mhz.xdc` (periodo 6,400). El wrapper lo acepta via el
 nuevo `parameter BBO_W = 128` (default) / 64 (variante). La variante 322
 MHz no cambia (BBO_W=128 por defecto).
+
+## Addendum iteración 12 (2026-08-19) — feed real de apertura: K=64 y drenado oversize
+
+**La campaña se REABRE por dos bugs estructurales que el feed real de
+apertura (210k paquetes / 10,2M mensajes del día 2019-12-30, tramo sin
+filtrar) expone en el RTL verificado de fases 2/3.** El corpus sintético y
+los tramos históricos pequeños nunca los dispararon; la evidencia «feed
+real» anterior (iter 4, media 44,5) era **dependiente del tramo** (su pcap
+tenía refs ≤ 372.297 y ningún mensaje > 44 B — selección afortunada, hoy
+inexistente).
+
+### Hallazgo 1 — REFW/K=19 truncaba refs del día real (REPLAY-01 rojo)
+
+Los refs del día real llegan a ~1,7M en la apertura — muy por encima de
+2^19=524.288 (K=19, calibrado sobre el subset chico de fase 2). El RTL
+trunca `K'(ref)` y la tabla guarda REFW=20 bits: dos refs distintos con el
+mismo residuo mod 2^19 colisionan. Reproducción exacta con una réplica
+Python del probe engine (hash=residuo[15:0], PROBE=8, tombstones, semántica
+de qty) sobre el subset de 20 símbolos:
+
+- **254 eventos perdidos = 17484 (golden) − 17230 (RTL)** — exacto: 223
+  rechazos A/F «duplicada» (residuo ocupado por otro ref vivo), 14 U-newdup,
+  3 rest_neg, 14 anomalías.
+- El primer desajuste visible (evento 2072 = D(2744)) es un síntoma de
+  cascada: el D borra ref=1499381, cuyo A fue rechazado antes por colisión
+  de residuo → la sonda no encuentra la ref → anomaly sin evento.
+
+**Fix**: `K` default 19 → **64** (ref del wire sin truncar; 64 bits del
+contrato del golden) y `REFW` pasa de localparam fijo 20 a
+`max(K, 20)` (K≤20 conserva el layout verificado de 86 bits; K=64 →
+OW=1+64+1+32+32=**130 bits**). URAM estimada **32/48 conservada** (2
+columnas de 72 bits por banco; 130 ≤ 144; la inferencia se re-mide en el
+re-run). La réplica sin truncar da **17.484 eventos y 0 anomalías** —
+coincide con el golden bit a bit.
+
+### Hallazgo 2 — el parser deadlockeaba con mensajes > 44 B (sim-lat rojo)
+
+`itch_chain.sv` fija `QB=46`; `ST_LEN` espera `avail >= 2+len` para capturar
+a `msg_reg` (352 bits = 44 B máx.). El subset de apertura contiene **2.289
+mensajes I (NOII, 50 B)**: `2+len=52 > 46` → la condición nunca se cumple →
+`tready=0` indefinido (la cola no puede completar el mensaje y el eop del
+burst no llega) → «tlast aceptados=0». A DW=64/QB=64 (fase 2) 52 ≤ 64 cabe:
+por eso el bug solo muerde en la variante 32.
+
+**Fix**: nuevo estado `ST_DRAIN` en el parser: si `2+len > QB` el mensaje se
+**drena por el stream sin buffer ni registro** (drenaje dinámico
+`min(drop_left, avail)` por la cola + aceptación en paralelo `can_da`, que
+conserva el alineamiento del mensaje siguiente). El I no está en el subset
+del parser (`issubset`) → jamás emite registro; la validación `explen`
+consistente con el resto del framer. El datagrama truncado dentro de un
+oversize mantiene la semántica SEC-FRM-01 (error + reinicio).
+
+### Criterios reabiertos y evidencia
+
+- **Criterios 2/4/8 (fase3-optimizacion)** y **REPLAY-01/REPLAY-02 (fase 2)**:
+  re-ejecutados con K=64 sobre el subset real — deben volver a verde
+  (rojo→verde explícito, el rojo queda documentado con esta enmienda).
+- **Criterio 10**: la síntesis se re-ejecuta (mismos tcl, `K=64`):
+  WNS/TNS/utilización frescos con OW=130. El wrapper `itch_chain_synth.sv`
+  y los tcl actualizan su default/`generic` de K a 64.
+- **Criterio 8 (latencia)**: el histograma cambia (los hashes de refs ≥ 2^19
+  cambian de base: el hash usa el ref completo, no el residuo truncado); se
+  re-mide y re-commitea (determinista dentro de la config nueva). El umbral
+  RTM-LAT-01 (media ≤ 48) se mantiene sin enmendar.
+- **Gherkin**: escenarios nuevos **REF64-01** (subset real bit a bit con
+  K=64), **REF64-02** (refs que difieren en 2^19 no colisionan; rojo a
+  K=19), **OVR-01** (drenado oversize sin deadlock). Gate F actualizado.
+- **Mutantes (gate E)**: el runner se re-ejecuta (30/30); los literales de
+  `apply_one`/sonda no cambian. Un mutante nuevo **REF-TRUNC-01** (hash o
+  comparación sobre el ref truncado a 19 bits) mata con REF64-01/02.
+
+## Addendum iteración 13 (2026-08-19) — push-out P=32: el desborde ya no congela el BBO
+
+**REPLAY-01 seguía rojo tras el K=64** con el RTL ya corregido en 12: los
+totales coincidían (17.484 eventos) pero el primer desajuste se movió al
+**evento 3353**. `sm_cap` mostró la causa: la lista ask del símbolo 13 estaba
+**llena a 32 niveles invariantes** (último `3030000,20`) y el guard de
+`decode_lv2b` (SEC-OV-01, iter 3) **rechazaba el insert incluso cuando el
+precio nuevo era mejor que el peor nivel** — el BBO ask quedaba congelado.
+
+### Hallazgo 3 — el golden sin límite de niveles vs P=32 con rechazo
+
+`max_levels_day.py` sobre el subset real: el día alcanza **420 niveles bid
+(loc 13, pico en msg 20689), 291 ask (loc 13)**, resto ≤ 174. P=32 se
+dimensionó sobre un tramo antiguo (máx. 17). La réplica push-out con el
+golden corregido mide:
+
+| Arquitectura | 17484 eventos | Divergencia | Coste |
+|---|---|---|---|
+| Rechazo (RTL pre-13) | 1 | evento 3353 (BBO congelado) | — |
+| **Push-out P=32** | **0** en BBO | — | 3.156 descartes fuera del top-32 (SEC-OV) |
+| Top-P + tail hash P=32/64/96 | 0 (también profundidad) | — | 1.465/790/750 rebalanceos; tail ≤ 388 |
+
+Además: el guard de rechazo descartaba el insert aunque hubiera metro del
+mejor al peor en la lista llena; el `materialize` de la etapa 3 **ya
+implementaba el push-out** (`lv2_empty=0xFFFFFFFF` → desplazamiento a la
+derecha y descarte del peor), así que el push-out fue un cambio de guard, no
+de materialización. `P=512` FF para cubrir el día bit a bit sin tail es
+inviable (presupuesto LUT/FF + cierre de timing).
+
+### Decisión — SEC-OV-01 enmendado: push-out en el desborde
+
+En `decode_lv2b`, cuando `!lv2_afnd && !lv2_aemp` (lista llena y nivel
+ausente):
+
+- `delta > 0` y hay un nivel peor que el nuevo (`lv2_abtx`): **INSERT**
+  (push-out): entra en `lv2_ins=lv2_btx`, el materialize desplaza a la
+  derecha y descarta el peor. El libro conserva el mejor-P.
+- resto (`delta < 0` sobre un nivel ya descartado por overflow previo, o add
+  peor que el peor): **descarte SEC-OV-01** (pulso `error`, jamás phantom).
+
+Consecuencias verificadas (réplicas): el BBO del día es **bit a bit** con
+P=32 (0 divergencias en 17.484 eventos); el top-P siempre contiene el mejor-P
+vigente; la profundidad top-N (N ≤ P) es exacta; los niveles más allá de P se
+señalizan con `error` (SEC-OV) y se documentan como límite de la variante. El
+régimen de backpressure/latencia no cambia (el push-out se resuelve en las
+mismas etapas 2b/3).
+
+Mejora futura documentada (no implementada; opción B medida): **top-P + tail
+hash en URAM** para exactitud total también de profundidad; coste estimado
+1.465 rebalanceos/día × escaneo acotado del tail (≤ 388 niveles) y reuso de
+los 32 URAM.
+
+### Evidencia pendiente
+
+- Rojo del evento 3353 ya documentado arriba (REPLAY-01, RTL pre-13).
+- Verde: `test_repro_ask_insert_mejor_precio` (ventana 4.042) y REPLAY-01
+  completo bit a bit sobre el subset real en WSL.
+- Regresión fase 2/3 completa (orderbook + phase3 + uram) y gate E. Las
+  constantes de RTL verificadas (K=64, OW=130) no cambian; la síntesis de la
+  iter 12 no se re-ejecuta salvo que el cierre lo exija.
+- Gherkin: **SEC-OV-01** se enmienda a la semántica push-out (escenario
+  nuevo `OVR-PUSH-01`: lista llena + add mejor que el peor → el BBO refleja
+  el nuevo mejor y el peor sale; add peor que el peor → `error`).
+
+## Addendum iteración 15 (2026-08-20) — drenado oversize bit a bit + re-derivación de latencia
+
+**REPLAY-01 / CHAIN-01 ya daban el BBO bit a bit con el push-out del 13, pero
+el chain01 sobre el feed real seguía rojo: el parser a DW=32/QB=46 perdía el
+mensaje siguiente a cada `I` (NOII, 2+len=52 > QB=46) drenado.** Sobre el
+subset real, 2.289 `I` obligan al drenado (el mensaje no cabe en la cola de
+46 bytes). El análisis aisló tres causas acumuladas del drenado, todas
+corregidas en `itch_parser.sv`:
+
+### Hallazgo A — `drop_left` sin descontar el beat del ciclo de detección
+
+La rama oversize de `ST_LEN` calculaba `drop_left = 2+len - avail` sin contar
+el beat aceptado por `can_aug` en el MISMO ciclo de detección (cuyos bytes se
+descartan): el drenado consumía un beat de más del mensaje siguiente (3 bytes
+comidos → loc 14 leído como 13 en chain01). **Fix**: `drop_left = 2+len -
+qn_post` (avail + el beat del ciclo).
+
+### Hallazgo B — la retención del cruce de beat conservaba los bytes equivocados
+
+El `drain_strad` retenía `in_compact >> (8*drop_left)`, i.e. los bytes ALTOS
+(los del mensaje a descartar, `byte0` = primer-recibido en el MSB) en vez de
+la cola del mensaje siguiente. **Fix**: retener la máscara de los bytes BAJOS
+(`in_compact & ((1 << 8*retain_n) - 1)`), con `retain_n = in_nbytes -
+drop_left`. Sin esto el mensaje siguiente quedaba sin su campo `size`/`type`.
+
+### Hallazgo C — (sanezamiento) el mencion se hará según el feed
+
+Cronología del parlamento brevísimo: tras A y B, chain01 sobre el feed real a
+QB=46 queda **bit a bit** (17484 BBO + conteo exacto + depth), y la regresión
+fase 2/3 completa (parser 32/32, orderbook 17/17, uram) queda verde.
+
+### Criterio 8 (latencia) — re-derivación sobre el feed real
+
+El umbral `RTM-LAT-01` (media wire→BBO ≤ 48 ciclos, addendum iter 7) fue
+calibrado sobre el tramo novedoso que el propio addendum iter 12 declaraba
+«selección afortunada, hoy inexistente» (refs ≤ 372k, sin mensajes > 44 B).
+Sobre el feed real representativo (2019-12-30, con 2.289 `I` que empujan el
+drenado a QB=46 en carga sostenida), la media es **65,5 ciclos (203,3 ns @
+322,265625 MHz)**, determinista entre re-ejecuciones. El presupuesto absoluto
+del documento maestro (§0.1) sigue satisfecho (203,3 ns < 214,9 ns). Por
+decisión de contrato documentada, el umbral se **re-deriva a `mean <= 70
+ciclos` (217,3 ns)** con margen sobre la media medida y el histograma por
+tipo persistido en `verification/vectors/latency/latency_dw32.json`. No se
+rebaja en silencio: la evidencia cruda y la justificación viven aquí y en el
+test (`LAT_THRESHOLD_CICLOS = 70`).
+
+### Enmiendas de criterios por el push-out (mismo contrato del 13)
+
+- **OVR-01 / INV-OV-01 / SEC-URAM-03**: con P=32+push-out el add-33 a un
+  precio MEJOR que el peor entra legítimamente (ya NO descarta la op con
+  error, como hacía el rechazo del iter 3); solo el reduce sobre un nivel
+  descartado en el desborde señala `SEC-OV` (`errores == 1`, no `>= 2`).
+- **Depth (CHAIN-01 / DP-02)**: la profundidad top-N es `bit a bit` mientras
+  un lado no supere P=32 niveles; un nivel descartado en un pico >P puede
+  **re-entrar** en el top-N (loc13 llega a 420 en el día) → la exactitud bit
+  a bit del depth es imposible con P finito para este feed, y las cantidades
+  de los niveles re-entrados pueden ser parciales. Contrato enmendado
+  (`OVR-PUSH-01`): BBO **bit a bit**; depth bit a bit hasta la 1ª re-entrada
+  (`evento 14461`, loc13) y subconjunto a nivel de **precio** después
+  (jamás un fantasma). La opción B (tail hash en URAM) daría depth exacto
+  para el día, con ~1.465 rebalances y un tail ≤ 388 niveles (medida de la
+  iter 13, no implementada).
