@@ -81,9 +81,10 @@ def apply(mutant, raw):
     if n == 0:
         raise SystemExit(f"ERROR: el mutante {mutant[0]} no encuentra su objetivo "
                          f"(count=0). old={old!r}")
-    if n > 1:
-        raise SystemExit(f"ERROR: el mutante {mutant[0]} encuentra {n} objetivos "
-                         f"(se esperaba exactamente 1). old={old!r}")
+    # COUNT-NO-EOP/COUNT-RESIDUAL: la cadena de cierre `eop_eff && qn_post==0`
+    # vive en ST_NEXT y (desde el addendum iter 15) en el cierre de ST_DRAIN
+    # (drenando el último mensaje). El flip debe tocar AMBAS (la semántica de
+    # cierre del datagrama es común) — se reemplazan todas las ocurrencias.
     return raw.replace(old, new)
 
 

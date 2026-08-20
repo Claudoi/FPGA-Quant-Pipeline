@@ -35,9 +35,9 @@ MUTANTS = [
     ("OV-BEST", "best bid <= en vez de >= (cambio de mejor precio)",
      "lv_beat[i] <= (lv_qty[base+i] != 0) &&\n                              (ask ? (lv_price[base+i] > price)\n                                   : (lv_price[base+i] < price));",
      "lv_beat[i] <= (lv_qty[base+i] != 0) &&\n                              (ask ? (lv_price[base+i] < price)\n                                   : (lv_price[base+i] > price));"),
-    ("OV-EMPTY", "overflow de niveles sin error (acepta silencioso)",
-     "if (!lv2_afnd && !lv2_aemp) begin\n                // overflow de niveles (SEC-OV-01): la op se descarta\n                lv2_mode <= LV_MODE_NONE;\n                lverr = 1'b1;",
-     "if (!lv2_afnd && !lv2_aemp) begin\n                // overflow de niveles (SEC-OV-01): la op se descarta\n                lv2_mode <= LV_MODE_NONE;\n                lverr = 1'b0;"),
+    ("OV-EMPTY", "push-out: el descarte SEC-OV en el desborde no señala error (reduce-ausente y add peor que el peor aceptados en silencio)",
+     "if (lv_delta[31]) begin\n                    lv2_mode <= LV_MODE_NONE;\n                    lverr = 1'b1;\n                end else if (lv2_abtx) begin\n                    lv2_mode <= LV_MODE_INSERT;\n                end else begin\n                    lv2_mode <= LV_MODE_NONE;\n                    lverr = 1'b1;\n                end",
+     "if (lv_delta[31]) begin\n                    lv2_mode <= LV_MODE_NONE;\n                    lverr = 1'b0;\n                end else if (lv2_abtx) begin\n                    lv2_mode <= LV_MODE_INSERT;\n                end else begin\n                    lv2_mode <= LV_MODE_NONE;\n                    lverr = 1'b0;\n                end"),
     ("U-NOTATOMIC", "replace no atómico (borra la orig pero no añade la nueva)",
      "launch_lv(u_side, u_price, u_shares);\n                    wr_en = 1'b1;\n                    wr_addr = u_nidx;\n                    wr_data = entry_new(u_newref, u_side, u_price, u_shares);",
      "launch_lv(u_side, u_price, u_shares);"),
@@ -62,6 +62,9 @@ MUTANTS = [
     ("HASH-NOREF", "el lookup no compara el ref (colisión -> op sobre la ref equivocada)",
      "if (rd_data[0] && (rd_data[REFW:1] == pr_target)) begin",
      "if (rd_data[0]) begin"),
+    ("REF-TRUNC", "comparación del ref truncada a 19 bits (replica el bug K=19 pre-iter 12: refs que comparten el residuo mod 2^19 colisionan)",
+     "if (rd_data[0] && (rd_data[REFW:1] == pr_target)) begin",
+     "if (rd_data[0] && (rd_data[19:1] == pr_target[18:0])) begin"),
     ("HASH-LOOKUP-BOUND", "la sonda proba de menos (off-by-one: la ref del último slot no se encuentra)",
      "if (pr_i == 16'(PROBE-1)) begin",
      "if (pr_i == 16'(PROBE-2)) begin"),
@@ -175,9 +178,14 @@ def lints():
     env["PATH"] = os.path.join(REPO, ".venv", "bin") + os.pathsep + env.get("PATH", "")
     r = subprocess.run(
         ["verilator", "--lint-only", "-Wall",
-         "-Wno-WIDTHEXPAND", "-Wno-CASEOVERLAP", "-Wno-CASEINCOMPLETE",
+         "-Wno-BLKSEQ", "-Wno-WIDTHEXPAND", "-Wno-CASEOVERLAP",
+         "-Wno-CASEINCOMPLETE",
          "-Wno-UNUSEDSIGNAL", "-Wno-UNUSEDPARAM",  # el mutante suele dejar
                             # señales sin usar (colateral esperado del flip)
+                            # -Wno-BLKSEQ: los 9 blocking-assigments de tasks
+                            # (estilo preexistente en HEAD, iter 13) tumban el
+                            # lint de TODOS los candidatos sin ser culpa del
+                            # mutante
          "--top-module", "orderbook", "rtl/orderbook/orderbook.sv"],
         cwd=REPO, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
