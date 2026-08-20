@@ -23,19 +23,21 @@ read_verilog -sv ../rtl/orderbook/orderbook.sv
 read_verilog -sv ../rtl/parser/itch_parser.sv
 read_verilog -sv ../rtl/itch_chain.sv
 read_verilog -sv itch_chain_synth.sv
-set_property generic {DW=32 K=19 QB=46} [current_fileset]
+set_property generic {DW=32 K=64 QB=46} [current_fileset]
 
 read_xdc constraints/fase3_322mhz.xdc
 
-# El array o_mem (NSLOTxOW = 65.536x86 = 5,64 Mbits) supera el límite soft de
-# elaboración (1 Mbit) y dispara Synth 8-4556. AMD documenta el override:
+# El array o_mem (NSLOTxOW = 65.536x130 = 8,52 Mbits con K=64, addendum iter
+# 12) supera el límite soft de elaboración (1 Mbit) y dispara Synth 8-4556.
+# AMD documenta el override:
 #   set_param synth.elaboration.rodinMoreOptions "rt::set_parameter var_size_limit <n>"
-# 6.000.000 deja margen sobre los 5.636.096 bits reales. El fix primario es el
+# 9.000.000 deja margen sobre los 8.519.680 bits reales. El fix primario es el
 # atributo (* ram_style = "ultra" *) en o_mem (inferencia URAM temprana); este
 # override queda como red de seguridad. NO se parte el array: el diseño de
-# fase3-uram quiere una sola RAM 86-bit (URAM, packing ideal).
+# fase3-uram quiere una sola RAM (URAM, packing ideal — 2 columnas de 72 bits
+# por banco para OW=130, 32 URAM288 esperadas).
 set_param synth.elaboration.rodinMoreOptions \
-    "rt::set_parameter var_size_limit 6000000"
+    "rt::set_parameter var_size_limit 9000000"
 
 # Optimización post-elaboración del array o_mem (5,64 Mbit) con todos los
 # cores disponibles (12 físicos en la máquina de desarrollo); el default 2

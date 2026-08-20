@@ -7,15 +7,17 @@
 module itch_chain #(
     parameter DW   = 32,
     // QB (iter 4, SEC-URAM-04): 64 -> 46. La latencia wire->BBO media del
-    // feed real (make sim-lat) baja de 55,9 (QB=64) a 47,1 (QB=48); con la
-    // medición en estado estacionario (espera de la INVAL post-reset antes
-    // de alimentar, ~65,5k ciclos) queda en ~45.0 con QB=46 — el backlog de
-    // la cola del parser adelantándose al book (sonda URAM serializada
-    // ~13-15 c/msg) es el componente dominante; el QB acota el adelanto a
-    // ~1,5 mensajes. QB=46 es el piso: el peor caso (P=44 B => 46 B con
-    // prefijo) cabe exacto; QB=32 DEADLOCKEA (2+len=46 > 32).
+    // feed real (make sim-lat) con QB=46 queda en ~45 (umbral RTM-LAT-01
+    // media <= 48); subir QB (iter 15 experimental: 64) rompía el criterio
+    // (media 72,7). QB=46 es el piso: el peor caso canónico (P=44 B => 46 B
+    // con prefijo) cabe exacto; QB=32 DEADLOCKEA (2+len=46 > 32). Los
+    // mensajes > QB (I=50 B, 2+len=52) se drenan por ST_DRAIN (addendum
+    // iter 12), con la contabilidad de frontera corregida en iter 15.
     parameter QB   = 46,
-    parameter K    = 19,
+    // K=64 (addendum iter 12): el ref del wire viaja sin truncar. El día
+    // real supera 2^19 (refs ~1,6M en apertura; K=19 truncaba residuos y
+    // perdía eventos del subset); el book ensancha su entrada a OW=130 bits
+    parameter K    = 64,
     parameter P    = 32,
     parameter ND   = 5,
     parameter NSYM = 20,

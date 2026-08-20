@@ -19,7 +19,9 @@
 module itch_chain_synth #(
     parameter DW   = 32,
     parameter QB   = 46,
-    parameter K    = 19,
+    // K=64 (addendum iter 12): el ref del wire viaja sin truncar (el día
+    // real supera 2^19; el book ensancha su entrada a OW=130 bits)
+    parameter K    = 64,
     parameter P    = 32,
     parameter ND   = 5,
     parameter NSYM = 20,
