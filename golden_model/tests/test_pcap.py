@@ -77,6 +77,19 @@ class TestPcap(unittest.TestCase):
         )
         self.assertEqual(reconstruido, self.bf_path.read_bytes())
 
+    def test_pca05_max_messages_recorta_el_stream_sin_perder_grupo(self):
+        """Recorte por max_messages: solo los primeros N mensajes y el ultimo
+        grupo parcial se flushea (regla G0: tramos de dia real reproducibles)."""
+        stats = self._convert(max_messages=3)
+        self.assertEqual(stats["messages"], 3)
+        reconstruido = b"".join(
+            len(m).to_bytes(2, "big") + m
+            for _seq, msgs, _raw in iter_pcap_packets(self.pcap_path)
+            for m in msgs
+        )
+        esperado = binaryfile(*self.payloads[:3]).getvalue()
+        self.assertEqual(reconstruido, esperado)
+
     def test_sec06_mensaje_mayor_que_el_payload_maximo_produce_error_claro(self):
         self.bf_path.write_bytes(binaryfile(p_a(ref=1)).getvalue())
         with self.assertRaises(OversizedMessageError) as ctx:

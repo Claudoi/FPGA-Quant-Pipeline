@@ -104,6 +104,7 @@ def convert(
     dst_ip: str = DEFAULT_DST_IP,
     src_port: int = DEFAULT_SRC_PORT,
     dst_port: int = DEFAULT_DST_PORT,
+    max_messages: int | None = None,
 ) -> dict[str, int]:
     """Convierte un BinaryFILE en pcap; devuelve estadisticas de la conversion."""
     if len(session) != 10:
@@ -133,6 +134,9 @@ def convert(
             group.clear()
 
         for idx, payload in enumerate(_iter_binaryfile(fin)):
+            if max_messages is not None and idx >= max_messages:
+                flush()
+                break
             if len(payload) + 2 > max_payload:
                 raise OversizedMessageError(
                     f"mensaje {idx}: {len(payload) + 2} B con length prefix > "
