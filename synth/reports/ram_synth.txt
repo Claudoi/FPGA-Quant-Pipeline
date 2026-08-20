@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date         : Wed Aug 19 03:36:48 2026
+| Date         : Thu Aug 20 06:55:45 2026
 | Host         : atini running 64-bit major release  (build 9200)
 | Command      : report_ram_utilization -file <local-build-path>/synth/reports/ram_synth.txt
 | Design       : itch_chain_synth
@@ -43,7 +43,7 @@ Table of Contents
 +---------------------------+------------+-------------+------------------------+------------------------+
 | Memory Name               | Array Size | Memory Type | Port 1 Dimension / Map | Port 2 Dimension / Map |
 +---------------------------+------------+-------------+------------------------+------------------------+
-| u_book/o_mem              |    5636096 | RAM_SDP     | 65536x86               | 65536x86               |
+| u_book/o_mem              |    8519680 | RAM_SDP     | 65536x130              | 65536x130              |
 |  u_book/o_mem_reg_uram_0  |     294912 |             |  B:B:4096x72           |  A:A:4096x72           |
 |  u_book/o_mem_reg_uram_1  |     294912 |             |  B:B:4096x72           |  A:A:4096x72           |
 |  u_book/o_mem_reg_uram_2  |     294912 |             |  B:B:4096x72           |  A:A:4096x72           |
@@ -60,22 +60,22 @@ Table of Contents
 |  u_book/o_mem_reg_uram_13 |     294912 |             |  B:B:4096x72           |  A:A:4096x72           |
 |  u_book/o_mem_reg_uram_14 |     294912 |             |  B:B:4096x72           |  A:A:4096x72           |
 |  u_book/o_mem_reg_uram_15 |     294912 |             |  B:B:4096x72           |  A:A:4096x72           |
-|  u_book/o_mem_reg_uram_16 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_17 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_18 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_19 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_20 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_21 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_22 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_23 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_24 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_25 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_26 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_27 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_28 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_29 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_30 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
-|  u_book/o_mem_reg_uram_31 |      57344 |             |  B:B:4096x14           |  A:A:4096x14           |
+|  u_book/o_mem_reg_uram_16 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_17 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_18 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_19 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_20 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_21 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_22 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_23 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_24 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_25 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_26 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_27 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_28 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_29 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_30 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
+|  u_book/o_mem_reg_uram_31 |     237568 |             |  B:B:4096x58           |  A:A:4096x58           |
 +---------------------------+------------+-------------+------------------------+------------------------+
 
 
@@ -102,22 +102,22 @@ Table of Contents
 |  u_book/o_mem_reg_uram_13 | URAM288   |         294912 |    294912 |    100.00 |    4096 |          4096 |        100.00 |      72 |            72 |        100.00 |    4096 |          4096 |        100.00 |      72 |            72 |        100.00 |
 |  u_book/o_mem_reg_uram_14 | URAM288   |         294912 |    294912 |    100.00 |    4096 |          4096 |        100.00 |      72 |            72 |        100.00 |    4096 |          4096 |        100.00 |      72 |            72 |        100.00 |
 |  u_book/o_mem_reg_uram_15 | URAM288   |         294912 |    294912 |    100.00 |    4096 |          4096 |        100.00 |      72 |            72 |        100.00 |    4096 |          4096 |        100.00 |      72 |            72 |        100.00 |
-|  u_book/o_mem_reg_uram_16 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_17 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_18 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_19 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_20 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_21 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_22 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_23 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_24 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_25 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_26 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_27 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_28 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_29 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_30 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
-|  u_book/o_mem_reg_uram_31 | URAM288   |         294912 |     57344 |     19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |    4096 |          4096 |        100.00 |      14 |            72 |         19.44 |
+|  u_book/o_mem_reg_uram_16 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_17 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_18 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_19 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_20 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_21 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_22 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_23 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_24 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_25 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_26 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_27 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_28 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_29 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_30 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
+|  u_book/o_mem_reg_uram_31 | URAM288   |         294912 |    237568 |     80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |    4096 |          4096 |        100.00 |      58 |            72 |         80.56 |
 +---------------------------+-----------+----------------+-----------+-----------+---------+---------------+---------------+---------+---------------+---------------+---------+---------------+---------------+---------+---------------+---------------+
 
 
@@ -127,7 +127,7 @@ Table of Contents
 +---------------------------+-----------+------------------------+------------------------+-------------+-------------------------+-------------+-------------------------+-----------+--------+--------+---------+-----------+--------+--------+---------+
 | Memory Name               | Primitive | Port 1 Dimension / Map | Port 2 Dimension / Map | Port A Type | Port A Requirement (ns) | Port B Type | Port B Requirement (ns) | A Cascade | IREG_A | OREG_A | DOA_REG | B Cascade | IREG_B | OREG_B | DOB_REG |
 +---------------------------+-----------+------------------------+------------------------+-------------+-------------------------+-------------+-------------------------+-----------+--------+--------+---------+-----------+--------+--------+---------+
-| u_book/o_mem              |           | 65536x86               | 65536x86               |             |                         |             |                         |           |        |        |         |           |        |        |         |
+| u_book/o_mem              |           | 65536x130              | 65536x130              |             |                         |             |                         |           |        |        |         |           |        |        |         |
 |  u_book/o_mem_reg_uram_0  | URAM288   |  B:B:4096x72           |  A:A:4096x72           |        Read |                     6.4 |       Write |                     6.4 |     FIRST |      0 |      0 |         |     FIRST |      0 |      0 |         |
 |  u_book/o_mem_reg_uram_1  | URAM288   |  B:B:4096x72           |  A:A:4096x72           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
 |  u_book/o_mem_reg_uram_2  | URAM288   |  B:B:4096x72           |  A:A:4096x72           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
@@ -144,22 +144,22 @@ Table of Contents
 |  u_book/o_mem_reg_uram_13 | URAM288   |  B:B:4096x72           |  A:A:4096x72           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
 |  u_book/o_mem_reg_uram_14 | URAM288   |  B:B:4096x72           |  A:A:4096x72           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
 |  u_book/o_mem_reg_uram_15 | URAM288   |  B:B:4096x72           |  A:A:4096x72           |        Read |                     6.4 |       Write |                     6.4 |      LAST |      0 |      0 |         |      LAST |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_16 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |     FIRST |      0 |      0 |         |     FIRST |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_17 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_18 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_19 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_20 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_21 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_22 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_23 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |      LAST |      0 |      0 |         |      LAST |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_24 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |     FIRST |      0 |      0 |         |     FIRST |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_25 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_26 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_27 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_28 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_29 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_30 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
-|  u_book/o_mem_reg_uram_31 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |        Read |                     6.4 |       Write |                     6.4 |      LAST |      0 |      0 |         |      LAST |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_16 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |     FIRST |      0 |      0 |         |     FIRST |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_17 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_18 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_19 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_20 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_21 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_22 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_23 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |      LAST |      0 |      0 |         |      LAST |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_24 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |     FIRST |      0 |      0 |         |     FIRST |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_25 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_26 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_27 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_28 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_29 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_30 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |    MIDDLE |      0 |      0 |         |    MIDDLE |      0 |      0 |         |
+|  u_book/o_mem_reg_uram_31 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |        Read |                     6.4 |       Write |                     6.4 |      LAST |      0 |      0 |         |      LAST |      0 |      0 |         |
 +---------------------------+-----------+------------------------+------------------------+-------------+-------------------------+-------------+-------------------------+-----------+--------+--------+---------+-----------+--------+--------+---------+
 
 
@@ -169,7 +169,7 @@ Table of Contents
 +---------------------------+-----------+------------------------+------------------------+--------------------+---------------+-------------------+-----------+--------------------+---------------+-------------------+-----------+
 | Memory Name               | Primitive | Port 1 Dimension / Map | Port 2 Dimension / Map | Port A Power Gated | Port A Enable | Port A WRITE_MODE | A Cascade | Port B Power Gated | Port B Enable | Port B WRITE_MODE | B Cascade |
 +---------------------------+-----------+------------------------+------------------------+--------------------+---------------+-------------------+-----------+--------------------+---------------+-------------------+-----------+
-| u_book/o_mem              |           | 65536x86               | 65536x86               |                    |               |                   |           |                    |               |                   |           |
+| u_book/o_mem              |           | 65536x130              | 65536x130              |                    |               |                   |           |                    |               |                   |           |
 |  u_book/o_mem_reg_uram_0  | URAM288   |  B:B:4096x72           |  A:A:4096x72           |                    |         POWER |                   |     FIRST |                    |        SIGNAL |                   |     FIRST |
 |  u_book/o_mem_reg_uram_1  | URAM288   |  B:B:4096x72           |  A:A:4096x72           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
 |  u_book/o_mem_reg_uram_2  | URAM288   |  B:B:4096x72           |  A:A:4096x72           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
@@ -186,22 +186,22 @@ Table of Contents
 |  u_book/o_mem_reg_uram_13 | URAM288   |  B:B:4096x72           |  A:A:4096x72           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
 |  u_book/o_mem_reg_uram_14 | URAM288   |  B:B:4096x72           |  A:A:4096x72           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
 |  u_book/o_mem_reg_uram_15 | URAM288   |  B:B:4096x72           |  A:A:4096x72           |                    |         POWER |                   |      LAST |                    |        SIGNAL |                   |      LAST |
-|  u_book/o_mem_reg_uram_16 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |     FIRST |                    |        SIGNAL |                   |     FIRST |
-|  u_book/o_mem_reg_uram_17 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_18 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_19 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_20 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_21 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_22 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_23 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |      LAST |                    |        SIGNAL |                   |      LAST |
-|  u_book/o_mem_reg_uram_24 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |     FIRST |                    |        SIGNAL |                   |     FIRST |
-|  u_book/o_mem_reg_uram_25 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_26 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_27 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_28 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_29 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_30 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
-|  u_book/o_mem_reg_uram_31 | URAM288   |  B:B:4096x14           |  A:A:4096x14           |                    |         POWER |                   |      LAST |                    |        SIGNAL |                   |      LAST |
+|  u_book/o_mem_reg_uram_16 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |     FIRST |                    |        SIGNAL |                   |     FIRST |
+|  u_book/o_mem_reg_uram_17 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_18 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_19 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_20 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_21 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_22 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_23 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |      LAST |                    |        SIGNAL |                   |      LAST |
+|  u_book/o_mem_reg_uram_24 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |     FIRST |                    |        SIGNAL |                   |     FIRST |
+|  u_book/o_mem_reg_uram_25 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_26 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_27 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_28 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_29 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_30 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |    MIDDLE |                    |        SIGNAL |                   |    MIDDLE |
+|  u_book/o_mem_reg_uram_31 | URAM288   |  B:B:4096x58           |  A:A:4096x58           |                    |         POWER |                   |      LAST |                    |        SIGNAL |                   |      LAST |
 +---------------------------+-----------+------------------------+------------------------+--------------------+---------------+-------------------+-----------+--------------------+---------------+-------------------+-----------+
 * only one URAM is read at a time in any given cascade chain.
 

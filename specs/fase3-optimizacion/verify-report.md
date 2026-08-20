@@ -779,3 +779,49 @@ el umbral se re-deriva a **media ≤ 70 ciclos** con evidencia persistida en
 - REP-02 (parser fase1): pendiente de pcap local.
 - La opción B (tail hash en URAM) para depth exacto del día (medida iter 13,
   no implementada) queda como mejora documentada.
+
+## Addendum iter 16 (2026-08-20) — re-síntesis con el RTL actual (K=64/push-out/drenado)
+
+Tras los cambios de iter 12-15 (K=64 → OW=130, push-out, drenado oversize), la
+síntesis se re-ejecutó con Vivado ML 2023.2 sobre `itch_chain_synth.sv` (batch,
+`synth/`, part `xcku3p-ffva676-2L-e`). El gate del tcl falla si queda cualquier
+path de setup con slack negativo.
+
+### Variante 64b/156,25 MHz — CERRADA (evidencia fresca)
+
+```text
+== FASE3 SYNTH/IMPL OK ==
+período 6,400 ns @ 156,25 MHz
+WNS = +0,057 ns   TNS = 0,000 ns (0 filas tns-failing de 289.887 endpoints)
+WHS = +0,021 ns   URAM 32/48 (66,67 %)   Bonded IOB 194/256 (75,78 %)
+```
+
+Ruta más ajustada +0,057 ns (interna del book). El datapath actual (parser 32 →
+book 32, QB=46, K=64/OW=130, tabla en 32 URAM) cierra a 156,25 MHz = 10G.
+
+### Variante 32b/322 MHz — ABIERTA (evidencia fresca)
+
+```text
+FASE3 TIMING FAIL: WNS=-3,458 ns (se exige WNS>=0 y TNS=0)
+Ruta crítica: u_book/m_loc_idx_reg[1]/C -> u_book/sm_asel_reg[0]/D  (-3,458 ns)
+```
+
+El camino crítico es la **selección de niveles del book** (`m_locate_idx` →
+`sm_asel`) con la sonda URAM serializada, la misma limitación estructural del
+modelo I/O del wrapper que se documentó en el iter 11 (el budget se consume en
+la observabilidad, no en el datapath). El criterio 10 a 322 MHz sigue ABIERTO;
+la variante de 156,25 MHz (mismo throughput 10G) es la que cierra el listón
+industrial.
+
+### REP-02 (fase 1) — CERRADO (evidencia fresca)
+
+Tramo A/U real seleccionado sin índices manuales (primera ventana deslizante
+desde `/tmp/real_subset.pcap`):
+
+```text
+REP-02 line-rate OK: tramo A/U real (msgs 241733..241736, 4 mensajes),
+9 stalls con downstream siempre listo, salida bit a bit
+```
+
+El criterio (≤ 24 stalls en un tramo A/U real con downstream listo + salida bit
+a bit contra el oráculo) se cumple; **fase 1 queda cerrada con este hito**.

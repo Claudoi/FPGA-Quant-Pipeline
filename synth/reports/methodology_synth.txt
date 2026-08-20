@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date         : Wed Aug 19 03:37:30 2026
+| Date         : Thu Aug 20 06:56:27 2026
 | Host         : atini running 64-bit major release  (build 9200)
 | Command      : report_methodology -file <local-build-path>/synth/reports/methodology_synth.txt
 | Design       : itch_chain_synth
@@ -34,32 +34,32 @@ Table of Contents
 -----------------
 TIMING-15#1 Warning
 Large hold violation  
-There is a large clock skew of 3.355 ns between bbo_tready (clocked by clk_pipeline) and bbo_tvalid_o_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.611 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
+There is a large clock skew of 3.355 ns between bbo_tready (clocked by clk_pipeline) and bbo_tvalid_o_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.606 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
 Related violations: <none>
 
 TIMING-15#2 Warning
 Large hold violation  
-There is a large clock skew of 3.355 ns between bbo_tready (clocked by clk_pipeline) and bbo_tvalid_o_reg_rep/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.600 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
+There is a large clock skew of 3.355 ns between bbo_tready (clocked by clk_pipeline) and bbo_tvalid_o_reg_rep/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.595 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
 Related violations: <none>
 
 TIMING-15#3 Warning
 Large hold violation  
-There is a large clock skew of 3.355 ns between bbo_tready (clocked by clk_pipeline) and u_book/bbo_tvalid_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.482 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
+There is a large clock skew of 3.355 ns between bbo_tready (clocked by clk_pipeline) and u_book/bbo_tvalid_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.449 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
 Related violations: <none>
 
 TIMING-15#4 Warning
 Large hold violation  
-There is a large clock skew of 3.355 ns between depth_tready (clocked by clk_pipeline) and depth_tvalid_o_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.611 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
+There is a large clock skew of 3.355 ns between depth_tready (clocked by clk_pipeline) and depth_tvalid_o_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.606 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
 Related violations: <none>
 
 TIMING-15#5 Warning
 Large hold violation  
-There is a large clock skew of 3.355 ns between depth_tready (clocked by clk_pipeline) and depth_tvalid_o_reg_rep/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.600 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
+There is a large clock skew of 3.355 ns between depth_tready (clocked by clk_pipeline) and depth_tvalid_o_reg_rep/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.595 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
 Related violations: <none>
 
 TIMING-15#6 Warning
 Large hold violation  
-There is a large clock skew of 3.355 ns between depth_tready (clocked by clk_pipeline) and u_book/depth_tvalid_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.482 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
+There is a large clock skew of 3.355 ns between depth_tready (clocked by clk_pipeline) and u_book/depth_tvalid_reg/D (clocked by clk_pipeline) that results in large hold timing violation(s) of -2.449 ns. Fixing large hold violations during routing might impact setup slack and result in more difficult timing closure
 Related violations: <none>
 
 TIMING-15#7 Warning

@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version      : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
-| Date              : Wed Aug 19 03:37:46 2026
+| Date              : Thu Aug 20 06:56:42 2026
 | Host              : atini running 64-bit major release  (build 9200)
 | Command           : report_timing_summary -check_timing_verbose -report_unconstrained -max_paths 10 -file <local-build-path>/synth/reports/timing_synth.txt
 | Design            : itch_chain_synth
@@ -143,7 +143,7 @@ Table of Contents
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
     -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-      0.612        0.000                      0               286594       -2.760    -1047.101                  17101               286594        1.762        0.000                       0                 94679  
+      0.470        0.000                      0               288452       -2.760     -815.159                  12969               288452        1.762        0.000                       0                 95067  
 
 
 Timing constraints are not met.
@@ -166,7 +166,7 @@ clk_pipeline  {0.000 3.200}        6.400           156.250
 
 Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
 -----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
-clk_pipeline        0.612        0.000                      0               286594       -2.760    -1047.101                  17101               286594        1.762        0.000                       0                 94679  
+clk_pipeline        0.470        0.000                      0               288452       -2.760     -815.159                  12969               288452        1.762        0.000                       0                 95067  
 
 
 ------------------------------------------------------------------------------------------------
@@ -216,29 +216,28 @@ Path Group    From Clock    To Clock
 From Clock:  clk_pipeline
   To Clock:  clk_pipeline
 
-Setup :            0  Failing Endpoints,  Worst Slack        0.612ns,  Total Violation        0.000ns
-Hold  :        17101  Failing Endpoints,  Worst Slack       -2.760ns,  Total Violation    -1047.101ns
+Setup :            0  Failing Endpoints,  Worst Slack        0.470ns,  Total Violation        0.000ns
+Hold  :        12969  Failing Endpoints,  Worst Slack       -2.760ns,  Total Violation     -815.159ns
 PW    :            0  Failing Endpoints,  Worst Slack        1.762ns,  Total Violation        0.000ns
 ---------------------------------------------------------------------------------------------------
 
 
 Max Delay Paths
 --------------------------------------------------------------------------------------
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_changed_o_reg/C
+Slack (MET) :             0.470ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_changed
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[124]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.775ns  (logic 1.822ns (31.550%)  route 3.953ns (68.450%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=2 LUT4=1 LUT5=6 LUT6=4 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -257,42 +256,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_changed_o_reg/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_changed_o_reg/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_changed_OBUF
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_changed_OBUF_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_changed
-                                                                      r  bbo_changed (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 f  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 f  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 f  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 f  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 f  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 f  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.550 f  u_parser/q_reg[183]_i_7/CO[2]
+                         net (fo=23, unplaced)        0.238     7.788    u_parser/q_reg[183]_i_7_n_5
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.826 f  u_parser/q[372]_i_6/O
+                         net (fo=6, unplaced)         0.208     8.034    u_parser/q[372]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.072 f  u_parser/q[364]_i_5/O
+                         net (fo=8, unplaced)         0.214     8.286    u_parser/q[364]_i_5_n_0
+                         LUT3 (Prop_LUT3_I0_O)        0.070     8.356 f  u_parser/q[412]_i_7/O
+                         net (fo=6, unplaced)         0.208     8.564    u_parser/q[412]_i_7_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.070     8.634 r  u_parser/q[380]_i_2/O
+                         net (fo=2, unplaced)         0.186     8.820    u_parser/q[380]_i_2_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.858 r  u_parser/q[124]_i_2/O
+                         net (fo=1, unplaced)         0.186     9.044    u_parser/q[124]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     9.082 r  u_parser/q[124]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.130    u_parser/q[124]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[124]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[124]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[124]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.130    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.470    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[0]/C
+Slack (MET) :             0.502ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[0]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[60]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.743ns  (logic 1.790ns (31.168%)  route 3.953ns (68.832%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=2 LUT4=1 LUT5=6 LUT6=4 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -311,42 +371,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[0]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[0]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[0]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[0]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[0]
-                                                                      r  bbo_locate[0] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 f  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 f  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 f  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 f  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 f  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 f  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.550 f  u_parser/q_reg[183]_i_7/CO[2]
+                         net (fo=23, unplaced)        0.238     7.788    u_parser/q_reg[183]_i_7_n_5
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.826 f  u_parser/q[372]_i_6/O
+                         net (fo=6, unplaced)         0.208     8.034    u_parser/q[372]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.072 f  u_parser/q[364]_i_5/O
+                         net (fo=8, unplaced)         0.214     8.286    u_parser/q[364]_i_5_n_0
+                         LUT3 (Prop_LUT3_I0_O)        0.070     8.356 f  u_parser/q[412]_i_7/O
+                         net (fo=6, unplaced)         0.208     8.564    u_parser/q[412]_i_7_n_0
+                         LUT5 (Prop_LUT5_I3_O)        0.038     8.602 r  u_parser/q[316]_i_2/O
+                         net (fo=2, unplaced)         0.186     8.788    u_parser/q[316]_i_2_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.826 r  u_parser/q[60]_i_2/O
+                         net (fo=1, unplaced)         0.186     9.012    u_parser/q[60]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     9.050 r  u_parser/q[60]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.098    u_parser/q[60]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[60]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[60]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[60]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.098    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.502    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[10]/C
+Slack (MET) :             0.524ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[10]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[140]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.721ns  (logic 1.790ns (31.288%)  route 3.931ns (68.712%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=1 LUT4=1 LUT5=7 LUT6=4 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -365,42 +486,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[10]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[10]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[10]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[10]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[10]
-                                                                      r  bbo_locate[10] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 f  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 f  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 f  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 f  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 f  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 f  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.550 f  u_parser/q_reg[183]_i_7/CO[2]
+                         net (fo=23, unplaced)        0.238     7.788    u_parser/q_reg[183]_i_7_n_5
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.826 f  u_parser/q[372]_i_6/O
+                         net (fo=6, unplaced)         0.208     8.034    u_parser/q[372]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.072 f  u_parser/q[364]_i_5/O
+                         net (fo=8, unplaced)         0.214     8.286    u_parser/q[364]_i_5_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.070     8.356 r  u_parser/q[396]_i_5/O
+                         net (fo=2, unplaced)         0.186     8.542    u_parser/q[396]_i_5_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     8.580 r  u_parser/q[396]_i_2/O
+                         net (fo=2, unplaced)         0.186     8.766    u_parser/q[396]_i_2_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.804 r  u_parser/q[140]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.990    u_parser/q[140]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     9.028 r  u_parser/q[140]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.076    u_parser/q[140]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[140]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[140]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[140]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.076    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.524    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[11]/C
+Slack (MET) :             0.524ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[11]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[204]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.721ns  (logic 1.790ns (31.288%)  route 3.931ns (68.712%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=1 LUT4=2 LUT5=6 LUT6=4 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -419,42 +601,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[11]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[11]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[11]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[11]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[11]
-                                                                      r  bbo_locate[11] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 f  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 f  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 f  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 f  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 f  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 f  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.550 f  u_parser/q_reg[183]_i_7/CO[2]
+                         net (fo=23, unplaced)        0.238     7.788    u_parser/q_reg[183]_i_7_n_5
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.826 f  u_parser/q[372]_i_6/O
+                         net (fo=6, unplaced)         0.208     8.034    u_parser/q[372]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.072 f  u_parser/q[364]_i_5/O
+                         net (fo=8, unplaced)         0.214     8.286    u_parser/q[364]_i_5_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     8.324 f  u_parser/q[332]_i_5/O
+                         net (fo=2, unplaced)         0.186     8.510    u_parser/q[332]_i_5_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.070     8.580 f  u_parser/q[204]_i_4/O
+                         net (fo=1, unplaced)         0.186     8.766    u_parser/q[204]_i_4_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.804 r  u_parser/q[204]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.990    u_parser/q[204]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     9.028 r  u_parser/q[204]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.076    u_parser/q[204]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[204]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[204]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[204]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.076    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.524    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[12]/C
+Slack (MET) :             0.556ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[12]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[76]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.689ns  (logic 1.758ns (30.902%)  route 3.931ns (69.098%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=1 LUT4=2 LUT5=5 LUT6=5 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -473,42 +716,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[12]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[12]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[12]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[12]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[12]
-                                                                      r  bbo_locate[12] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 f  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 f  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 f  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 f  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 f  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 f  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.550 f  u_parser/q_reg[183]_i_7/CO[2]
+                         net (fo=23, unplaced)        0.238     7.788    u_parser/q_reg[183]_i_7_n_5
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.826 f  u_parser/q[372]_i_6/O
+                         net (fo=6, unplaced)         0.208     8.034    u_parser/q[372]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.072 f  u_parser/q[364]_i_5/O
+                         net (fo=8, unplaced)         0.214     8.286    u_parser/q[364]_i_5_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     8.324 f  u_parser/q[332]_i_5/O
+                         net (fo=2, unplaced)         0.186     8.510    u_parser/q[332]_i_5_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     8.548 r  u_parser/q[332]_i_2/O
+                         net (fo=2, unplaced)         0.186     8.734    u_parser/q[332]_i_2_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.772 r  u_parser/q[76]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.958    u_parser/q[76]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.996 r  u_parser/q[76]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.044    u_parser/q[76]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[76]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[76]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[76]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.044    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.556    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[13]/C
+Slack (MET) :             0.570ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[13]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[120]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.675ns  (logic 1.780ns (31.366%)  route 3.895ns (68.634%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=2 LUT4=1 LUT5=5 LUT6=5 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -527,42 +831,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[13]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[13]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[13]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[13]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[13]
-                                                                      r  bbo_locate[13] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 r  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 r  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 r  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 r  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 r  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 r  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_O[1])
+                                                      0.132     7.572 r  u_parser/q_reg[183]_i_7/O[1]
+                         net (fo=1, unplaced)         0.184     7.756    u_parser/tailmask[56]
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.794 f  u_parser/q[368]_i_6/O
+                         net (fo=7, unplaced)         0.211     8.005    u_parser/q[368]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.043 f  u_parser/q[360]_i_5/O
+                         net (fo=9, unplaced)         0.217     8.260    u_parser/q[360]_i_5_n_0
+                         LUT6 (Prop_LUT6_I3_O)        0.038     8.298 f  u_parser/q[248]_i_2/O
+                         net (fo=4, unplaced)         0.198     8.496    u_parser/q[248]_i_2_n_0
+                         LUT3 (Prop_LUT3_I2_O)        0.038     8.534 r  u_parser/q[376]_i_4/O
+                         net (fo=2, unplaced)         0.186     8.720    u_parser/q[376]_i_4_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.758 r  u_parser/q[120]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.944    u_parser/q[120]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.982 r  u_parser/q[120]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.030    u_parser/q[120]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[120]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[120]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[120]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.030    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.570    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[14]/C
+Slack (MET) :             0.570ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[14]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[376]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.675ns  (logic 1.780ns (31.366%)  route 3.895ns (68.634%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=2 LUT4=1 LUT5=5 LUT6=5 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -581,42 +946,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[14]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[14]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[14]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[14]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[14]
-                                                                      r  bbo_locate[14] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 r  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 r  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 r  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 r  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 r  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 r  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_O[1])
+                                                      0.132     7.572 r  u_parser/q_reg[183]_i_7/O[1]
+                         net (fo=1, unplaced)         0.184     7.756    u_parser/tailmask[56]
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.794 f  u_parser/q[368]_i_6/O
+                         net (fo=7, unplaced)         0.211     8.005    u_parser/q[368]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.043 f  u_parser/q[360]_i_5/O
+                         net (fo=9, unplaced)         0.217     8.260    u_parser/q[360]_i_5_n_0
+                         LUT6 (Prop_LUT6_I3_O)        0.038     8.298 f  u_parser/q[248]_i_2/O
+                         net (fo=4, unplaced)         0.198     8.496    u_parser/q[248]_i_2_n_0
+                         LUT3 (Prop_LUT3_I2_O)        0.038     8.534 r  u_parser/q[376]_i_4/O
+                         net (fo=2, unplaced)         0.186     8.720    u_parser/q[376]_i_4_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     8.758 r  u_parser/q[376]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.944    u_parser/q[376]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.982 r  u_parser/q[376]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.030    u_parser/q[376]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[376]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[376]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[376]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.030    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.570    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[15]/C
+Slack (MET) :             0.570ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[15]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[56]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.675ns  (logic 1.780ns (31.366%)  route 3.895ns (68.634%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=2 LUT4=1 LUT5=5 LUT6=5 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -635,42 +1061,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[15]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[15]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[15]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[15]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[15]
-                                                                      r  bbo_locate[15] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 r  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 r  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 r  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 r  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 r  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 r  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_O[1])
+                                                      0.132     7.572 r  u_parser/q_reg[183]_i_7/O[1]
+                         net (fo=1, unplaced)         0.184     7.756    u_parser/tailmask[56]
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.794 f  u_parser/q[368]_i_6/O
+                         net (fo=7, unplaced)         0.211     8.005    u_parser/q[368]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.043 f  u_parser/q[360]_i_5/O
+                         net (fo=9, unplaced)         0.217     8.260    u_parser/q[360]_i_5_n_0
+                         LUT6 (Prop_LUT6_I3_O)        0.038     8.298 f  u_parser/q[248]_i_2/O
+                         net (fo=4, unplaced)         0.198     8.496    u_parser/q[248]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.534 r  u_parser/q[312]_i_2/O
+                         net (fo=2, unplaced)         0.186     8.720    u_parser/q[312]_i_2_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.758 r  u_parser/q[56]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.944    u_parser/q[56]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.982 r  u_parser/q[56]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.030    u_parser/q[56]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[56]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[56]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[56]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.030    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.570    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[1]/C
+Slack (MET) :             0.582ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[1]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[200]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.663ns  (logic 1.780ns (31.432%)  route 3.883ns (68.568%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=1 LUT4=2 LUT5=6 LUT6=4 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -689,42 +1176,103 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[1]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[1]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[1]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[1]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[1]
-                                                                      r  bbo_locate[1] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 r  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 r  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 r  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 r  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 r  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 r  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_O[1])
+                                                      0.132     7.572 r  u_parser/q_reg[183]_i_7/O[1]
+                         net (fo=1, unplaced)         0.184     7.756    u_parser/tailmask[56]
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.794 f  u_parser/q[368]_i_6/O
+                         net (fo=7, unplaced)         0.211     8.005    u_parser/q[368]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.043 f  u_parser/q[360]_i_5/O
+                         net (fo=9, unplaced)         0.217     8.260    u_parser/q[360]_i_5_n_0
+                         LUT4 (Prop_LUT4_I1_O)        0.038     8.298 f  u_parser/q[328]_i_5/O
+                         net (fo=2, unplaced)         0.186     8.484    u_parser/q[328]_i_5_n_0
+                         LUT5 (Prop_LUT5_I2_O)        0.038     8.522 f  u_parser/q[200]_i_4/O
+                         net (fo=1, unplaced)         0.186     8.708    u_parser/q[200]_i_4_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.746 r  u_parser/q[200]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.932    u_parser/q[200]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.970 r  u_parser/q[200]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.018    u_parser/q[200]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[200]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[200]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[200]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.018    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.582    
 
-Slack (MET) :             0.612ns  (required time - arrival time)
-  Source:                 bbo_locate_o_reg[2]/C
+Slack (MET) :             0.582ns  (required time - arrival time)
+  Source:                 f_rd_reg[1]/C
                             (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
-  Destination:            bbo_locate[2]
-                            (output port clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
+  Destination:            u_parser/q_reg[72]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@3.200ns period=6.400ns})
   Path Group:             clk_pipeline
-  Path Type:              Max at Slow Process Corner
+  Path Type:              Setup (Max at Slow Process Corner)
   Requirement:            6.400ns  (clk_pipeline rise@6.400ns - clk_pipeline rise@0.000ns)
-  Data Path Delay:        1.398ns  (logic 1.365ns (97.639%)  route 0.033ns (2.361%))
-  Logic Levels:           1  (OBUF=1)
-  Output Delay:           1.000ns
-  Clock Path Skew:        -3.355ns (DCD - SCD + CPR)
-    Destination Clock Delay (DCD):    0.000ns = ( 6.400 - 6.400 ) 
+  Data Path Delay:        5.663ns  (logic 1.780ns (31.432%)  route 3.883ns (68.568%))
+  Logic Levels:           23  (CARRY8=7 LUT1=1 LUT2=1 LUT3=1 LUT4=2 LUT5=5 LUT6=5 RAMD32=1)
+  Clock Path Skew:        -0.145ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    2.927ns = ( 9.327 - 6.400 ) 
     Source Clock Delay      (SCD):    3.355ns
-    Clock Pessimism Removal (CPR):    0.000ns
+    Clock Pessimism Removal (CPR):    0.283ns
   Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
     Total System Jitter     (TSJ):    0.071ns
     Total Input Jitter      (TIJ):    0.000ns
@@ -743,26 +1291,88 @@ Slack (MET) :             0.612ns  (required time - arrival time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    clk_IBUF_BUFG
-                         FDRE                                         r  bbo_locate_o_reg[2]/C
+                         net (fo=95066, unplaced)     2.584     3.355    clk_IBUF_BUFG
+                         FDRE                                         r  f_rd_reg[1]/C
   -------------------------------------------------------------------    -------------------
-                         FDRE (Prop_FDRE_C_Q)         0.406     3.761 r  bbo_locate_o_reg[2]/Q
-                         net (fo=1, unplaced)         0.033     3.794    bbo_locate_OBUF[2]
-                         OBUF (Prop_OBUF_I_O)         0.959     4.752 r  bbo_locate_OBUF[2]_inst/O
-                         net (fo=0)                   0.000     4.752    bbo_locate[2]
-                                                                      r  bbo_locate[2] (OUT)
+                         FDRE (Prop_FDRE_C_Q)         0.077     3.432 r  f_rd_reg[1]/Q
+                         net (fo=86, unplaced)        0.231     3.663    f_keep_reg_0_3_0_7/ADDRD1
+                         RAMD32 (Prop_RAMD32_RADR1_O)
+                                                      0.135     3.798 r  f_keep_reg_0_3_0_7/RAMD/O
+                         net (fo=7, unplaced)         0.132     3.930    u_parser/p_s_axis_tkeep[6]
+                         LUT6 (Prop_LUT6_I0_O)        0.150     4.080 r  u_parser/drop_left[2]_i_9/O
+                         net (fo=5, unplaced)         0.204     4.284    u_parser/drop_left[2]_i_9_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     4.322 f  u_parser/qn[1]_i_6/O
+                         net (fo=6, unplaced)         0.208     4.530    u_parser/qn[1]_i_6_n_0
+                         LUT6 (Prop_LUT6_I2_O)        0.038     4.568 r  u_parser/qn[2]_i_6/O
+                         net (fo=2, unplaced)         0.186     4.754    u_parser/qn[2]_i_6_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     4.792 r  u_parser/qn[3]_i_7/O
+                         net (fo=2, unplaced)         0.186     4.978    u_parser/qn[3]_i_7_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.038     5.016 r  u_parser/q[378]_i_11/O
+                         net (fo=5, unplaced)         0.204     5.220    u_parser/q[378]_i_11_n_0
+                         LUT4 (Prop_LUT4_I0_O)        0.038     5.258 r  u_parser/qn[5]_i_3/O
+                         net (fo=5, unplaced)         0.158     5.416    u_parser/qn[5]_i_3_n_0
+                         LUT5 (Prop_LUT5_I0_O)        0.112     5.528 r  u_parser/q[393]_i_15/O
+                         net (fo=8, unplaced)         0.214     5.742    u_parser/q[393]_i_15_n_0
+                         LUT2 (Prop_LUT2_I1_O)        0.038     5.780 f  u_parser/q[393]_i_9/O
+                         net (fo=14, unplaced)        0.227     6.007    u_parser/q[393]_i_9_n_0
+                         LUT1 (Prop_LUT1_I0_O)        0.037     6.044 r  u_parser/q[399]_i_21/O
+                         net (fo=1, unplaced)         0.023     6.067    u_parser/tailmask[5]
+                         CARRY8 (Prop_CARRY8_S[1]_CO[3])
+                                                      0.184     6.251 r  u_parser/q_reg[399]_i_12/CO[3]
+                         net (fo=16, unplaced)        0.114     6.365    u_parser/q_reg[399]_i_12_n_4
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.057     6.422 r  u_parser/q_reg[378]_i_14/CO[2]
+                         net (fo=18, unplaced)        0.116     6.538    u_parser/q_reg[378]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.648 r  u_parser/q_reg[378]_i_15/CO[2]
+                         net (fo=18, unplaced)        0.116     6.764    u_parser/q_reg[378]_i_15_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     6.874 r  u_parser/q_reg[255]_i_16/CO[2]
+                         net (fo=16, unplaced)        0.114     6.988    u_parser/q_reg[255]_i_16_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.098 r  u_parser/q_reg[255]_i_14/CO[2]
+                         net (fo=16, unplaced)        0.114     7.212    u_parser/q_reg[255]_i_14_n_5
+                         CARRY8 (Prop_CARRY8_CI_CO[2])
+                                                      0.110     7.322 r  u_parser/q_reg[367]_i_10/CO[2]
+                         net (fo=19, unplaced)        0.118     7.440    u_parser/q_reg[367]_i_10_n_5
+                         CARRY8 (Prop_CARRY8_CI_O[1])
+                                                      0.132     7.572 r  u_parser/q_reg[183]_i_7/O[1]
+                         net (fo=1, unplaced)         0.184     7.756    u_parser/tailmask[56]
+                         LUT6 (Prop_LUT6_I1_O)        0.038     7.794 f  u_parser/q[368]_i_6/O
+                         net (fo=7, unplaced)         0.211     8.005    u_parser/q[368]_i_6_n_0
+                         LUT5 (Prop_LUT5_I4_O)        0.038     8.043 f  u_parser/q[360]_i_5/O
+                         net (fo=9, unplaced)         0.217     8.260    u_parser/q[360]_i_5_n_0
+                         LUT4 (Prop_LUT4_I1_O)        0.038     8.298 f  u_parser/q[328]_i_5/O
+                         net (fo=2, unplaced)         0.186     8.484    u_parser/q[328]_i_5_n_0
+                         LUT6 (Prop_LUT6_I5_O)        0.038     8.522 r  u_parser/q[328]_i_2/O
+                         net (fo=2, unplaced)         0.186     8.708    u_parser/q[328]_i_2_n_0
+                         LUT5 (Prop_LUT5_I1_O)        0.038     8.746 r  u_parser/q[72]_i_2/O
+                         net (fo=1, unplaced)         0.186     8.932    u_parser/q[72]_i_2_n_0
+                         LUT3 (Prop_LUT3_I1_O)        0.038     8.970 r  u_parser/q[72]_i_1/O
+                         net (fo=1, unplaced)         0.048     9.018    u_parser/q[72]_i_1_n_0
+                         FDRE                                         r  u_parser/q_reg[72]/D
   -------------------------------------------------------------------    -------------------
 
                          (clock clk_pipeline rise edge)
                                                       6.400     6.400 r  
-                         clock pessimism              0.000     6.400    
-                         clock uncertainty           -0.035     6.365    
-                         output delay                -1.000     5.365    
+                                                      0.000     6.400 r  clk (IN)
+                         net (fo=0)                   0.000     6.400    clk_IBUF_inst/I
+                         INBUF (Prop_INBUF_PAD_O)     0.331     6.731 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, unplaced)         0.000     6.731    clk_IBUF_inst/OUT
+                         IBUFCTRL (Prop_IBUFCTRL_I_O)
+                                                      0.000     6.731 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, unplaced)         0.133     6.864    clk_IBUF
+                         BUFGCE (Prop_BUFGCE_I_O)     0.024     6.888 r  clk_IBUF_BUFG_inst/O
+                         net (fo=95066, unplaced)     2.439     9.327    u_parser/clk_IBUF_BUFG
+                         FDRE                                         r  u_parser/q_reg[72]/C
+                         clock pessimism              0.283     9.610    
+                         clock uncertainty           -0.035     9.574    
+                         FDRE (Setup_FDRE_C_D)        0.025     9.599    u_parser/q_reg[72]
   -------------------------------------------------------------------
-                         required time                          5.365    
-                         arrival time                          -4.752    
+                         required time                          9.599    
+                         arrival time                          -9.018    
   -------------------------------------------------------------------
-                         slack                                  0.612    
+                         slack                                  0.582    
 
 
 
@@ -811,7 +1421,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_keep_reg_0_3_0_7/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_keep_reg_0_3_0_7/WCLK
                          RAMD32                                       r  f_keep_reg_0_3_0_7/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -863,7 +1473,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_keep_reg_0_3_0_7/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_keep_reg_0_3_0_7/WCLK
                          RAMD32                                       r  f_keep_reg_0_3_0_7/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -915,7 +1525,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -967,7 +1577,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1019,7 +1629,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMF/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1071,7 +1681,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_0_13/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_0_13/RAMG/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1123,7 +1733,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMB/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1175,7 +1785,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMC/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1227,7 +1837,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMF/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1279,7 +1889,7 @@ Slack (VIOLATED) :        -2.760ns  (arrival time - required time)
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
+                         net (fo=95066, unplaced)     2.584     3.355    f_mem_reg_0_3_14_27/WCLK
                          RAMD32                                       r  f_mem_reg_0_3_14_27/RAMG/CLK
                          clock pessimism              0.000     3.355    
                          RAMD32 (Hold_RAMD32_CLK_I)
@@ -1340,8 +1950,8 @@ Path Group:  (none)
 From Clock:  
   To Clock:  clk_pipeline
 
-Max Delay          3556 Endpoints
-Min Delay          3556 Endpoints
+Max Delay          2940 Endpoints
+Min Delay          2940 Endpoints
 --------------------------------------------------------------------------------------
 
 
@@ -1397,7 +2007,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
@@ -1450,7 +2060,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 Slack:                    inf
@@ -1503,7 +2113,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
 
 Slack:                    inf
@@ -1556,7 +2166,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
 
 Slack:                    inf
@@ -1609,7 +2219,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
@@ -1662,7 +2272,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 Slack:                    inf
@@ -1715,7 +2325,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
 
 Slack:                    inf
@@ -1768,7 +2378,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
 
 Slack:                    inf
@@ -1821,7 +2431,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
 
 Slack:                    inf
@@ -1874,7 +2484,7 @@ Slack:                    inf
                                                       0.000     0.331 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.133     0.464    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.024     0.488 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.439     2.927    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
 
 
@@ -1915,7 +2525,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -1950,7 +2560,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -1985,7 +2595,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2020,7 +2630,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2055,7 +2665,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2090,7 +2700,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2125,7 +2735,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2160,7 +2770,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2195,7 +2805,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 Slack:                    inf
@@ -2230,7 +2840,7 @@ Slack:                    inf
                                                       0.000     0.582 r  clk_IBUF_inst/IBUFCTRL_INST/O
                          net (fo=1, unplaced)         0.161     0.743    clk_IBUF
                          BUFGCE (Prop_BUFGCE_I_O)     0.028     0.771 r  clk_IBUF_BUFG_inst/O
-                         net (fo=94678, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
+                         net (fo=95066, unplaced)     2.584     3.355    u_book/clk_IBUF_BUFG
                          URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
 
 
