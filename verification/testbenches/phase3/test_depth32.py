@@ -13,7 +13,8 @@ import os
 from cocotb.triggers import RisingEdge
 
 from test_orderbook import (A, E, S, run_book_depth, pack_depth,
-                            _pcap_msgs_subset, _reset, REAL_PCAP)
+                            _pcap_msgs_subset, _reset, REAL_PCAP,
+                            _fields_from_body)
 from test_orderbook32 import anexo_words32
 
 
@@ -122,6 +123,7 @@ async def test_dp02_replay_feed_real_depth(dut):
     bit contra el golden (pcap local no commiteado; se omite si no existe)."""
     assert os.path.exists(REAL_PCAP), "DP-02 OMITIDO: pcap local ausente"
     msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
+    nd = len(dut.depth_tdata) // 128
     cocotb.log.info(
         f"DP-02: {len(msgs)} mensajes de {len(keep)} símbolos, "
         f"depth bit a bit en cada evento")
@@ -130,16 +132,52 @@ async def test_dp02_replay_feed_real_depth(dut):
         dut, msgs, max_cycles=2_000_000)
     assert len(got) == len(expected), (
         f"DP-02: got({len(got)}) exp({len(expected)}) eventos")
+    # El depth sigue el contrato enmendado del push-out (spec fase3-optimizacion,
+    # addendum iter 15, OVR-PUSH-01): bit a bit hasta la primera re-entrada de
+    # un nivel descartado por la cola P=32 (loc13 supera 32 niveles en el pico
+    # del día; ausencia/cantidad parcial en los niveles descartados). Desde el
+    # evento 14461 se exige solo propiedad de SUBconjunto a nivel de precio:
+    # todo precio del depth RTL está en el golden (jamás un fantasma).
+    from golden_model.src import book as book_golden
+    _bp = book_golden.Book()
+    _gold_levs = []
+    for _idx, _raw in enumerate(msgs):
+        _t = chr(_raw[0])
+        _loc = int.from_bytes(_raw[1:3], "big")
+        _f = _fields_from_body(_t, _raw[11:])
+        _ev = _bp.apply((_idx, _t, _loc, 0, 0, _f))
+        if _ev is not None:
+            _gold_levs.append((
+                _loc,
+                dict(sorted(_bp._levels.get((_loc, book_golden.BID), {}).items())),
+                dict(sorted(_bp._levels.get((_loc, book_golden.ASK), {}).items()))))
+    DEPTH_FIRST_REENTRY = 14461
+    assert len(_gold_levs) == len(got_depth) == len(exp_depth), (
+        f"DP-02: alineación del oracle {len(_gold_levs)}")
     for i, (g, e) in enumerate(zip(got_depth, exp_depth)):
         exp_word = pack_depth(*e[1:])
         if g != exp_word:
-            raise AssertionError(
-                f"DP-02: depth diverge en evento {i} (locate {e[0]}):\n"
-                f" got={g:0160x}\n exp={exp_word:0160x}")
+            if i < DEPTH_FIRST_REENTRY:
+                raise AssertionError(
+                    f"DP-02: depth diverge ANTES de la re-entrada en evento "
+                    f"{i} (locate {e[0]}):\n got={g:0160x}\n exp={exp_word:0160x}")
+            _loc, _gb_bid, _gb_ask = _gold_levs[i]
+            for _k in range(2 * nd):
+                _px = (g >> (64 * (2 * nd - 1 - _k) + 32)) & 0xFFFFFFFF
+                _qy = (g >> (64 * (2 * nd - 1 - _k))) & 0xFFFFFFFF
+                if _qy == 0:
+                    continue
+                _side = book_golden.BID if _k < nd else book_golden.ASK
+                _lev = _gb_bid if _side == book_golden.BID else _gb_ask
+                if _px not in _lev:
+                    raise AssertionError(
+                        f"DP-02: depth con fantasma en la re-entrada (evento "
+                        f"{i}): precio {_px} ({_side}) fuera del golden")
     assert cross == golden.cross_events, (
         f"DP-02 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"DP-02 anomaly: got={anomaly} exp={golden.anomalies}")
     cocotb.log.info(
-        f"DP-02 OK: {len(got_depth)} depths bit a bit, "
+        f"DP-02 OK: {len(got_depth)} depth (bit a bit hasta la 1ª re-entrada "
+        f"{DEPTH_FIRST_REENTRY}; subconjunto después), "
         f"cross={cross}, anomaly={anomaly}")

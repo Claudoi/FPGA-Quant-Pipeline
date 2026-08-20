@@ -413,6 +413,39 @@ async def test_sec_ov01_overflow_cantidad(dut):
 
 
 # ---------------------------------------------------------------------------
+# OVR-PUSH-01: desborde de niveles con push-out (SEC-OV-01 enmendado, iter 13)
+# ---------------------------------------------------------------------------
+@cocotb.test()
+async def test_ovr_push01_desborde_push_out(dut):
+    """Espejo §OVR-PUSH-01: lista ask llena; add mejor que el peor -> push-out
+    sin error y BBO al nuevo mejor; add peor que el peor -> SEC-OV (error) y
+    BBO intacto. El golden, sin límite de niveles, emite el evento changed=0
+    del add profundo; el RTL lo emite idéntico (materializa el top-P según el
+    descarte)."""
+    AMZN = 393
+    base_ts = 10_000_000_000
+    adds = [A(AMZN, base_ts + i, i + 1, b"S", 5, b"AMZN    ", 50_000 + 100 * i)
+            for i in range(32)]
+    mejor = A(AMZN, base_ts + 32, 100, b"S", 5, b"AMZN    ", 49_500)
+    peor = A(AMZN, base_ts + 33, 101, b"S", 5, b"AMZN    ", 60_000)
+
+    # caso 1: add mejor que el peor vigente -> push-out, sin error
+    msgs1 = adds + [mejor]
+    expected1, _ = run_book(msgs1)
+    got1, _, _, err1 = await drive_and_collect_bbo(dut, msgs1)
+    assert err1 == 0, f"OVR-PUSH-01: error inesperado en el push-out: {err1}"
+    assert got1 == expected1, f"OVR-PUSH-01: got={got1} exp={expected1}"
+    assert got1[-1][1][2] == 49_500, f"OVR-PUSH-01: ask BBO={got1[-1][1][2]} != 49_500"
+
+    # caso 2: add peor que el peor vigente -> SEC-OV con pulso error, BBO intacto
+    msgs2 = adds + [mejor, peor]
+    expected2, _ = run_book(msgs2)
+    got2, _, _, err2 = await drive_and_collect_bbo(dut, msgs2)
+    assert err2 >= 1, "OVR-PUSH-01: no se observó el pulso error de SEC-OV"
+    assert got2 == expected2, f"OVR-PUSH-01: got={got2} exp={expected2}"
+
+
+# ---------------------------------------------------------------------------
 # SEC-CR-01: libro cruzado en trading continuo -> cross_events cuenta
 # ---------------------------------------------------------------------------
 @cocotb.test()
@@ -474,18 +507,25 @@ async def test_multi01_dos_simbolos_independientes(dut):
 # ---------------------------------------------------------------------------
 @cocotb.test()
 async def test_inv_u01_replace_best_bid_estado_final(dut):
-    """INV/SEC-U-01 (borde): U sobre el mejor bid -> el estado final es visible."""
+    """INV/SEC-U-01 (borde): U sobre el mejor bid -> el estado final es visible
+    y la ref original queda fuera de la tabla (un D posterior cuenta anomaly)."""
     AMZN = 1101
     msgs = [
         A(AMZN, 1, 247097, b"B", 500, b"AMZN    ", 425_800),
         A(AMZN, 2, 246365, b"B", 300, b"AMZN    ", 425_500),
         U(AMZN, 3, 247097, 247657, 500, 425_700),  # baja el mejor bid 425800->425700
+        D(AMZN, 4, 247097),   # ref original ya borrada por el U -> anomaly
     ]
     expected, golden = run_book(msgs)
-    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
+    got, _, anomaly, _ = await drive_and_collect_bbo(dut, msgs)
     assert got == expected, (
         f"INV-U-01: got={got} exp={expected} "
         f"(el U debe dejar visible el nivel 425700, no el 425800 stale)")
+    # U-DELETE-HALF (gate E): si el replace dejara la ref original en la tabla,
+    # el D(247097) la encontraría (anomaly=0); el golden la dio por borrada.
+    assert anomaly == golden.anomalies == 1, (
+        f"INV-U-01: anomaly={anomaly} exp={golden.anomalies} (la ref original "
+        f"debe quedar fuera de la tabla tras el U)")
 
 
 # ---------------------------------------------------------------------------
@@ -545,6 +585,72 @@ def _pcap_msgs_subset(pcap_path, max_symbols=20):
 
 
 @cocotb.test(skip=not os.path.exists(REAL_PCAP))
+async def test_repro_ask_insert_mejor_precio(dut):
+    """Repro reducido de la divergencia del evento 3353 (feed real): el caso
+    mínimo sintético (4 asks + mejor ask) pasa; el bug exige la ventana real.
+    Se alimentan los primeros 4042 mensajes del pcap (estado previo fiel) y se
+    compara el BBO con el golden — debe divergir en el evento 3353."""
+    msgs, _ = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
+    msgs = msgs[:4042]
+    expected, golden = run_book(msgs)
+    got, _, _, _ = await drive_and_collect_bbo(dut, msgs)
+    if got != expected:
+        first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
+        raise AssertionError(
+            f"REPRO-3353: primer desajuste en evento {first}\n"
+            f" got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
+    assert got == expected, "REPRO-3353: got==exp"
+
+
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
+async def test_debug_smcap_evento_3353(dut):
+    """DEBUG: dumpea sm_cap_px/sm_cap_qt (captura de emisión, verilator
+    public) en los eventos 3351-3356 con msgs[:4038] para ver el estado de
+    los niveles ask del RTL en la divergencia."""
+    msgs, _ = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
+    msgs = msgs[:4038]
+    await _reset(dut)
+    words = anexo_words(msgs)
+    cocotb.log.info(f"DEBUG: {len(msgs)} msgs -> {len(words)} words")
+    P_ASK_OFF = 32  # P=32 niveles por lado; ask en sm_cap[P..2P-1]
+    ev_idx = [0]
+    samples = {}
+    ci = 0
+    n = len(words)
+    quiet = 0
+
+    async def sample():
+        n_ = ev_idx[0]
+        if 3351 <= n_ <= 3356:
+            asks = [(int(dut.sm_cap_px[P_ASK_OFF + i].value),
+                     int(dut.sm_cap_qt[P_ASK_OFF + i].value))
+                    for i in range(32)]
+            samples[n_] = [(p, q) for p, q in asks if q != 0]
+
+    for _ in range(2_000_000):
+        dut.s_axis_tvalid.value = 1 if ci < n else 0
+        dut.s_axis_tdata.value = words[ci] if ci < n else 0
+        dut.s_axis_tlast.value = 1 if ci == n - 1 else 0
+        dut.bbo_tready.value = 1
+        dut.depth_tready.value = 1
+        await RisingEdge(dut.clk)
+        if int(dut.bbo_tvalid.value) == 1 and int(dut.bbo_tready.value) == 1:
+            await sample()
+            ev_idx[0] += 1
+            quiet = 0
+        elif ci >= n:
+            quiet += 1
+        if int(dut.s_axis_tvalid.value) == 1 and int(dut.s_axis_tready.value) == 1:
+            if ci < n:
+                ci += 1
+        if quiet > 200:
+            break
+    cocotb.log.info(f"DEBUG: total eventos {ev_idx[0]}, words {ci}/{n}")
+    for k in sorted(samples):
+        cocotb.log.info(f"smcap EV{k}: asks={samples[k]}")
+
+
+@cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_replay01_feed_real_bbo(dut):
     """Espejo §REPLAY-01: el BBO del feed real (subset 20 símbolos) es idéntico
     al golden book.py — bit a bit, evento a evento, incluido changed.
@@ -561,7 +667,8 @@ async def test_replay01_feed_real_bbo(dut):
         first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
         raise AssertionError(
             f"REPLAY-01: got({len(got)}) exp({len(expected)}) sobre {len(msgs)} msgs "
-            f"/ {len(keep)} símbolos; primer desajuste en evento {first}:\n"
+            f"/ {len(keep)} símbolos; primer desajuste en evento {first}: "
+            f"anomaly={anomaly} cross={cross} golden.cross={golden.cross_events}\n"
             f" got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
     assert cross == golden.cross_events, (
         f"REPLAY-01 cross: got={cross} exp={golden.cross_events}")

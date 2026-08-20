@@ -214,23 +214,35 @@ async def test_sec_uram_03_el_pipeline_de_niveles_no_crea_burbujas_ni_fantasmas(
     sobre un nivel ausente -> jamás un precio stale ni una cantidad envuelta,
     y cada operación de nivel consume a lo sumo 2 ciclos extra (pipeline
     registrado, sin burbujas: un run de niveles es LV2->LV3, nunca se repite
-    ni retrocede)."""
+    ni retrocede).
+
+    Push-out (addendum iter 13/15): el add-33 (mejor que el peor) entra y
+    descarta el 100000. Un D sobre una orden EN la lista librea un slot; un
+    D sobre la orden del nivel YA descartado (100000) cae en la rama
+    reduce-ausente CON slot libre (LV-NEGWRAP): jamás escribe la cantidad
+    envuelta (~4,29e9) como fantasma."""
     AMZN = 393
     msgs = [S(AMZN, 1, ord("Q"))]
     for i in range(33):
         msgs.append(A(AMZN, 10 + i, 1000 + i, b"B", 100, b"AMZN    ", 1_000_00 + i))
-    msgs.append(D(AMZN, 50, 1000))          # libera el nivel del precio 100000
-    msgs.append(D(AMZN, 51, 1032))          # la orden 33ª (en tabla, sin nivel)
+    msgs.append(D(AMZN, 50, 1009))          # libera un slot (nivel 100009 en el libro)
+    msgs.append(D(AMZN, 51, 1000))          # reduce del nivel 100000 descartado por el push-out
     out, trace, errores, anomaly = await drive_sampling(dut, msgs)
-    # forma cerrada (el golden no tiene límite de P): 35 eventos, sin wrap
-    assert errores >= 2, (
-        f"SEC-URAM-03: errores={errores} exp>=2 (overflow del add 33 + reduce "
-        f"sobre nivel ausente)")
+    # forma cerrada: 35 eventos, sin wrap. El único error es el reduce-ausente
+    # del D(1000) (el add-33 entró por push-out y el D(1009) fue normal).
+    assert errores == 1, (
+        f"SEC-URAM-03: errores={errores} exp=1 (solo el reduce del nivel "
+        f"descartado por el push-out sobre un slot libre — LV-NEGWRAP: la "
+        f"cantidad NO debe envolver)")
     assert anomaly == 0, f"SEC-URAM-03: anomaly={anomaly} exp=0"
     assert len(out) == 35, f"SEC-URAM-03: eventos={len(out)} exp=35"
-    assert out[-1] == (393, (100031, 100, 0, 0), 0), (
-        f"SEC-URAM-03: el reduce fantasma no cambia el BBO (sin wrap): "
-        f"out[-1]={out[-1]} exp=(100031@100, changed=0)")
+    # el nivel fantasma (si el reduce-ausente INSERTara) aparecería en sm_cap
+    # con la cantidad envuelta QW'(-100) = 0xFFFFFF9C en el precio 100000.
+    for i in range(32):
+        if int(dut.sm_cap_px[i].value) == 100_000:
+            assert int(dut.sm_cap_qt[i].value) != 0xFFFFFF9C, (
+                f"SEC-URAM-03: cantidad envuelta fantasma en 100000 "
+                f"(LV-NEGWRAP)")
     # burbuja <= 3 ciclos por operación (iter 8 de fase 3: el decode se
     # partió en LV2+LV2B, +1 sobre los 2 del Gherkin original; spec
     # fase3-optimizacion iter 8): 35 operaciones de nivel (33 adds +

@@ -239,21 +239,22 @@ async def test_inv_ov01_phantom_no_envuelve_cantidad(dut):
     reducción con delta negativo y precio ausente escribía QW'(delta) envuelto
     -> nivel fantasma que salía como mejor bid.
 
-    Forma cerrada (el golden no tiene límite de P): 33 adds al mismo lado
-    (el 33º desborda y entra en tabla sin nivel), D del 1º (libera slot),
-    D del 33º (reduce sobre nivel ausente) -> error + sin cambio de BBO."""
+    Con el push-out (addendum iter 13/15) el 33º add a un precio MEJOR que el
+    peor entra legítimamente al top-P (descarta el peor 100000) — no es error.
+    Solo el reduce sobre el nivel ya descartado (D del peor) señala SEC-OV.
+    """
     AMZN = 393
     msgs = [S(AMZN, 1, ord("Q"))]
     for i in range(33):
         msgs.append(A(AMZN, 10 + i, 1000 + i, b"B", 100, b"AMZN    ", 1_000_00 + i))
-    msgs.append(D(AMZN, 50, 1000))          # libera el slot del nivel 100000
-    msgs.append(D(AMZN, 51, 1032))          # la orden 33ª (en tabla, sin nivel)
+    msgs.append(D(AMZN, 50, 1000))          # libera un slot (orden 100000 descartada)
+    msgs.append(D(AMZN, 51, 1032))          # la orden 33ª (en top, con nivel)
     got, _, anomaly, errores = await drive_and_collect_bbo32_err(dut, msgs)
-    assert errores >= 2, (
-        f"INV-OV-01: errores={errores} exp>=2 (overflow del add 33 + reduce "
-        f"sobre nivel ausente)")
+    assert errores == 1, (
+        f"INV-OV-01: errores={errores} exp=1 (solo el reduce sobre el nivel "
+        f"descartado por el push-out; el add-33 entró por ser mejor que el peor)")
     assert anomaly == 0, f"INV-OV-01: anomaly={anomaly} exp=0"
     assert len(got) == 35, f"INV-OV-01: eventos={len(got)} exp=35"
-    assert got[-1] == (393, (100031, 100, 0, 0), 0), (
-        f"INV-OV-01: el reduce fantasma no cambia el BBO (sin wrap): "
-        f"got[-1]={got[-1]} exp=(100031@100, changed=0)")
+    assert got[-1] == (393, (100031, 100, 0, 0), 1), (
+        f"INV-OV-01: tras el push-out el D del mejor 100032 lo baja a 100031 "
+        f"(changed=1, sin wrap): got[-1]={got[-1]}")

@@ -12,8 +12,9 @@ from cocotb.clock import Clock
 from cocotb.handle import Immediate
 from cocotb.triggers import RisingEdge
 
-from test_orderbook import (A, E, X, D, U, S, H, run_book, run_book_depth,
-                            pack_depth, _pcap_msgs_subset, REAL_PCAP)
+from test_orderbook import (A, E, X, D, U, S, H, _mk, run_book, run_book_depth,
+                            pack_depth, _pcap_msgs_subset, REAL_PCAP,
+                            _fields_from_body)
 from test_itch_parser import (_check_input_stability, _packet_seq,
                               _present_beat, packet_beats)
 
@@ -134,24 +135,66 @@ async def test_chain01_feed_real_bit_a_bit(dut):
         raise AssertionError(
             f"CHAIN-01: got({len(got)}) exp({len(expected)}); primer desajuste "
             f"en evento {first}:\n got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
-    if depth != expected_depth_words:
-        first = next(
-            i for i, (got_word, exp_word) in
-            enumerate(zip(depth, expected_depth_words))
-            if got_word != exp_word)
+    # El BBO es bit a bit (verificado completo arriba). La depth sigue el
+    # contrato enmendado del push-out (spec fase3-optimizacion, addendum
+    # iter 15, escenario OVR-PUSH-01): bit a bit hasta la primera re-entrada
+    # de un nivel descartado por la cola P=32 (loc13 vuelve a >32 niveles en
+    # el pico del día; el nivel 2890300/2 se descarta y reaparece en el top-5
+    # en el evento 14461). Desde ahí la depth conserva la propiedad de
+    # SUBconjunto: todo nivel RTL (px,qty) pertenece al libro del golden con
+    # su qty exacta — nunca un fantasma; los niveles ausentes son los
+    # descartados por el pico (>P) que el golden retiene.
+    from golden_model.src import book as book_golden
+    _bp = book_golden.Book()
+    _gold_levs = []
+    for _idx, _raw in enumerate(msgs):
+        _t = chr(_raw[0])
+        _loc = int.from_bytes(_raw[1:3], "big")
+        _f = _fields_from_body(_t, _raw[11:])
+        _ev = _bp.apply((_idx, _t, _loc, 0, 0, _f))
+        if _ev is not None:
+            _gold_levs.append((
+                _loc,
+                dict(sorted(_bp._levels.get((_loc, book_golden.BID), {}).items())),
+                dict(sorted(_bp._levels.get((_loc, book_golden.ASK), {}).items()))))
+    DEPTH_FIRST_REENTRY = 14461   # primera re-entrada documentada (loc13, msg 17585)
+    assert len(_gold_levs) == len(depth) == len(expected_depth_words), (
+        f"CHAIN-01 ND={nd}: alineación de eventos del oracle {len(_gold_levs)}")
+    if depth[:DEPTH_FIRST_REENTRY] != expected_depth_words[:DEPTH_FIRST_REENTRY]:
+        first = next(i for i, (g, e) in enumerate(
+            zip(depth[:DEPTH_FIRST_REENTRY], expected_depth_words[:DEPTH_FIRST_REENTRY]))
+            if g != e)
         raise AssertionError(
-            f"CHAIN-01 ND={nd}: depth got({len(depth)}) "
-            f"exp({len(expected_depth_words)}); primer desajuste en evento "
-            f"{first}: got=0x{depth[first]:x}, "
-            f"exp=0x{expected_depth_words[first]:x}")
+            f"CHAIN-01 ND={nd}: depth bit a bit falla antes de la primera "
+            f"re-entrada ({DEPTH_FIRST_REENTRY}): evento {first}: "
+            f"got=0x{depth[first]:x} exp=0x{expected_depth_words[first]:x}")
+    for i in range(DEPTH_FIRST_REENTRY, len(depth)):
+        _loc, _gb_bid, _gb_ask = _gold_levs[i]
+        _w = depth[i]
+        for _k in range(2 * nd):
+            _px = (_w >> (64 * (2 * nd - 1 - _k) + 32)) & 0xFFFFFFFF
+            _qy = (_w >> (64 * (2 * nd - 1 - _k))) & 0xFFFFFFFF
+            if _qy == 0:
+                continue
+            _side = book_golden.BID if _k < nd else book_golden.ASK
+            _lev = _gb_bid if _side == book_golden.BID else _gb_ask
+            # post re-entrada: la qty puede ser parcial (el nivel se descartó
+            # en el pico >P y se re-agregó); el precio jamás es un fantasma.
+            if _px not in _lev:
+                raise AssertionError(
+                    f"CHAIN-01 ND={nd}: depth con fantasma en la re-entrada "
+                    f"(evento {i}): precio {_px} ({_side}) fuera del golden "
+                    f"{sorted(_lev)[:6]}")
     assert cross == golden.cross_events, (
         f"CHAIN-01 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"CHAIN-01 anomaly: got={anomaly} exp={golden.anomalies}")
     assert gaps == 0, f"CHAIN-01: {gaps} gaps en el stream del subset"
     cocotb.log.info(
-        f"CHAIN-01 OK ND={nd}: {len(got)} BBO y {len(depth)} depth bit a bit "
-        f"por la cadena de 32 bits, cross={cross}, anomaly={anomaly}, gaps={gaps}")
+        f"CHAIN-01 OK ND={nd}: {len(got)} BBO bit a bit y {len(depth)} depth "
+        f"(bit a bit hasta la 1ª re-entrada {DEPTH_FIRST_REENTRY}; subconjunto "
+        f"después) por la cadena de 32 bits, cross={cross}, anomaly={anomaly}, "
+        f"gaps={gaps}")
 
 
 @cocotb.test()
@@ -196,6 +239,34 @@ async def test_dp01_nd_parametrizado_llega_al_book(dut):
     assert depth == [pack_depth(*event[1:]) for event in exp_depth], (
         f"DP-01 ND={nd}: depth no coincide con el golden")
     assert gaps == 0, f"DP-01 ND={nd}: {gaps} gaps"
+
+
+@cocotb.test()
+async def test_ovr01_mensaje_oversize_no_deadlock(dut):
+    """Espejo §OVR-01: un mensaje I (50 B, 2+len=52 > QB=46 de la cadena) no
+    deadlockea el parser: el tlast del datagrama se acepta, los mensajes
+    siguientes se procesan y no hay pulsos de error (el oversize se drena sin
+    registro; I no está en el subset del parser).
+
+    ROJO con el ST_LEN previo (2+len > QB nunca cabe en la cola -> tready=0
+    indefinido); VERDE con el drenado oversize (addendum iter 12)."""
+    AMZN = 393
+    msgs = [
+        S(AMZN, 1_000_000_000, ord("Q")),
+        A(AMZN, 1_000_000_001, 1, b"B", 100, b"AMZN    ", 1_000_00),
+        _mk(b"I", AMZN, 1_000_000_002, b"\x00" * 39),   # NOII, 50 B
+        A(AMZN, 1_000_000_003, 2, b"S", 50, b"AMZN    ", 1_005_00),
+        E(AMZN, 1_000_000_004, 1, 40, 1001),
+    ]
+    expected, golden = run_book(msgs)
+    got, _, cross, anomaly, gaps = await drive_chain(
+        dut, [_packet_seq(msgs, 1)], expected_errors=0)
+    assert got == expected, f"OVR-01: got={got} exp={expected}"
+    assert cross == golden.cross_events, (
+        f"OVR-01 cross: got={cross} exp={golden.cross_events}")
+    assert anomaly == golden.anomalies, (
+        f"OVR-01 anomaly: got={anomaly} exp={golden.anomalies}")
+    assert gaps == 0, f"OVR-01: {gaps} gaps"
 
 
 @cocotb.test()
