@@ -36,9 +36,12 @@
 // CORRECCIÓN > velocidad: 1 mensaje/ciclo de reloj, lógica O(P).
 module orderbook #(
     parameter DW  = 64,
-    parameter K   = 19,          // ancho de order_ref (bits). 2^19 >= max ref
-                                 // del subset real (372.297); el campo en
-                                 // memoria es REFW=20 bits (uram.md)
+    parameter K   = 64,          // ancho de order_ref (bits). 64 = el ref del
+                                 // wire sin truncar: el día real supera 2^19
+                                 // (refs ~1,6M en apertura) y K=19 colisionaba
+                                 // residuos (254 eventos perdidos, addendum
+                                 // iter 12); K<=20 conserva el layout de 86
+                                 // bits de las configs verificadas
     parameter SLOT = 16,         // 2^SLOT slots de la tabla hashada (criterio 5).
                                  // hash(ref) = ref[SLOT-1:0]
     parameter PROBE = 8,         // pasos máx de linear probing por op
@@ -70,8 +73,11 @@ module orderbook #(
 );
 
     localparam NSLOT = 2**SLOT;
-    localparam REFW  = 20;      // campo ref en memoria (K <= REFW; uram.md)
-    localparam OW    = 1 + REFW + 1 + PXW + QW;   // 86 bits {qty,px,side,ref,valid}
+    // campo ref en memoria: max(K, 20) — las configs con K<=20 conservan el
+    // layout verificado de 86 bits; K>20 (p. ej. K=64 del feed real, addendum
+    // iter 12) ensancha la entrada a OW=1+REFW+1+PXW+QW (130 bits a K=64)
+    localparam REFW  = (K > 20) ? K : 20;
+    localparam OW    = 1 + REFW + 1 + PXW + QW;   // {qty,px,side,ref,valid}
 
     // bytes por palabra y su log2: 64 bits -> 8 B (b>>3), 32 bits -> 4 B (b>>2)
     localparam BYTES = DW / 8;
@@ -160,7 +166,9 @@ localparam ST_UADD       = 4'd5;
     // tabla de órdenes en URAM (fase3-uram): array único de NSLOT x OW bits
     // (65.536 x 86 ≈ 20 URAM del XCKU3P). SIN reset de contenido (patrón de
     // inferencia); la invalidación post-reset corre en ST_INVAL.
-    // Entrada: {valid[0], ref[REFW:1], side[21], price[PXW+22-1:22], qty[85:54]}
+    // Entrada: {valid[0], ref[REFW:1], side[REFW+1], price[REFW+PXW+1:REFW+2],
+    // qty[OW-1:OW-QW]} — REFW=20 en las configs K<=20 (86 bits), REFW=K=64
+    // en la config del feed real (130 bits, 2 columnas de 72 bits por banco)
 //    ram_style="ultra": fuerza inferencia URAM en la elaboración. El
 //    bloqueador real de la inferencia era la escritura vía task (bisect
 //    2026-08-18); el atributo fija la familia de memoria y evita el pase
@@ -1151,9 +1159,21 @@ if (m_len < 8'd11) error <= 1'b1;   // cuerpo inválido
             lv2_empty <= lv2_aemp ? 32'(lv2_emp) : 32'hFFFFFFFF;
             lv2_ins   <= (lv2_abtx ? 32'(lv2_btx) : 32'(lv2_emp));
             if (!lv2_afnd && !lv2_aemp) begin
-                // overflow de niveles (SEC-OV-01): la op se descarta
-                lv2_mode <= LV_MODE_NONE;
-                lverr = 1'b1;
+                // overflow de niveles. Con push-out (secuencia 11) se distingue:
+                //   delta>0 mejor que el peor -> LV_MODE_INSERT: el materialize
+                //     (lv2_empty=0xFFFFFFFF) desplaza a la derecha desde lv2_ins
+                //     y descarta el peor nivel (el top-P conserva el mejor-P).
+                //   resto (reduce sobre nivel descartado por overflow, o add
+                //     peor que el peor) -> se descarta, SEC-OV-01 (jamás phantom)
+                if (lv_delta[31]) begin
+                    lv2_mode <= LV_MODE_NONE;
+                    lverr = 1'b1;
+                end else if (lv2_abtx) begin
+                    lv2_mode <= LV_MODE_INSERT;
+                end else begin
+                    lv2_mode <= LV_MODE_NONE;
+                    lverr = 1'b1;
+                end
             end else if (!lv2_afnd && lv_delta[31]) begin
                 // reduce sobre un nivel que no existe (orden en tabla sin
                 // nivel por overflow previo): jamás una cantidad envuelta
