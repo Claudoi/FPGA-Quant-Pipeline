@@ -14,10 +14,10 @@ flowchart LR
     B --> C["Order book<br/><br/>URAM hash table<br/>32 URAM288<br/>levels + BBO"]
     C --> D["BBO + top-N<br/><br/>best bid / ask<br/>depth_tdata"]
 
-    style A fill:#e8f4f8,stroke:#0b7285
-    style B fill:#fff4e6,stroke:#e8590c
-    style C fill:#fff9db,stroke:#f08c00
-    style D fill:#ebfbee,stroke:#2f9e44
+    style A fill:#e8f4f8,stroke:#0b7285,color:#000000
+    style B fill:#fff4e6,stroke:#e8590c,color:#000000
+    style C fill:#fff9db,stroke:#f08c00,color:#000000
+    style D fill:#ebfbee,stroke:#2f9e44,color:#000000
 ```
 
 ```
