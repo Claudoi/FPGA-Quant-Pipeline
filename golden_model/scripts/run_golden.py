@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""run_golden.py — CLI del golden model: BinaryFILE -> vectores + stats.
+"""run_golden.py — golden model CLI: BinaryFILE -> vectors + stats.
 
-Pipeline: parser -> book -> (VectorSink si hay subset) + StatsCollector,
-con invariantes activas todo el run y chequeo profundo periódico y al cierre
-(spec fase0, criterios 3 y 6).
+Pipeline: parser -> book -> (VectorSink if there is a subset) + StatsCollector,
+with invariants active for the whole run and a periodic and end-of-run deep check
+(spec phase 0, criteria 3 and 6).
 
-Uso:
+Usage:
     python3 -m golden_model.scripts.run_golden <BinaryFILE[.gz]> \
         [--subset subset_symbols.json] [--out DIR] [--text] [--max-messages N]
 """
@@ -35,7 +35,7 @@ def run(
     max_messages: int | None = None,
     strict: bool = False,
 ) -> dict:
-    """Ejecuta el pipeline completo; devuelve el resumen del run."""
+    """Runs the full pipeline; returns the run summary."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     book = Book(strict_cross=strict)
@@ -79,13 +79,13 @@ def run(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("src", help="BinaryFILE de entrada (acepta .gz)")
-    ap.add_argument("--subset", default=None, help="subset_symbols.json (sin subset: solo stats)")
+    ap.add_argument("src", help="input BinaryFILE (accepts .gz)")
+    ap.add_argument("--subset", default=None, help="subset_symbols.json (no subset: stats only)")
     ap.add_argument("--out", default="data/itch_sample/out")
-    ap.add_argument("--text", action="store_true", help="vuelca tambien vectors.txt")
+    ap.add_argument("--text", action="store_true", help="also dump vectors.txt")
     ap.add_argument("--max-messages", type=int, default=None)
     ap.add_argument("--strict", action="store_true",
-                    help="aborta ante libro cruzado en trading continuo (defecto: lo cuenta)")
+                    help="abort on crossed book in continuous trading (default: count it)")
     args = ap.parse_args(argv)
     summary = run(args.src, args.subset, args.out, text=args.text,
                   max_messages=args.max_messages, strict=args.strict)

@@ -1,202 +1,199 @@
-# optimizacion.feature — fase 3: variante 32-bit @ 322 MHz, URAM con hash, top-N
+# optimizacion.feature — phase 3: 32-bit @ 322 MHz variant, hashed URAM, top-N
 
-Espejo de «Criterios de aceptación» 1-11 de `spec.md` de fase3-optimizacion.
-La semántica de cada operación es EXACTAMENTE la de `golden_model/src/book.py`
-y `golden_model/itch/messages.py` (fases 0-2).
+Mirror of "Acceptance criteria" 1-11 of the fase3-optimizacion `spec.md`.
+The semantics of each operation is EXACTLY that of `golden_model/src/book.py`
+and `golden_model/itch/messages.py` (phases 0-2).
 
-#language: es
-Funcionalidad: Pipeline 32-bit @ 322 MHz con tabla URAM hashada y top-N público
-  Como pipeline de market data a line-rate 10G
-  Quiero que el parser y el book funcionen a datapath de 32 bits
-  Para que el diseño cierre timing a 322,265625 MHz con la tabla en URAM
+# language: en
+Feature: 32-bit @ 322 MHz pipeline with hashed URAM table and public top-N
+  As a market-data pipeline at 10G line rate
+  I want the parser and the book to work on a 32-bit datapath
+  So that the design closes timing at 322.265625 MHz with the table in URAM
 
-  Escenario: P32-01 — el parser a DW=32 emite el Anexo A de 32 bits bit a bit
-    Dado el corpus sintético de la fase 1
-    Cuando el parser de 32 bits procesa cada mensaje
-    Entonces las words de salida (w0 context, w1 idx, w2.. cuerpo, sin ts —
-      layout recortado de fase3-uram) coinciden bit a bit con el oráculo message_oracle
+  Scenario: P32-01 — the DW=32 parser emits the 32-bit Annex A bit-exact
+    Given the phase-1 synthetic corpus
+    When the 32-bit parser processes each message
+    Then the output words (w0 context, w1 idx, w2.. body, without ts —
+      the fase3-uram trimmed layout) are bit-exact against the message_oracle oracle
 
-  Escenario: P32-02 — el parser a DW=32 acepta el peor caso a 1 palabra/ciclo
-    Dado un flujo de mensajes mínimos back-to-back
-    Cuando el parser de 32 bits los procesa
-    Entonces no hay backpressure sostenida de entrada
-    Y no se pierde ningún mensaje
+  Scenario: P32-02 — the DW=32 parser accepts the worst case at 1 word/cycle
+    Given a stream of minimum messages back-to-back
+    When the 32-bit parser processes them
+    Then there is no sustained input backpressure
+    And no message is lost
 
-  Escenario: B32-01 — el book a DW=32 emite el BBO del golden bit a bit
-    Dado el corpus sintético de la fase 2 (A/F/E/C/X/D/U/S/H)
-    Cuando el book de 32 bits aplica cada mensaje
-    Entonces el BBO emitido por símbolo es bit a bit idéntico al golden book.py
+  Scenario: B32-01 — the DW=32 book emits the golden BBO bit-exact
+    Given the phase-2 synthetic corpus (A/F/E/C/X/D/U/S/H)
+    When the 32-bit book applies each message
+    Then the BBO emitted per symbol is bit-exact against the golden book.py
 
-  Escenario: B32-02 — el book a DW=32 reproduce el feed real del subset
-    Dado el pcap del día local decapado (20 símbolos)
-    Cuando el book de 32 bits procesa los mensajes del subset
-    Entonces la secuencia de BBO es bit a bit idéntica al golden book.py
+  Scenario: B32-02 — the DW=32 book reproduces the real subset feed
+    Given the decapsulated local-day pcap (20 symbols)
+    When the 32-bit book processes the subset messages
+    Then the BBO sequence is bit-exact against the golden book.py
 
-  Escenario: REG-01 — la regresión de 64 bits sigue verde tras parametrizar
-    Dado el RTL extendido con DW parametrizado (default 64)
-    Cuando se re-ejecutan las suites de fase 1 y fase 2
-    Entonces todos los tests siguen pasando sin cambios
+  Scenario: REG-01 — the 64-bit regression stays green after parameterizing
+    Given the RTL extended with parameterized DW (default 64)
+    When the phase-1 and phase-2 suites are re-run
+    Then all tests keep passing unchanged
 
-  Escenario: CHAIN-01 — la cadena parser→book a DW=32 es bit a bit
-    Dado el feed real decapado (parser 32 → book 32, sin re-parseo)
-    Cuando la cadena procesa el subset
-    Entonces la secuencia de BBO es bit a bit idéntica al golden book.py
+  Scenario: CHAIN-01 — the DW=32 parser→book chain is bit-exact
+    Given the decapsulated real feed (parser 32 → book 32, no re-parse)
+    When the chain processes the subset
+    Then the BBO sequence is bit-exact against the golden book.py
 
-  Escenario: SEC-HASH-01 — el probe agotado cuenta anomalía sin abortar
-    Dado una order_ref cuyo slot es el mismo tras PROBE pasos
-    Cuando el book busca esa ref
-    Entonces cuenta anomaly_count
-    Y continúa procesando el siguiente mensaje
+  Scenario: SEC-HASH-01 — an exhausted probe counts an anomaly without aborting
+    Given an order_ref whose slot is the same after PROBE steps
+    When the book looks up that ref
+    Then it counts anomaly_count
+    And continues processing the next message
 
-  Escenario: SEC-HASH-02 — la tabla de órdenes llena se señaliza con error
-    Dado que todos los slots están ocupados
-    Cuando llega un add de una ref nueva
-    Entonces señaliza error
-    Y no sobrescribe ni envuelve silenciosamente
+  Scenario: SEC-HASH-02 — a full order table is signalled with error
+    Given that all slots are occupied
+    When an add of a new ref arrives
+    Then it signals error
+    And does not overwrite nor wrap silently
 
-  Escenario: SEC-HASH-03 — colisiones de hash de símbolos distintos se resuelven
-    Dado dos refs de símbolos distintos con el mismo slot base
-    Cuando el book las procesa
-    Entonces cada operación actúa sobre su propia orden
-    Y el BBO de cada símbolo coincide con el golden
+  Scenario: SEC-HASH-03 — hash collisions of distinct symbols are resolved
+    Given two refs of distinct symbols with the same base slot
+    When the book processes them
+    Then each operation acts on its own order
+    And each symbol's BBO matches the golden
 
-  Escenario: SEC-NSYM-01 — el símbolo 21 señala error sin índice fuera de rango
-    Dado un locate fuera del subset de NSYM=20
-    Cuando llega un mensaje de ese símbolo
-    Entonces señaliza error
-    Y el índice interno del símbolo permanece menor que NSYM en todo ciclo
-    Y no corrompe los niveles de los símbolos registrados
+  Scenario: SEC-NSYM-01 — symbol 21 signals error without an out-of-range index
+    Given a locate outside the NSYM=20 subset
+    When a message of that symbol arrives
+    Then it signals error
+    And the internal symbol index stays below NSYM in every cycle
+    And does not corrupt the registered symbols' levels
 
-  Escenario: SEC-BP-01 — el BBO se retiene bajo backpressure sin perderse
-    Dado un consumidor que baja bbo_tready después de observar bbo_tvalid
-    Cuando mantiene el stall durante dos ciclos completos
-    Entonces bbo_tvalid y el payload permanecen estables hasta que tready sube
-    Y se entrega exactamente una vez, sin pérdida ni duplicado
+  Scenario: SEC-BP-01 — the BBO is held under backpressure without loss
+    Given a consumer that lowers bbo_tready after observing bbo_tvalid
+    When it holds the stall for two full cycles
+    Then bbo_tvalid and the payload stay stable until tready rises
+    And it is delivered exactly once, without loss or duplicate
 
-  Escenario: SEC-DP-01 — depth de un símbolo vacío es todo ceros
-    Dado un símbolo sin ninguna orden
-    Cuando el book emite su depth
-    Entonces depth_tdata es 0 en todos los niveles
+  Scenario: SEC-DP-01 — the depth of an empty symbol is all zeros
+    Given a symbol with no orders
+    When the book emits its depth
+    Then depth_tdata is 0 at all levels
 
-  Escenario: DP-01 — el top-N público es bit a bit igual a los niveles del golden
-    Dado un símbolo con ND niveles o más por lado
-    Cuando el book emite un evento de ese símbolo
-    Entonces depth_tdata contiene los ND mejores niveles por lado, mejor primero
-    Y una elaboración de itch_chain con ND=3 produce exactamente 384 bits
-    Y coincide bit a bit con los niveles ordenados del golden book.py
+  Scenario: DP-01 — the public top-N is bit-exact against the golden levels
+    Given a symbol with ND levels or more per side
+    When the book emits an event of that symbol
+    Then depth_tdata contains the ND best levels per side, best first
+    And an itch_chain elaboration with ND=3 produces exactly 384 bits
+    And is bit-exact against the ordered levels of the golden book.py
 
-  Escenario: SEC-LAT-01 — la latencia por tipo es determinista y reproducible
-    Dado la cadena parser→book a DW=32 sobre una secuencia fija
-    Cuando se mide la latencia wire→BBO por tipo de mensaje
-    Entonces la re-ejecución produce el histograma idéntico
+  Scenario: SEC-LAT-01 — per-type latency is deterministic and reproducible
+    Given the DW=32 parser→book chain over a fixed sequence
+    When the wire→BBO latency per message type is measured
+    Then the re-run produces the identical histogram
 
-  # --- iteración 7 (2026-08-18): retiming del escaneo de niveles ----------
-  # Addendum iteración 7 de spec.md. El ST_EMIT de un solo ciclo se divide en
-  # ST_EMIT_A (captura) / ST_EMIT_B (selección+changed+depth) / ST_EMIT_C
-  # (handshake) — +2 ciclos en el camino del evento, latencia re-derivada.
+  # --- iteration 7 (2026-08-18): level-scan retiming ---------------------
+  # Addendum iteration 7 of spec.md. The single-cycle ST_EMIT splits into
+  # ST_EMIT_A (capture) / ST_EMIT_B (selection+changed+depth) / ST_EMIT_C
+  # (handshake) — +2 cycles on the event path, latency re-derived.
 
-  Escenario: RTM-01 — el escaneo de niveles del BBO/depth está registrado en etapas
-    Dado el book con ST_EMIT pipelined (etapas A/B/C)
-    Cuando se procesa un evento de update
-    Entonces la captura de niveles del símbolo es un registro (verificada con sonda interna)
-    Y el find-first por lado opera sobre la captura, no sobre los arrays de niveles
-    Y el payload emitido es bit a bit idéntico al golden book.py
+  Scenario: RTM-01 — the BBO/depth level scan is registered in stages
+    Given the book with pipelined ST_EMIT (stages A/B/C)
+    When an update event is processed
+    Then the symbol's level capture is a register (verified with an internal probe)
+    And the per-side find-first operates on the capture, not on the level arrays
+    And the emitted payload is bit-exact against the golden book.py
 
-  Escenario: RTM-02 — el BBO del evento pipelined es consistente con la captura
-    Dado un símbolo con niveles en los slots 0..k-1 y vacíos después (invariante
-      de lista ordenada: el mejor nivel vive en el primer slot no vacío)
-    Cuando el book emite un evento de ese símbolo por el pipeline A/B/C
-    Entonces el BBO es el primer nivel no vacío de la captura (slot 0 si hay niveles)
-    Y los ND primeros niveles de la captura coinciden con depth_tdata
-    Y un símbolo sin niveles emite BBO a cero, changed a 0 y depth a cero
+  Scenario: RTM-02 — the pipelined event's BBO is consistent with the capture
+    Given a symbol with levels in slots 0..k-1 and empty afterwards (ordered-list
+      invariant: the best level lives in the first non-empty slot)
+    When the book emits an event of that symbol through the A/B/C pipeline
+    Then the BBO is the first non-empty level of the capture (slot 0 if there are levels)
+    And the first ND levels of the capture match depth_tdata
+    And a symbol with no levels emits a zero BBO, changed 0 and zero depth
 
-  Escenario: RTM-03 — changed se calcula sobre la captura y no se pierde
-    Dado dos eventos consecutivos idénticos para el mismo símbolo
-    Cuando el segundo se emite
-    Entonces bbo_changed vale 0 en el segundo
-    Y un evento con cambio distinto vale 1
+  Scenario: RTM-03 — changed is computed over the capture and is not lost
+    Given two consecutive identical events for the same symbol
+    When the second is emitted
+    Then bbo_changed is 0 in the second
+    And an event with a distinct change is 1
 
-  Escenario: RTM-04 — el handshake de salida retiene el evento pipelined
-    Dado un consumidor que baja bbo_tready tras observar bbo_tvalid
-    Cuando el evento proviene del pipeline de etapas A/B/C
-    Entonces bbo_tvalid y el payload permanecen estables hasta que tready sube
-    Y se entrega exactamente una vez, sin pérdida ni duplicado
+  Scenario: RTM-04 — the output handshake holds the pipelined event
+    Given a consumer that lowers bbo_tready after observing bbo_tvalid
+    When the event comes from the A/B/C stage pipeline
+    Then bbo_tvalid and the payload stay stable until tready rises
+    And it is delivered exactly once, without loss or duplicate
 
-  Escenario: RTM-LAT-01 — la latencia re-medida cumple el umbral re-derivado
-    Dado la cadena parser→book a DW=32 sobre la secuencia fija de latencia
-    Cuando se mide la latencia wire→BBO por tipo de mensaje tras el pipeline
-    Entonces la media total es ≤ 48 ciclos
-    Y la re-ejecución produce el histograma idéntico
+  Scenario: RTM-LAT-01 — the re-measured latency meets the re-derived threshold
+    Given the DW=32 parser→book chain over the fixed latency sequence
+    When the wire→BBO latency per message type is measured after the pipeline
+    Then the total mean is ≤ 70 cycles (re-derived from 48 over the real feed)
+    And the re-run produces the identical histogram
 
-  Escenario: RTM-REG-01 — la regresión de 64 bits sigue verde con el pipeline
-    Dado el book pipelined con DW=64 (default)
-    Cuando se re-ejecutan las suites de fase 1 y fase 2
-    Entonces todos los tests siguen pasando sin cambios
+  Scenario: RTM-REG-01 — the 64-bit regression stays green with the pipeline
+    Given the pipelined book with DW=64 (default)
+    When the phase-1 and phase-2 suites are re-run
+    Then all tests keep passing unchanged
 
-  # --- iteración 12 (2026-08-19): feed real de apertura — K=64 y drenado ---
-  # Addendum iteración 12 de spec.md. El tramo de apertura real (210k
-  # paquetes, refs ~1,6-1,7M) expone dos bugs estructurales: K=19 truncaba
-  # refs > 2^19 (254 eventos perdidos, reproducción numérica exacta) y el
-  # parser con QB=46 deadlockeaba con mensajes > 44 B (I=50 B, 2+len=52 > 46).
+  # --- iteration 12 (2026-08-19): market-open real feed — K=64 and drain ---
+  # Addendum iteration 12 of spec.md. The real open stretch (210k packets,
+  # refs ~1.6-1.7M) exposes two structural bugs: K=19 truncated refs > 2^19
+  # (254 lost events, exact numeric reproduction) and the QB=46 parser
+  # deadlocked on messages > 44 B (I=50 B, 2+len=52 > 46).
 
-  Escenario: REF64-01 — el book con K=64 reproduce el feed real de apertura
-    Dado el pcap real de apertura del día (refs > 2^19) decapado (20 símbolos)
-    Cuando el book procesa los mensajes del subset con K=64
-    Entonces el BBO es bit a bit idéntico al golden book.py
-    Y no hay anomalías (ningún ref se truncó ni colisionó)
+  Scenario: REF64-01 — the K=64 book reproduces the real market-open feed
+    Given the decapsulated real open-day pcap (refs > 2^19, 20 symbols)
+    When the book processes the subset messages with K=64
+    Then the BBO is bit-exact against the golden book.py
+    And there are no anomalies (no ref truncated nor collided)
 
-  Escenario: REF64-02 — refs que difieren en 2^19 no colisionan con K=64
-    Dado dos órdenes cuyos refs difieren exactamente en 2^19 (mismo residuo
-      mod 2^19)
-    Cuando el book las procesa con K=64
-    Entonces ambas viven en la tabla sin error de ref duplicada
-    Y el borrado de cada una actúa sobre su propia orden
-    (con K=19 la segunda add se rechaza como duplicada y su borrado cuenta
-    anomalía — rojo de la enmienda)
+  Scenario: REF64-02 — refs differing by 2^19 do not collide with K=64
+    Given two orders whose refs differ exactly by 2^19 (same residue mod 2^19)
+    When the book processes them with K=64
+    Then both live in the table without a duplicate-ref error
+    And the deletion of each acts on its own order
+    (with K=19 the second add is rejected as duplicate and its deletion counts
+    an anomaly — the amendment's red)
 
-  Escenario: OVR-01 — el parser drena los mensajes oversize sin deadlock
-    Dado un datagrama con un mensaje de 50 B (2+len=52 > QB=46) entre
-      mensajes normales
-    Cuando el parser de 32 bits (o la cadena) lo procesa
-    Entonces el tlast del datagrama se acepta y el stream continúa
-    Y los mensajes posteriores al oversize se procesan correctamente
-    Y no se emite registro del mensaje oversize (fuera del subset)
+  Scenario: OVR-01 — the parser drains oversize messages without deadlock
+    Given a datagram with a 50 B message (2+len=52 > QB=46) between normal messages
+    When the 32-bit parser (or the chain) processes it
+    Then the datagram's tlast is accepted and the stream continues
+    And the messages after the oversize are processed correctly
+    And no record is emitted for the oversize message (outside the subset)
 
-  Escenario: OVR-PUSH-01 — desborde de niveles con push-out (SEC-OV-01 enmendado)
-    Dado un símbolo con la lista ask llena a P niveles (sin huecos)
-    Cuando llega un add a un precio mejor que el peor nivel vigente
-    Entonces el nivel nuevo entra al top-P y el peor sale (push-out)
-    Y el BBO refleja el nuevo mejor precio exactamente
-    Y no se señala error
-    Cuando llega un add a un precio peor que el peor nivel vigente
-    Entonces la op se descarta y se señala SEC-OV (pulso error)
-    Y el BBO no cambia
-    (con el rechazo pre-13 el primer caso congelaba el BBO — rojo del evento
-    3353 sobre el feed real)
+  Scenario: OVR-PUSH-01 — level overflow with push-out (SEC-OV-01 amended)
+    Given a symbol with the ask list full at P levels (no holes)
+    When an add at a price better than the current worst level arrives
+    Then the new level enters the top-P and the worst leaves (push-out)
+    And the BBO reflects the new best price exactly
+    And no error is signalled
+    When an add at a price worse than the current worst level arrives
+    Then the op is discarded and SEC-OV is signalled (error pulse)
+    And the BBO does not change
+    (with the pre-13 rejection the first case froze the BBO — the red of event
+    3353 over the real feed)
 
-  Escenario: OVR-DRN-01 — el NOII oversize se drena sin romper el stream
-    Dado un datagrama con mensajes I (2+len > QB) intercalados
-    Cuando el parser de 32 bits (QB=46) los procesa contra el feed real
-    Entonces cada mensaje I se drena por el stream con la frontera del beat
-    Y el mensaje siguiente queda alineado byte a byte (drop_left con el beat
-      del ciclo y retención de la cola baja en el cruce)
-    Y el BBO de la cadena es bit a bit contra el golden book.py
-    (rojos iter 13-14: 3 bytes comidos por el cruce -> loc 14 como 13)
+  Scenario: OVR-DRN-01 — the oversize NOII is drained without breaking the stream
+    Given a datagram with interleaved I messages (2+len > QB)
+    When the 32-bit parser (QB=46) processes them against the real feed
+    Then each I message is drained by the stream with the beat boundary
+    And the next message stays byte-aligned (drop_left with the cycle's beat and
+      the low-tail retention at the crossing)
+    And the chain BBO is bit-exact against the golden book.py
+    (iter 13-14 reds: 3 bytes eaten by the crossing -> loc 14 as 13)
 
-  Escenario: OVR-DEPTH-01 — la profundidad respeta el contrato del push-out
-    Dado el feed real (loc13 supera 32 niveles en el pico)
-    Cuando el book emite la profundidad top-N
-    Entonces el depth es bit a bit hasta la primera re-entrada de un nivel
-      descartado en el pico (>P)
-    Y desde ahí no hay ningún precio fantasma (todo precio del depth está en
-      el golden; las cantidades de los niveles re-entrados pueden ser
-      parciales)
-    (la exactitud bit a bit del depth con P finito es imposible para un feed
-    con picos >P; el tail en URAM lo daría — opción B, no implementada)
+  Scenario: OVR-DEPTH-01 — the depth respects the push-out contract
+    Given the real feed (loc13 exceeds 32 levels at the peak)
+    When the book emits the top-N depth
+    Then the depth is bit-exact until the first re-entry of a level discarded at
+      the peak (>P)
+    And from there there is no phantom price (every depth price is in the golden;
+      the quantities of re-entered levels may be partial)
+    (bit-exact depth with finite P is impossible for a feed with >P peaks; the
+    URAM tail would provide it — option B, not implemented)
 
-  Escenario: RTM-LAT-01 — umbral de latencia re-derivado sobre el feed real
-    Dado el feed real de apertura representativo (2.289 NOII)
-    Cuando la cadena parser->book a DW=32 procesa el subset
-    Entonces el histograma wire->BBO es determinista entre re-ejecuciones
-    Y la media total queda <= 70 ciclos (203,3 ns medidos; el umbral 48 de
-      iter 7 era de un tramo afortunado, no representativo)
+  Scenario: RTM-LAT-01 — latency threshold re-derived over the real feed
+    Given the representative market-open feed (2,289 NOII)
+    When the DW=32 parser->book chain processes the subset
+    Then the wire->BBO histogram is deterministic across re-runs
+    And the total mean stays <= 70 cycles (203.3 ns measured; the iter-7 48
+      threshold was a lucky, non-representative stretch)

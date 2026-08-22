@@ -1,22 +1,22 @@
-"""Iterador BinaryFILE -> mensajes ITCH 5.0 tipados.
+"""BinaryFILE iterator -> typed ITCH 5.0 messages.
 
-BinaryFILE (formato de los ficheros de emi.nasdaq.com): secuencia de
-`length u16be + payload`, donde el payload es exactamente un mensaje ITCH
-(el mismo framing que lleva cada mensaje dentro de MoldUDP64).
+BinaryFILE (format of the emi.nasdaq.com files): sequence of
+`length u16be + payload`, where the payload is exactly one ITCH message
+(the same framing that carries each message inside MoldUDP64).
 
-Contrato (spec fase0, criterio 1): todos los tipos se validan por longitud;
-tipo desconocido, longitud incorrecta o mensaje truncado = error duro.
+Contract (spec phase 0, criterion 1): all types are validated by length;
+unknown type, wrong length, or truncated message = hard error.
 
-Cada mensaje se entrega como tupla:
+Each message is delivered as a tuple:
 
     (msg_idx, mtype, locate, tracking, ts_ns, fields)
 
-- msg_idx: índice global en el fichero, 0-based.
-- mtype: str de 1 carácter ('A', 'S', ...).
-- locate/tracking/ts_ns: cabecera común (ts en ns desde medianoche).
-- fields: tupla con los campos tras la cabecera para los tipos con layout
-  completo (subset del libro + R/S/H, ver messages.LAYOUTS); None para el
-  resto (validados y contabilizables por la cabecera).
+- msg_idx: global index in the file, 0-based.
+- mtype: 1-character str ('A', 'S', ...).
+- locate/tracking/ts_ns: common header (ts in ns since midnight).
+- fields: tuple with the fields after the header for the types with a full
+  layout (book subset + R/S/H, see messages.LAYOUTS); None for the
+  rest (validated and countable via the header).
 """
 from __future__ import annotations
 
@@ -31,19 +31,19 @@ _HEADER_LEN = 2
 
 
 class ItchError(ValueError):
-    """Base de los errores de protocolo ITCH/BinaryFILE."""
+    """Base class for ITCH/BinaryFILE protocol errors."""
 
 
 class UnknownTypeError(ItchError):
-    """Tipo de mensaje no definido en ITCH 5.0."""
+    """Message type not defined in ITCH 5.0."""
 
 
 class BadLengthError(ItchError):
-    """Longitud declarada distinta de la especificada para el tipo."""
+    """Declared length differs from the one specified for the type."""
 
 
 class TruncatedMessageError(ItchError):
-    """El fichero termina a mitad de un mensaje."""
+    """The file ends in the middle of a message."""
 
 
 def _open(source: str | PathLike[str] | BinaryIO) -> BinaryIO:
@@ -58,7 +58,7 @@ def _open(source: str | PathLike[str] | BinaryIO) -> BinaryIO:
 def iter_messages(
     source: str | PathLike[str] | BinaryIO,
 ) -> Iterator[tuple[int, str, int, int, int, tuple | None]]:
-    """Itera un BinaryFILE entregando mensajes tipados (ver docstring del módulo)."""
+    """Iterates a BinaryFILE yielding typed messages (see module docstring)."""
     f = _open(source)
     lengths = MESSAGE_LENGTHS
     layouts = LAYOUTS
@@ -70,29 +70,29 @@ def iter_messages(
                 return
             if len(prefix) < _HEADER_LEN:
                 raise TruncatedMessageError(
-                    f"mensaje {idx}: prefijo de longitud truncado"
+                    f"message {idx}: truncated length prefix"
                 )
             declared = int.from_bytes(prefix, "big")
             payload = f.read(declared)
             if len(payload) < declared:
                 raise TruncatedMessageError(
-                    f"mensaje {idx}: declara {declared} B, quedan {len(payload)}"
+                    f"message {idx}: declares {declared} B, {len(payload)} left"
                 )
             mtype = chr(payload[0])
             entry = lengths.get(mtype)
             if entry is None:
                 raise UnknownTypeError(
-                    f"mensaje {idx}: tipo desconocido {mtype!r}"
+                    f"message {idx}: unknown type {mtype!r}"
                 )
             expected = entry[1]
             if declared != expected:
                 raise BadLengthError(
-                    f"mensaje {idx}: tipo {mtype!r} declara {declared} B, "
-                    f"la spec exige {expected} B"
+                    f"message {idx}: type {mtype!r} declares {declared} B, "
+                    f"the spec requires {expected} B"
                 )
             layout = layouts.get(mtype)
             if layout is None:
-                # validado por longitud; solo cabecera común
+                # validated by length; common header only
                 locate = int.from_bytes(payload[1:3], "big")
                 tracking = int.from_bytes(payload[3:5], "big")
                 ts_ns = int.from_bytes(payload[5:11], "big")

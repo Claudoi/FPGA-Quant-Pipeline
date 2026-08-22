@@ -1,230 +1,232 @@
-# fase0-golden-model (fase 0 del maestro)
+# fase0-golden-model (phase 0 of the master plan)
 
 ## Goal
 
-Construir la fuente única de verdad del proyecto: un parser Nasdaq TotalView-ITCH
-5.0 + order book en **Python stdlib pura** que lee los BinaryFILE de
-`emi.nasdaq.com`, mantiene el libro de TODO el mercado y emite los **vectores de
-referencia** (BBO mensaje a mensaje, para un subset de símbolos) contra los que se
-verificará el RTL en las fases 1-2. Incluye el tooling de datos:
-`fetch_itch.py` (descarga + md5) y `binaryfile_to_pcap.py` (BinaryFILE → pcap
-MoldUDP64/UDP/IP/Ethernet para el testbench). Sin esta campaña no existe «contra
-qué verificar»; es el cimiento del ciclo entero.
+Build the project's single source of truth: a Nasdaq TotalView-ITCH 5.0
+parser + order book in **pure Python stdlib** that reads the BinaryFILEs from
+`emi.nasdaq.com`, maintains the book for the ENTIRE market, and emits the
+**reference vectors** (message-by-message BBO, for a subset of symbols)
+against which the RTL will be verified in phases 1–2. It includes the data
+tooling: `fetch_itch.py` (download + md5) and `binaryfile_to_pcap.py`
+(BinaryFILE → MoldUDP64/UDP/IP/Ethernet pcap for the testbench). Without this
+campaign there is no "what to verify against"; it is the foundation of the
+entire cycle.
 
 ## Scope
 
 **In scope:**
 
-- `golden_model/itch/messages.py` — tabla canónica de layouts ITCH 5.0 (fuente
-  única: tipos, longitudes, campos; nada de literales de protocolo fuera de aquí).
-- `golden_model/itch/parser.py` — iterador BinaryFILE → mensajes tipados.
-  - Todos los tipos ITCH 5.0 **validados** (longitud exacta por tipo).
-  - Cabecera común (tipo, Stock Locate, tracking, timestamp) decodificada en todos.
-  - Campos completos solo en: `A, F, E, C, X, D, U` (libro), `R` (Stock
-    Directory), `S` (System Event), `H` (Stock Trading Action — necesaria para
-    condicionar la invariante bid<ask al estado de trading continuo).
-  - Resto de tipos: contabilizados por tipo. Tipo desconocido o longitud
-    incorrecta = **error duro** (excepción, no warning).
-- `golden_model/src/book.py` — order book multi-símbolo: tabla de órdenes por
-  order reference, niveles de precio agregados, BBO por símbolo. Semántica:
-  - `U` (Replace) es **atómico**: delete + add producen UN solo estado resultante.
-  - Lado vacío del BBO se representa `precio=0, qty=0`.
-  - Operación sobre order reference desconocida (ventanas parciales): se cuenta
-    como anomalía y se salta, no aborta.
-- `golden_model/src/vectors.py` — escritor del formato binario canónico (Anexo A)
-  + volcado a texto bajo demanda (`--text`).
-- `golden_model/src/stats.py` — estadísticas del día: mensajes por tipo; por
-  símbolo: mensajes, pico de órdenes vivas, pico de niveles (dimensionado URAM).
-- `golden_model/scripts/run_golden.py` — CLI: BinaryFILE → vectores (subset) +
-  stats + invariantes activas.
-- `golden_model/scripts/select_subset.py` — ranking de símbolos por actividad;
-  escribe `verification/vectors/subset_symbols.json` (commiteado, es config).
-- `scripts/fetch_itch.py` — descarga de `emi.nasdaq.com/ITCH/` + verificación md5.
-- `scripts/binaryfile_to_pcap.py` — BinaryFILE → pcap real (abrible en
-  Wireshark/tcpdump): empaquetado hasta ~1400 B de payload UDP (configurable,
-  `--msgs-per-packet 1` para tests dirigidos), sequence numbers sintéticos
-  monotónicos desde 1, MAC/IP-multicast/puerto sintéticos fijos configurables.
-- `golden_model/tests/` — tests espejo (stdlib `unittest`; ver regla de nombres
-  en Verificación).
-- Vectores pequeños **sintéticos** commiteados en `verification/vectors/`.
+- `golden_model/itch/messages.py` — canonical table of ITCH 5.0 layouts (single
+  source: types, lengths, fields; no protocol literals anywhere else).
+- `golden_model/itch/parser.py` — BinaryFILE iterator → typed messages.
+  - All ITCH 5.0 types **validated** (exact length per type).
+  - Common header (type, Stock Locate, tracking, timestamp) decoded in all.
+  - Full fields only in: `A, F, E, C, X, D, U` (book), `R` (Stock Directory),
+    `S` (System Event), `H` (Stock Trading Action — needed to gate the bid<ask
+    invariant to the continuous-trading state).
+  - Remaining types: counted by type. Unknown type or incorrect length =
+    **hard error** (exception, not warning).
+- `golden_model/src/book.py` — multi-symbol order book: order table keyed by
+  order reference, aggregated price levels, BBO per symbol. Semantics:
+  - `U` (Replace) is **atomic**: delete + add produce a SINGLE resulting state.
+  - Empty side of the BBO is represented as `price=0, qty=0`.
+  - Operation on an unknown order reference (partial windows): counted as an
+    anomaly and skipped, does not abort.
+- `golden_model/src/vectors.py` — writer of the canonical binary format (Annex A)
+  + on-demand text dump (`--text`).
+- `golden_model/src/stats.py` — day statistics: messages per type; per symbol:
+  messages, peak live orders, peak levels (URAM sizing).
+- `golden_model/scripts/run_golden.py` — CLI: BinaryFILE → vectors (subset) +
+  stats + active invariants.
+- `golden_model/scripts/select_subset.py` — symbol activity ranking; writes
+  `verification/vectors/subset_symbols.json` (committed, it is config).
+- `scripts/fetch_itch.py` — download from `emi.nasdaq.com/ITCH/` + md5 verification.
+- `scripts/binaryfile_to_pcap.py` — BinaryFILE → real pcap (openable in
+  Wireshark/tcpdump): packing up to ~1400 B of UDP payload (configurable,
+  `--msgs-per-packet 1` for targeted tests), synthetic monotonic sequence
+  numbers from 1, fixed configurable synthetic MAC/IP-multicast/port.
+- `golden_model/tests/` — mirror tests (stdlib `unittest`; see the naming rule
+  in Verification).
+- Small **synthetic** vectors committed in `verification/vectors/`.
 
 **Out of scope (non-goals):**
 
-- RTL, cocotb, MAC 10G: fases 1+.
-- numpy/pandas en el pipeline de generación (stdlib pura; numpy solo para
-  análisis ad-hoc fuera del pipeline).
-- Campos completos de `P, Q, B, I, N, M, T, O, Y, L, V, W, K, J` (se cuentan).
-- Recovery/GLIMPSE/snapshot: los ficheros de muestra son días completos.
-- Métricas de latencia (fase 2), histogramas por tipo (fase 2+).
-- CI automatizado del run de día completo (se decide al tener cifras de runtime).
-- Datos crudos o vectores grandes commiteados (van a `data/itch_sample/`,
-  gitignored; solo vectores pequeños sintéticos en `verification/vectors/`).
+- RTL, cocotb, 10G MAC: phases 1+.
+- numpy/pandas in the generation pipeline (pure stdlib; numpy only for
+  ad-hoc analysis outside the pipeline).
+- Full fields of `P, Q, B, I, N, M, T, O, Y, L, V, W, K, J` (they are counted).
+- Recovery/GLIMPSE/snapshot: the sample files are full days.
+- Latency metrics (phase 2), per-type histograms (phase 2+).
+- Automated CI of the full-day run (decided once runtime figures exist).
+- Raw data or large vectors committed (they go to `data/itch_sample/`,
+  gitignored; only small synthetic vectors in `verification/vectors/`).
 
-**Radio medido:** no aplica — campaña inicial sobre árbol vacío
-(`golden_model/{itch,src,scripts,tests}/` y `scripts/` no contienen fuentes;
-verificado con `find` el 2026-08-12). No se renombra ni mueve nada existente.
+**Measured radius:** not applicable — initial campaign on an empty tree
+(`golden_model/{itch,src,scripts,tests}/` and `scripts/` contain no sources;
+verified with `find` on 2026-08-12). Nothing existing is renamed or moved.
 
 ## Constraints
 
-- **Python stdlib pura** en `golden_model/` y `scripts/` (struct precompilado,
-  memoryview, gzip, unittest). Dependencia nueva = edit explícito de esta spec.
-  Decisión registrada: tests con `unittest` (stdlib), NO pytest.
-- **Rendimiento:** día completo principal (ver Verificación) en **≤ 2 h** en la
-  máquina del owner, medido con `time` sobre `run_golden.py`. Si no llega, se
-  optimiza el hot loop antes de admitir dependencias.
-- Universo: libro de **todo el mercado**; vectores solo para el subset de
-  símbolos de `subset_symbols.json` (regla de selección: top 20 por **pico de
-  órdenes vivas** entre los símbolos de alta actividad del día principal, N
-  configurable; la elección final la confirma el owner con la tabla de stats).
-- Determinismo: mismo BinaryFILE de entrada → mismos vectores bit a bit.
-- Endianness: ITCH es big-endian en el cable; el fichero de vectores binario es
-  little-endian nativo (Anexo A). No mezclar.
+- **Pure Python stdlib** in `golden_model/` and `scripts/` (precompiled struct,
+  memoryview, gzip, unittest). A new dependency = explicit edit of this spec.
+  Recorded decision: tests use `unittest` (stdlib), NOT pytest.
+- **Performance:** the main full day (see Verification) in **≤ 2 h** on the
+  owner's machine, measured with `time` over `run_golden.py`. If it does not
+  meet this, the hot loop is optimized before admitting dependencies.
+- Universe: book for the **entire market**; vectors only for the symbol subset
+  of `subset_symbols.json` (selection rule: top 20 by **peak live orders**
+  among the high-activity symbols of the main day, configurable N; the final
+  choice is confirmed by the owner with the stats table).
+- Determinism: same input BinaryFILE → same vectors, bit-exact.
+- Endianness: ITCH is big-endian on the wire; the binary vector file is
+  native little-endian (Annex A). Do not mix.
 
-## Superficie y amenazas
+## Surface and threats
 
-- **Entradas nuevas:** BinaryFILE (`length u16be + payload`), fichero
-  `.md5sum` de Nasdaq, CLI de los tres scripts (rutas, `--subset`,
-  `--msgs-per-packet`, `--text`, `--out`).
-- **Salidas nuevas:** vectores binarios `*.vec.bin` (layout Anexo A), volcado
-  texto `*.vec.txt`, `subset_symbols.json`, stats CSV, pcap `*.pcap`.
-- **Casos de abuso del dominio** (cada uno con su escenario `SEC-` en Gherkin):
-  tipo desconocido (SEC-01), longitud incorrecta (SEC-02), mensaje truncado
-  (SEC-03), operación sobre ref desconocida (SEC-04), libro cruzado en subasta
-  (SEC-05), mensaje mayor que el payload UDP máximo (SEC-06), md5 incorrecto
-  (SEC-07), libro bloqueado en trading continuo en datos reales (SEC-08),
-  endpoint md5 caído (DAT-03).
-- **Qué se arriesga del maestro:** si el golden model miente, TODO el ciclo
-  verifica contra una referencia falsa (el 50 % del valor del proyecto es la
-  corrección bit a bit). Los vectores binarios son además el contrato que
-  consumirá cocotb: un layout ambiguo aquí es un bug en fase 1.
+- **New inputs:** BinaryFILE (`length u16be + payload`), Nasdaq `.md5sum` file,
+  CLI of the three scripts (paths, `--subset`, `--msgs-per-packet`, `--text`,
+  `--out`).
+- **New outputs:** binary vectors `*.vec.bin` (Annex A layout), text dump
+  `*.vec.txt`, `subset_symbols.json`, stats CSV, pcap `*.pcap`.
+- **Domain abuse cases** (each with its `SEC-` scenario in Gherkin):
+  unknown type (SEC-01), incorrect length (SEC-02), truncated message (SEC-03),
+  operation on unknown ref (SEC-04), crossed book in auction (SEC-05), message
+  larger than the max UDP payload (SEC-06), incorrect md5 (SEC-07), locked book
+  in continuous trading on real data (SEC-08), md5 endpoint down (DAT-03).
+- **What is at risk from the master:** if the golden model lies, the ENTIRE
+  cycle verifies against a false reference (50 % of the project's value is
+  bit-exact correctness). The binary vectors are also the contract that cocotb
+  will consume: an ambiguous layout here is a bug in phase 1.
 
-## Reuso
+## Reuse
 
-- No existe código previo que extender (campaña inicial). `Grep`/`find`
-  confirman `golden_model/`, `scripts/` vacíos de fuentes.
-- Se usa SOLO stdlib. Dependencias pactadas: **ninguna**. (`pytest` queda
-  descartado a favor de `unittest`; `numpy` fuera del pipeline de generación.)
+- No prior code to extend (initial campaign). `Grep`/`find` confirm
+  `golden_model/`, `scripts/` are empty of sources.
+- Only stdlib is used. Agreed dependencies: **none**. (`pytest` is discarded in
+  favor of `unittest`; `numpy` outside the generation pipeline.)
 
-## Criterios de aceptación (Definition of Done)
+## Acceptance criteria (Definition of Done)
 
-1. [ ] El parser itera el día principal completo sin errores: todos los mensajes
-   validados por longitud, cabecera común decodificada, conteo por tipo emitido;
-   tipo desconocido / longitud incorrecta / truncado = error duro.
+1. [ ] The parser iterates the entire main day without errors: all messages
+   validated by length, common header decoded, per-type count emitted;
+   unknown type / incorrect length / truncated = hard error.
    — Gherkin: `parser.feature` §PAR-01, §PAR-02, §PAR-03, §SEC-01, §SEC-02, §SEC-03
-2. [ ] El book produce el BBO correcto en los casos known-answer (add, execute
-   parcial/total, cancel, delete, replace atómico, libro vacío), con expected
-   escrito a mano.
+2. [ ] The book produces the correct BBO in the known-answer cases (add, partial/
+   total execute, cancel, delete, atomic replace, empty book), with hand-written
+   expected values.
    — Gherkin: `book.feature` §LIB-01…§LIB-06
-3. [ ] Invariantes activas en todo run real, chequeadas por mensaje: qty > 0 en
-   órdenes vivas y niveles; order references únicas; niveles consistentes con
-   órdenes (chequeo profundo periódico + cierre). Violación = abort con mensaje
-   que identifica el índice de mensaje. **Excepción (corrección de iteración 2,
-   con evidencia):** el libro bloqueado/cruzado en trading continuo NO aborta:
-   existe en datos reales (transiciones halt→trading; p.ej. símbolo ZJZZT,
-   msg 39778763 del día principal, bid==ask==130000 durante 2 mensajes). El
-   book cuenta esos eventos con su índice de mensaje y el resumen del run los
-   reporta. El modo estricto (`strict_cross=True` / `--strict`) mantiene el
-   abort y es el que ejercitan los tests sintéticos.
+3. [ ] Invariants active in every real run, checked per message: qty > 0 in live
+   orders and levels; unique order references; levels consistent with orders
+   (periodic deep check + close). Violation = abort with a message identifying
+   the message index. **Exception (iteration-2 correction, with evidence):** a
+   locked/crossed book in continuous trading does NOT abort: it exists in real
+   data (halt→trading transitions; e.g. symbol ZJZZT, msg 39778763 of the main
+   day, bid==ask==130000 for 2 messages). The book counts those events with
+   their message index and the run summary reports them. Strict mode
+   (`strict_cross=True` / `--strict`) keeps the abort and is what the synthetic
+   tests exercise.
    — Gherkin: `book.feature` §INV-01, §SEC-04, §SEC-05, §SEC-08
-4. [ ] El escritor de vectores emite un registro por mensaje modificador
-   (`A/F/E/C/X/D/U`) de los símbolos del subset, con índice de mensaje global
-   monotónico, layout de 40 B del Anexo A y flag de cambio correcto.
+4. [ ] The vector writer emits one record per modifying message
+   (`A/F/E/C/X/D/U`) of the subset symbols, with a monotonic global message
+   index, the 40 B layout of Annex A, and the correct change flag.
    — Gherkin: `vectores.feature` §VEC-01, §VEC-02, §VEC-04
-5. [ ] Round-trip: el volcado texto reproduce campo a campo el binario; el lector
-   propio relee lo escrito sin pérdida.
+5. [ ] Round-trip: the text dump reproduces the binary field by field; the
+   reader re-reads what it wrote without loss.
    — Gherkin: `vectores.feature` §VEC-03
-6. [ ] Run real del día principal: vectores + stats generados, invariantes sin
-   violaciones, runtime ≤ 2 h (output de `time` pegado en el verify-report).
+6. [ ] Real run of the main day: vectors + stats generated, invariants without
+   violations, runtime ≤ 2 h (`time` output pasted in the verify-report).
    — Gherkin: `parser.feature` §PAR-01, §PAR-02; `datos.feature` §DAT-02
-7. [ ] `fetch_itch.py` descarga y verifica md5; md5 incorrecto aborta sin dejar
-   fichero aparentemente válido. Si el servidor no sirve el `.md5sum` (hoy da
-   404), aborta **fail closed** con error claro y exit != 0 (sin traceback);
-   `--no-md5-verify` permite la descarga avisando por stderr (corrección de
-   iteración 3, hallazgo de grade: el 404 llegaba como traceback no manejado).
+7. [ ] `fetch_itch.py` downloads and verifies md5; an incorrect md5 aborts
+   without leaving a seemingly valid file. If the server does not serve the
+   `.md5sum` (today it returns 404), it aborts **fail closed** with a clear
+   error and exit != 0 (no traceback); `--no-md5-verify` allows the download
+   with a stderr warning (iteration-3 correction, grade finding: the 404 came
+   through as an unhandled traceback).
    — Gherkin: `datos.feature` §DAT-01, §DAT-03, §SEC-07
-8. [ ] `binaryfile_to_pcap.py`: pcap abrible con `tcpdump -r` sin errores;
-   payload ≤ límite configurado; seq monotónico desde 1; **round-trip**:
-   extrayendo los payloads MoldUDP64 del pcap se reconstruye el stream
-   BinaryFILE original byte a byte.
+8. [ ] `binaryfile_to_pcap.py`: pcap openable with `tcpdump -r` without errors;
+   payload ≤ configured limit; monotonic seq from 1; **round-trip**: extracting
+   the MoldUDP64 payloads from the pcap reconstructs the original BinaryFILE
+   stream byte for byte.
    — Gherkin: `pcap.feature` §PCA-01…§PCA-04, §SEC-06
-9. [ ] `subset_symbols.json` generado desde stats del día principal, con la tabla
-   de ranking que lo justifica (artefacto para el write-up y dimensionado URAM).
+9. [ ] `subset_symbols.json` generated from main-day stats, with the ranking
+   table that justifies it (artifact for the write-up and URAM sizing).
    — Gherkin: `datos.feature` §DAT-02
-10. [ ] Stdlib pura: `grep` de imports de `golden_model/` y `scripts/` muestra
-    solo módulos stdlib (comando en Verificación).
-    — Sin escenario Gherkin (propiedad estática, no comportamiento).
+10. [ ] Pure stdlib: `grep` of imports in `golden_model/` and `scripts/` shows
+   only stdlib modules (command in Verification).
+   — No Gherkin scenario (static property, not behavior).
 
-## Verificación
+## Verification
 
-| Criterio | Cómo se prueba |
+| Criterion | How it is tested |
 |---|---|
-| 1, 2, 3, 4, 5 | `python3 -m unittest discover -s golden_model/tests -v` — tests espejo con título normalizado (regla: nombre del escenario en minúsculas, espacios→`_`, sin tildes ni puntuación, prefijo `test_`; ej. §SEC-01 → `test_sec01_tipo_de_mensaje_desconocido_es_error_duro`) |
-| 6 | `time python3 golden_model/scripts/run_golden.py data/itch_sample/12302019.NASDAQ_ITCH50.gz --subset verification/vectors/subset_symbols.json --out data/itch_sample/out/` (exit 0, sin violaciones, runtime pegado) |
-| 7 | `python3 scripts/fetch_itch.py <fichero>` sobre descarga íntegra vía `file://` (urllib real), fichero corrompido a propósito, y endpoint md5 404 (fail closed) |
-| 8 | `python3 scripts/binaryfile_to_pcap.py <in> <out>.pcap` + `tcpdump -r <out>.pcap` + test espejo del round-trip |
-| 9 | `cat verification/vectors/subset_symbols.json` + tabla de stats en el verify-report |
-| 10 | `grep -RhE '^(import\|from) ' golden_model/ scripts/ \| sort -u` → solo stdlib |
+| 1, 2, 3, 4, 5 | `python3 -m unittest discover -s golden_model/tests -v` — mirror tests with normalized title (rule: scenario name lowercase, spaces→`_`, no accents or punctuation, prefix `test_`; e.g. §SEC-01 → `test_sec01_tipo_de_mensaje_desconocido_es_error_duro`) |
+| 6 | `time python3 golden_model/scripts/run_golden.py data/itch_sample/12302019.NASDAQ_ITCH50.gz --subset verification/vectors/subset_symbols.json --out data/itch_sample/out/` (exit 0, no violations, runtime pasted) |
+| 7 | `python3 scripts/fetch_itch.py <file>` over a full download via `file://` (real urllib), a deliberately corrupted file, and a 404 md5 endpoint (fail closed) |
+| 8 | `python3 scripts/binaryfile_to_pcap.py <in> <out>.pcap` + `tcpdump -r <out>.pcap` + mirror round-trip test |
+| 9 | `cat verification/vectors/subset_symbols.json` + stats table in the verify-report |
+| 10 | `grep -RhE '^(import\|from) ' golden_model/ scripts/ \| sort -u` → only stdlib |
 
-Régimen completo: skill `verify`. Para esta campaña: gate A = unittest verde;
-B/C = `python3 -m py_compile` de lo tocado + convenciones (type hints en APIs,
-docstrings de módulo); D = tabla spec↔tests + cobertura por tipo de mensaje del
-día real; E = **mutación manual pactada**: 5 mutantes sobre `book.py`/`parser.py`
-(flip `<`→`<=` en BBO, ±1 en qty, no eliminar nivel a qty 0, flag de cambio
-invertido, length check relajado) — cada uno debe morir con un test;
-F = espejos Gherkin (esta campaña mapea a `golden_model/tests`, declarado en
-`specs/gherkin-espejos.json`); G = G0+G3 (datos reales fuera del repo, golden
-como fuente); **gate G de timing/Vivado: NO APLICA** (no hay RTL en fase 0, se
-declara NO EJECUTADO con esta justificación).
+Full regime: skill `verify`. For this campaign: gate A = green unittest;
+B/C = `python3 -m py_compile` of what was touched + conventions (type hints in
+APIs, module docstrings); D = spec↔test table + coverage by message type of the
+real day; E = **agreed manual mutation**: 5 mutants over `book.py`/`parser.py`
+(flip `<`→`<=` in BBO, ±1 in qty, not deleting a level at qty 0, inverted
+change flag, relaxed length check) — each one must die with a test;
+F = Gherkin mirrors (this campaign maps to `golden_model/tests`, declared in
+`specs/gherkin-espejos.json`); G = G0+G3 (real data outside the repo, golden as
+source); **gate G timing/Vivado: NOT APPLICABLE** (no RTL in phase 0, declared
+NOT EXECUTED with this justification).
 
-**Contratos sin gate** — lo que puede romperse con suite y lint en verde:
+**Geless contracts** — what can break with suite and lint green:
 
-1. **Tabla de layouts autoconsistente pero mal transcrita.** Parser y packer de
-   tests comparten `messages.py`: si la tabla está mal copiada del PDF, los tests
-   pasan igualmente. Guardarraíl: los vectores sintéticos de los tests son
-   **literales hex escritos a mano desde el PDF de la spec** (oráculo
-   independiente), nunca generados por el propio código; y el conteo por tipo del
-   día real debe cuadrar con órdenes de magnitud conocidos (se pega en el
-   verify-report).
-2. **Layout del registro binario (Anexo A) vs. el futuro lector cocotb.** Nada en
-   fase 0 fuerza al RTL a leerlo bien. Guardarraíl: round-trip writer↔reader↔texto
-   en tests + layout fijado byte a byte en esta spec (cambiarlo = edit de spec).
-3. **Semántica heredada por el RTL** (replace atómico, lado vacío = 0/0, flag de
-   cambio): la define el golden y la consumen las fases 1-2; sus specs deben
-   referenciar este contrato, no redefinirlo.
+1. **Self-consistent but mis-transcribed layout table.** Parser and test packer
+   share `messages.py`: if the table is copied wrongly from the PDF, the tests
+   pass anyway. Guardrail: the synthetic test vectors are **hand-written hex
+   literals from the spec PDF** (independent oracle), never generated by the
+   code itself; and the per-type count of the real day must match known orders
+   of magnitude (pasted in the verify-report).
+2. **Binary record layout (Annex A) vs. the future cocotb reader.** Nothing in
+   phase 0 forces the RTL to read it right. Guardrail: writer↔reader↔text
+   round-trip in tests + layout fixed byte by byte in this spec (changing it =
+   spec edit).
+3. **Semantics inherited by the RTL** (atomic replace, empty side = 0/0, change
+   flag): the golden defines them and phases 1–2 consume them; their specs must
+   reference this contract, not redefine it.
 
 ## Loop
 
-Stop limit: **5 iteraciones**. Cadencia: encadenar build→verify→grade mientras
-quede cola; al agotar el límite con criterios en FAIL, escala al owner.
+Stop limit: **5 iterations**. Cadence: chain build→verify→grade while there is
+a queue; when the limit is reached with criteria in FAIL, escalate to the owner.
 
 ---
 
-## Anexo A — layout del registro de vectores (canónico, 40 bytes, little-endian)
+## Annex A — vector record layout (canonical, 40 bytes, little-endian)
 
-| Offset | Tamaño | Campo | Descripción |
+| Offset | Size | Field | Description |
 |---|---|---|---|
-| 0 | 8 | `msg_idx` u64 | Índice global del mensaje en el BinaryFILE (0-based) |
-| 8 | 8 | `ts_ns` u64 | Timestamp del mensaje (ns desde medianoche, del campo ITCH) |
-| 16 | 4 | `bid_px` u32 | Mejor bid (precio ITCH entero, ×10⁴); 0 si lado vacío |
-| 20 | 4 | `bid_qty` u32 | Cantidad agregada en mejor bid; 0 si lado vacío |
-| 24 | 4 | `ask_px` u32 | Mejor ask; 0 si lado vacío |
-| 28 | 4 | `ask_qty` u32 | Cantidad agregada en mejor ask; 0 si lado vacío |
+| 0 | 8 | `msg_idx` u64 | Global message index in the BinaryFILE (0-based) |
+| 8 | 8 | `ts_ns` u64 | Message timestamp (ns from midnight, from the ITCH field) |
+| 16 | 4 | `bid_px` u32 | Best bid (integer ITCH price, ×10⁴); 0 if side empty |
+| 20 | 4 | `bid_qty` u32 | Aggregated qty at best bid; 0 if side empty |
+| 24 | 4 | `ask_px` u32 | Best ask; 0 if side empty |
+| 28 | 4 | `ask_qty` u32 | Aggregated qty at best ask; 0 if side empty |
 | 32 | 2 | `locate` u16 | Stock Locate Code |
-| 34 | 1 | `msg_type` u8 | Tipo ITCH ASCII (`A,F,E,C,X,D,U`) |
-| 35 | 1 | `flags` u8 | bit0 = BBO cambió respecto al registro anterior del símbolo |
-| 36 | 4 | `reserved` u32 | 0 (futura profundidad/versión) |
+| 34 | 1 | `msg_type` u8 | ITCH ASCII type (`A,F,E,C,X,D,U`) |
+| 35 | 1 | `flags` u8 | bit0 = BBO changed vs. the previous record of the symbol |
+| 36 | 4 | `reserved` u32 | 0 (future depth/version) |
 
-`struct` Python: `"<QQIIIIHBBI"`. Un registro por mensaje modificador de cada
-símbolo del subset. Sin cabecera de fichero (el layout es el contrato; el
-nombre de fichero lleva día + hash del subset).
+Python `struct`: `"<QQIIIIHBBI"`. One record per modifying message of each
+subset symbol. No file header (the layout is the contract; the filename carries
+day + subset hash).
 
-## Anexo B — datos de la campaña
+## Annex B — campaign data
 
-- **Día principal:** `12302019.NASDAQ_ITCH50.gz` (~3,5 GB gz — el v5.0 más
-  pequeño del servidor a 2026-08). **Día de regresión:** `01302019.NASDAQ_ITCH50.gz`
-  (~4,8 GB gz). Si dejaran de estar disponibles: el v5.0 más pequeño disponible,
-  con edit explícito de este anexo.
-- Los crudos y los vectores generados viven en `data/itch_sample/` (gitignored).
-- Los ficheros NO son pcap: son BinaryFILE (`length u16be + payload`), sin
-  sequence numbers — los seq de MoldUDP64 del pcap son sintéticos, y la detección
-  de gaps se probará en fases RTL con secuencias fabricadas, no con este replay.
+- **Main day:** `12302019.NASDAQ_ITCH50.gz` (~3.5 GB gz — the smallest v5.0 on
+  the server as of 2026-08). **Regression day:** `01302019.NASDAQ_ITCH50.gz`
+  (~4.8 GB gz). If they become unavailable: the smallest available v5.0, with an
+  explicit edit of this annex.
+- The raw data and generated vectors live in `data/itch_sample/` (gitignored).
+- The files are NOT pcap: they are BinaryFILE (`length u16be + payload`), with
+  no sequence numbers — the MoldUDP64 seq of the pcap are synthetic, and gap
+  detection will be tested in RTL phases with fabricated sequences, not with
+  this replay.

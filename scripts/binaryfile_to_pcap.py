@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""binaryfile_to_pcap.py — BinaryFILE de Nasdaq -> pcap MoldUDP64/UDP/IP/Ethernet.
+"""binaryfile_to_pcap.py — Nasdaq BinaryFILE -> MoldUDP64/UDP/IP/Ethernet pcap.
 
-Los ficheros de muestra de emi.nasdaq.com son BinaryFILE (length u16be +
-payload), no pcap. Este script los envuelve en datagramas MoldUDP64 reales
-para alimentar los testbenches RTL (spec fase0, criterio 8):
+The sample files from emi.nasdaq.com are BinaryFILE (length u16be + payload),
+not pcap. This script wraps them in real MoldUDP64 datagrams to feed the RTL
+testbenches (spec phase 0, criterion 8):
 
-- Empaqueta mensajes hasta ~1400 B de payload UDP (como el feed real);
-  `--msgs-per-packet 1` para tests dirigidos.
-- Sequence numbers sinteticos monotonicos desde 1 (el BinaryFILE no los
-  trae: los gaps se prueban con secuencias fabricadas, no con este replay).
-- Checksum UDP = 0 (valido en IPv4; el feed real se valida aguas arriba —
-  decision avalada por el documento maestro).
-- Timestamp de paquete pcap: derivado del timestamp ITCH (ns desde
-  medianoche, offset fijo 5..11 en todo mensaje 5.0) del primer mensaje del
-  paquete; solo cosmetica Wireshark, el RTL no lo consume.
+- Packs messages up to ~1400 B of UDP payload (like the real feed);
+  `--msgs-per-packet 1` for directed tests.
+- Synthetic monotonic sequence numbers starting from 1 (the BinaryFILE does
+  not carry them: gaps are tested with fabricated sequences, not this replay).
+- UDP checksum = 0 (valid in IPv4; the real feed is validated upstream —
+  decision endorsed by the master document).
+- pcap packet timestamp: derived from the ITCH timestamp (ns since midnight,
+  fixed offset 5..11 in every 5.0 message) of the first message of the
+  packet; Wireshark cosmetics only, the RTL does not consume it.
 
-No depende de golden_model: el framing BinaryFILE y el de mensajes
-MoldUDP64 son el mismo (length + payload), asi que el round-trip es byte a
-byte por construccion (PCA-04).
+Does not depend on golden_model: the BinaryFILE framing and the MoldUDP64
+message framing are the same (length + payload), so the round-trip is byte
+for byte by construction (PCA-04).
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ DEFAULT_SRC_PORT = 12345
 
 
 class OversizedMessageError(ValueError):
-    """Mensaje ITCH mayor que el payload UDP maximo."""
+    """ITCH message larger than the max UDP payload."""
 
 
 def _ip_checksum(header: bytes) -> int:
@@ -85,11 +85,11 @@ def _iter_binaryfile(f: BinaryIO) -> Iterator[bytes]:
         if not prefix:
             return
         if len(prefix) < 2:
-            raise ValueError("prefijo de longitud truncado en BinaryFILE")
+            raise ValueError("truncated length prefix in BinaryFILE")
         declared = int.from_bytes(prefix, "big")
         payload = f.read(declared)
         if len(payload) < declared:
-            raise ValueError("mensaje truncado en BinaryFILE")
+            raise ValueError("truncated message in BinaryFILE")
         yield payload
 
 
@@ -106,9 +106,9 @@ def convert(
     dst_port: int = DEFAULT_DST_PORT,
     max_messages: int | None = None,
 ) -> dict[str, int]:
-    """Convierte un BinaryFILE en pcap; devuelve estadisticas de la conversion."""
+    """Converts a BinaryFILE into pcap; returns conversion statistics."""
     if len(session) != 10:
-        raise ValueError("la sesion MoldUDP64 son exactamente 10 bytes")
+        raise ValueError("the MoldUDP64 session is exactly 10 bytes")
     stats = {"messages": 0, "packets": 0, "bytes": 0}
     seq = 1
     with open(src, "rb") as fin, open(dst, "wb") as fout:
@@ -124,7 +124,7 @@ def convert(
                 len(m).to_bytes(2, "big") + m for m in group
             )
             frame = _ethernet_frame(dst_ip, _udp_packet(src_ip, dst_ip, src_port, dst_port, payload))
-            # ts del paquete: del primer mensaje (ns desde medianoche)
+            # packet ts: from the first message (ns since midnight)
             ts_ns = int.from_bytes(group[0][5:11], "big")
             fout.write(PCAP_RECORD.pack(ts_ns // 1_000_000_000, (ts_ns % 1_000_000_000) // 1000, len(frame), len(frame)))
             fout.write(frame)
@@ -139,8 +139,8 @@ def convert(
                 break
             if len(payload) + 2 > max_payload:
                 raise OversizedMessageError(
-                    f"mensaje {idx}: {len(payload) + 2} B con length prefix > "
-                    f"payload maximo {max_payload} B"
+                    f"message {idx}: {len(payload) + 2} B with length prefix > "
+                    f"max payload {max_payload} B"
                 )
             framed = len(payload) + 2
             over_size = group_len + MOLD_HEADER.size + framed > max_payload
@@ -156,12 +156,12 @@ def convert(
 
 
 def iter_pcap_packets(src: str | PathLike[str]) -> Iterator[tuple[int, list[bytes], bytes]]:
-    """Itera un pcap generado: (sequence_number, [payloads ITCH], payload UDP crudo)."""
+    """Iterates a generated pcap: (sequence_number, [ITCH payloads], raw UDP payload)."""
     with open(src, "rb") as f:
         magic = f.read(4)
         if magic != PCAP_GLOBAL.pack(0xA1B2C3D4, 0, 0, 0, 0, 0, 0)[:4]:
-            raise ValueError("no es un pcap little-endian")
-        f.read(20)  # resto de la cabecera global
+            raise ValueError("not a little-endian pcap")
+        f.read(20)  # rest of the global header
         while True:
             rec = f.read(16)
             if not rec:
@@ -169,8 +169,8 @@ def iter_pcap_packets(src: str | PathLike[str]) -> Iterator[tuple[int, list[byte
             _ts_sec, _ts_usec, incl, _orig = PCAP_RECORD.unpack(rec)
             frame = f.read(incl)
             if len(frame) < incl:
-                raise ValueError("paquete pcap truncado")
-            udp = frame[14 + 20:]  # Ethernet + IPv4 sin opciones
+                raise ValueError("truncated pcap packet")
+            udp = frame[14 + 20:]  # Ethernet + IPv4 without options
             payload = udp[8:]
             session, seq, count = MOLD_HEADER.unpack(payload[: MOLD_HEADER.size])
             msgs: list[bytes] = []
@@ -184,8 +184,8 @@ def iter_pcap_packets(src: str | PathLike[str]) -> Iterator[tuple[int, list[byte
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("src", help="BinaryFILE de entrada (descomprimido)")
-    ap.add_argument("dst", help="pcap de salida")
+    ap.add_argument("src", help="input BinaryFILE (decompressed)")
+    ap.add_argument("dst", help="output pcap")
     ap.add_argument("--max-payload", type=int, default=DEFAULT_MAX_PAYLOAD)
     ap.add_argument("--msgs-per-packet", type=int, default=None)
     ap.add_argument("--dst-ip", default=DEFAULT_DST_IP)
@@ -202,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         src_ip=args.src_ip, dst_ip=args.dst_ip,
         src_port=args.src_port, dst_port=args.dst_port,
     )
-    print(f"paquetes={stats['packets']} mensajes={stats['messages']} bytes={stats['bytes']}")
+    print(f"packets={stats['packets']} messages={stats['messages']} bytes={stats['bytes']}")
     return 0
 
 

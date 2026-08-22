@@ -1,10 +1,10 @@
-"""Regresión DW=64 del pipeline de emisión (fase 3, iter 7) — módulo de la
-elaboración sim-rtm64.
+"""DW=64 regression of the emission pipeline (phase 3, iter 7) — module of the
+sim-rtm64 elaboration.
 
-RTM-REG-01: el book pipelined a DW=64 (default del RTL) re-ejecuta el corpus
-de fase 2 bit a bit contra el golden. Separado de test_rtm32 porque el skip
-por ancho es estático en cocotb 2.0.1 (no hay SkipTest runtime): cada target
-del Makefile apunta al módulo de su ancho."""
+RTM-REG-01: the pipelined book at DW=64 (RTL default) re-runs the phase 2
+corpus bit-exact against the golden model. Separated from test_rtm32 because
+the width skip is static in cocotb 2.0.1 (no runtime SkipTest): each Makefile
+target points to the module of its width."""
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
@@ -13,9 +13,9 @@ from test_orderbook import S, A, E, X, D, run_book, drive_and_collect_bbo
 
 @cocotb.test()
 async def test_rtm_reg01_regresion_64_bits_con_pipeline(dut):
-    """Espejo §RTM-REG-01: el book pipelined a DW=64 (default) re-ejecuta el
-    corpus de fase 2 bit a bit contra el golden (regresión de la
-    parametrización; se ejercita en la elaboración sim-rtm64)."""
+    """Mirror §RTM-REG-01: the pipelined book at DW=64 (default) re-runs the phase 2
+    corpus bit-exact against the golden model (parameterization regression;
+    exercised in the sim-rtm64 elaboration)."""
     await _reset(dut)
     msgs = [
         S(AMZN, 1_000_000_000, ord("Q")),
@@ -34,10 +34,10 @@ async def test_rtm_reg01_regresion_64_bits_con_pipeline(dut):
         f"RTM-REG-01 anomaly: got={anomaly} exp={golden.anomalies}")
     assert cross == golden.cross_events, (
         f"RTM-REG-01 cross: got={cross} exp={golden.cross_events}")
-    assert errors == 0, f"RTM-REG-01: {errors} errores espurios"
+    assert errors == 0, f"RTM-REG-01: {errors} spurious errors"
     cocotb.log.info(
-        f"RTM-REG-01 OK: DW=64, {len(got)} eventos bit a bit vs golden "
-        f"(regresión de la parametrización con el pipeline de emisión)")
+        f"RTM-REG-01 OK: DW=64, {len(got)} events bit-exact vs golden "
+        f"(parameterization regression with the emission pipeline)")
 
 
 AMZN = 393

@@ -1,258 +1,253 @@
-# fase2-orderbook (fase 2 del maestro)
+# fase2-orderbook (phase 2 of the master plan)
 
 ## Goal
 
-Construir el **order book engine en RTL** (SystemVerilog compatible Verilator)
-que consume el registro normalizado del Anexo A emitido por el parser de fase 1
-(AXI-Stream de mensajes decodificados) y mantiene, por símbolo, el estado del
-libro: **tabla de órdenes vivas** (order_ref → símbolo/lado/precio/cantidad),
-**niveles de precio agregados** y el **BBO** (best bid & offer) actualizado con
-latencia determinista. Es la etapa que cierra, desde el límite implementado del
-repositorio, el pipeline `MoldUDP64 → parser → order book → BBO` del
-documento maestro. MAC 10G y Ethernet/IP/UDP quedan fuera de este repositorio.
+Build the **order book engine in RTL** (SystemVerilog, Verilator-compatible)
+that consumes the Annex-A normalized record emitted by the phase-1 parser
+(AXI-Stream of decoded messages) and maintains, per symbol, the book state:
+**live order table** (order_ref → symbol/side/price/qty), **aggregated price
+levels** and the **BBO** (best bid & offer) updated with deterministic latency.
+It is the stage that closes, from the implemented boundary of the repository,
+the pipeline `MoldUDP64 → parser → order book → BBO` of the master document.
+10G MAC and Ethernet/IP/UDP stay outside this repository.
 
-La corrección se verifica **bit a bit contra el golden model de fase 0**
-(`golden_model/src/book.py`), que ya fue validado contra días completos de
-Nasdaq (2019-12-30: 268M mensajes, 0 anomalías). El RTL replica esa semántica
-exacta; cualquier desviación es un FAIL.
+Correctness is verified **bit-exact against the phase-0 golden model**
+(`golden_model/src/book.py`), which was already validated against full Nasdaq
+days (2019-12-30: 268M messages, 0 anomalies). The RTL replicates that exact
+semantics; any deviation is a FAIL.
 
 ## Scope
 
 **In scope:**
 
-- `rtl/orderbook/` — módulos SystemVerilog del engine:
-  - **Decodificador de registro Anexo A**: extrae los campos por tipo
-    (A/F/E/C/X/D/U/S/H) desde el burst de words que emite el parser (word0
-    cabecera de contexto, word1 ts, words 2..N cuerpo big-endian).
-  - **Tabla de órdenes en URAM**: order_ref (32 bits útiles tras decap; el día
-    real ~268M refs < 2³²) → entrada de orden (locate, lado, precio, qty
-    restante). **No se implementa hash** en esta fase: se usa **indexación por
-    order_ref directa en espacio URAM de 2^K entradas** (K dimensionado al
-    subset, ver Constraints) — decisión de la entrevista: el hash con probing
-    se separa a una iteración de optimización si el subset real lo exige.
-  - **Niveles de precio**: por (locate, lado), array de niveles
-    {precio → qty agregada}; el BBO es el mejor nivel bid/ask.
-  - **FSM de aplicación** de los 7 tipos modificadores + S/H de estado.
-  - **Salida BBO**: por símbolo, (bid_px, bid_qty, ask_px, ask_qty), evento por
-    cambio (semántica `BookEvent` del golden).
+- `rtl/orderbook/` — SystemVerilog modules of the engine:
+  - **Annex-A record decoder**: extracts the fields by type
+    (A/F/E/C/X/D/U/S/H) from the word burst emitted by the parser (word0 context
+    header, word1 ts, words 2..N big-endian body).
+  - **Order table in URAM**: order_ref (32 useful bits after strip; the real day
+    ~268M refs < 2³²) → order entry (locate, side, price, remaining qty). **No
+    hash is implemented in this phase**: it uses **direct order_ref indexing in
+    a URAM space of 2^K entries** (K sized to the subset, see Constraints) —
+    interview decision: hashing with probing is deferred to an optimization
+    iteration if the real subset demands it.
+  - **Price levels**: per (locate, side), an array of levels {price → aggregated
+    qty}; the BBO is the best bid/ask level.
+  - **Application FSM** for the 7 modifying types + S/H state.
+  - **BBO output**: per symbol, (bid_px, bid_qty, ask_px, ask_qty), event on
+    change (`BookEvent` semantics of the golden).
   - Top `orderbook`.
-- `rtl/common/` — helpers compartidos si hacen falta (FIFO de handshake, etc.).
-- `verification/testbenches/orderbook/` — testbenches cocotb + Verilator:
-  - Feed de registros Anexo A sintéticos (construidos con el mismo formato que
-    emite el parser de fase 1) + **feed real decapado** del día local
-    (replay, `data/itch_sample/12302019…` → parser → book).
-  - Oráculo `golden_model/src/book.py` aplicado sobre los mismos mensajes;
-    comparación **evento a evento y bit a bit** del BBO.
-- Vectores congelados de BBO para el subset en `verification/vectors/bbo/`.
+- `rtl/common/` — shared helpers if needed (handshake FIFO, etc.).
+- `verification/testbenches/orderbook/` — cocotb + Verilator testbenches:
+  - Synthetic Annex-A record feed (built in the same format the phase-1 parser
+    emits) + **real stripped feed** of the local day (replay,
+    `data/itch_sample/12302019…` → parser → book).
+  - Oracle `golden_model/src/book.py` applied over the same messages; comparison
+    **event-by-event and bit-exact** of the BBO.
+- Frozen BBO vectors for the subset in `verification/vectors/bbo/`.
 
 **Out of scope (non-goals):**
 
-- Rehacer el parser: el book consume el Anexo A tal cual lo emite fase 1.
-  (El testbench puede alimentar registros directamente o encadenar parser+book.)
-- Hash table con colisiones/cuckoo (optimización futura, solo si el subset lo
-  pide). En esta fase la tabla es indexación directa por order_ref.
-- Top-N niveles de profundidad (depth book): solo **BBO** (criterio de esta
-  fase). El libro profundo por niveles existe (estado de niveles), pero la
-  salida pública es BBO.
-- Multi-símbolo completo de 2000+ símbolos: se soporta **hasta N símbolos**
-  del subset (20), con niveles por (locate, lado) en espacio parametrizado.
-- Latencia óptima 322 MHz / timing closure Vivado: fase 3.
-- CME MDP3 (stretch fase 4).
-- Market hours / halt-cross semántica estricta: el golden cuenta `cross_events`
-  y sigue; el RTL replica el **no-abort** del golden por defecto
-  (`strict_cross=False`), ver §Semántica.
+- Redoing the parser: the book consumes Annex A exactly as phase 1 emits it.
+  (The testbench can feed records directly or chain parser+book.)
+- Hash table with collisions/cuckoo (future optimization, only if the subset
+  asks for it). In this phase the table is direct order_ref indexing.
+- Top-N depth levels (depth book): only **BBO** (criterion of this phase). The
+  deep book by levels exists (level state), but the public output is BBO.
+- Full multi-symbol of 2000+ symbols: up to **N symbols** of the subset (20) are
+  supported, with levels per (locate, side) in parameterized space.
+- Optimal 322 MHz latency / Vivado timing closure: phase 3.
+- CME MDP3 (stretch phase 4).
+- Market-hours / strict halt-cross semantics: the golden counts `cross_events`
+  and continues; the RTL replicates the golden's **no-abort** by default
+  (`strict_cross=False`), see §Semantics.
 
-**Radio medido (2026-08-13):** `rtl/orderbook/` vacío (verificado con
-`find rtl/ -type f`). `rtl/parser/itch_parser.sv` existe y se reutiliza como
-generador de Anexo A. `verification/testbenches/orderbook/` no existe (nueva
-área). No se renombra ni mueve nada.
+**Measured radius (2026-08-13):** `rtl/orderbook/` empty (verified with
+`find rtl/ -type f`). `rtl/parser/itch_parser.sv` exists and is reused as the
+Annex-A generator. `verification/testbenches/orderbook/` does not exist (new
+area). Nothing is renamed or moved.
 
 ## Constraints
 
-- **Familia/part objetivo:** AMD/Xilinx UltraScale+ (part concreto en síntesis
-  fase 3). Datapath 64-bit @ 156,25 MHz (reloj del parser).
-- **URAM:** lectura registrada (1-2 ciclos de latencia). El pipeline se diseña
-  alrededor de esa latencia: el BBO de un mensaje refleja su efecto en el
-  siguiente beat válido de salida, sin «arreglar» el signo con lógica larga.
-- **Tabla de órdenes:** 2^K entradas, K tal que `2^K ≥ peak_live_orders` del
-  subset (pico medido 259.443 en 2019-12-30) — se parametriza `K` con default
-  adecuado a simulación y se documenta el mapeo a URAM para fase 3.
-- **Dimensionado de niveles:** array por (locate, lado) de `P` niveles de
-  precio; el golden asume dict sin tope, el RTL lo acota a `P` y señala
-  overflow de niveles (nunca silencio).
-- **Endianness:** los campos del cuerpo son big-endian del wire (Anexo A, sin
-  byte-swap); el decodificador extrae por offset exacto de
-  `golden_model/itch/messages.py` (fuente única, regla fase 0/1).
-- **Determinismo:** mismo stream → misma secuencia de BBO, bit a bit igual al
-  golden; sin pérdida ni doble cuenta.
+- **Target family/part:** AMD/Xilinx UltraScale+ (concrete part in phase-3
+  synthesis). Datapath 64-bit @ 156.25 MHz (parser clock).
+- **URAM:** registered read (1–2 cycles of latency). The pipeline is designed
+  around that latency: the BBO of a message reflects its effect on the next
+  valid output beat, without "fixing" the sign with long logic.
+- **Order table:** 2^K entries, K such that `2^K ≥ peak_live_orders` of the
+  subset (measured peak 259,443 on 2019-12-30) — `K` is parameterized with a
+  simulation-appropriate default and the URAM mapping is documented for phase 3.
+- **Level sizing:** array per (locate, side) of `P` price levels; the golden
+  assumes an unbounded dict, the RTL bounds it to `P` and signals level overflow
+  (never silent).
+- **Endianness:** body fields are wire big-endian (Annex A, no byte-swap); the
+  decoder extracts by exact offset of `golden_model/itch/messages.py` (single
+  source, phase-0/1 rule).
+- **Determinism:** same stream → same BBO sequence, bit-exact against the
+  golden; no loss or double-count.
 
-## Semántica (contrato heredado del golden — NO redefine, replica)
+## Semantics (contract inherited from the golden — does NOT redefine, replicates)
 
-`golden_model/src/book.py` (fase 0, validado contra día real) define:
+`golden_model/src/book.py` (phase 0, validated against a real day) defines:
 
-- `A`/`F` → add (ref duplicada = error invariante; qty ≤ 0 = error).
-- `E`/`C` → reduce cantidad; si llega a 0, elimina la orden. `C` reduce igual
-  que `E` (el exec_price no altera el precio de la orden).
-- `X` → reduce (cancel). `D` → delete (ref desconocida = anomalía, no aborta).
-- `U` → **replace ATÓMICO**: delete+add de un solo estado resultante (nunca
-  visible un BBO intermedio con la orden ausente).
-- `P` → no toca el libro.
-- `S` (evento) y `H` (trading state) → estado de mercado/halt; `S` en `Q` abre
-  y en `M` cierra market hours; el cruzado en trading continuo se CUENTA
-  (`cross_events`), no aborta (por defecto).
-- Operación sobre ref desconocida → anomalía contada, se continúa.
-- BBO lado vacío = (precio 0, qty 0).
+- `A`/`F` → add (duplicate ref = invariant error; qty ≤ 0 = error).
+- `E`/`C` → reduce qty; reaching 0 deletes the order. `C` reduces exactly like
+  `E` (exec_price does not alter the order price).
+- `X` → reduce (cancel). `D` → delete (unknown ref = anomaly, does not abort).
+- `U` → **ATOMIC replace**: delete+add of a single resulting state (never a
+  visible intermediate BBO with the order absent).
+- `P` → does not touch the book.
+- `S` (event) and `H` (trading state) → market/halt state; `S` in `Q` opens and
+  in `M` closes market hours; crossed in continuous trading is COUNTED
+  (`cross_events`), does not abort (by default).
+- Operation on unknown ref → counted anomaly, continues.
+- Empty BBO side = (price 0, qty 0).
 
-El RTL debe reproducir estas reglas EXACTAMENTE. La tabla de invariantes
-(ref duplicada, qty no positiva, nivel inconsistente, overflow de niveles) son
-escenarios `SEC-` de primera clase con `error` señalizado (o `cross_events`
-contado), nunca comportamiento silencioso.
+The RTL must reproduce these rules EXACTLY. The invariant table (duplicate ref,
+non-positive qty, inconsistent level, level overflow) are first-class `SEC-`
+scenarios with signaled `error` (or counted `cross_events`), never silent
+behavior.
 
-## Superficie y amenazas
+## Surface and threats
 
-**Entradas (puertos del top `orderbook`):** el AXI-Stream de fase 1 — mismo
-conjunto `s_axis_tdata/tvalid/tready/tlast` (64-bit), más `clk`/`rst_n`. El
-registro es el Anexo A: word0 `{msg_type, locate, length, msg_idx}`, word1 ts,
-words 2..N cuerpo.
+**Inputs (ports of the top `orderbook`):** the phase-1 AXI-Stream — the same
+`s_axis_tdata/tvalid/tready/tlast` set (64-bit), plus `clk`/`rst_n`. The record
+is Annex A: word0 `{msg_type, locate, length, msg_idx}`, word1 ts, words 2..N
+body.
 
-**Salidas nuevas:**
+**New outputs:**
 
-| Señal | Ancho | Descripción |
+| Signal | Width | Description |
 |---|---|---|
-| `bbo_locate` | 16 | locate del símbolo del evento BBO |
-| `bbo_tdata` | 128 | `{bid_px[31:0], bid_qty[31:0], ask_px[31:0], ask_qty[31:0]}` (precios ITCH de 32 bits, cantidades 32 bits) |
-| `bbo_tvalid` | 1 | hay un evento BBO de salida (por mensaje modificador) |
-| `bbo_tready` | 1 | backpressure del consumidor de BBO |
-| `bbo_changed` | 1 | cambió el BBO respecto al anterior (semántica `changed` del golden) |
-| `cross_events` | 32 | contador de libros cruzados en trading continuo |
-| `anomaly_count` | 32 | contador de refs desconocidas / operaciones inválidas no abortantes |
-| `error` | 1 | invariante violada (ref duplicada, qty ≤ 0, overflow de niveles) — fail con señal |
+| `bbo_locate` | 16 | locate of the symbol of the BBO event |
+| `bbo_tdata` | 128 | `{bid_px[31:0], bid_qty[31:0], ask_px[31:0], ask_qty[31:0]}` (32-bit ITCH prices, 32-bit qtys) |
+| `bbo_tvalid` | 1 | there is an output BBO event (per modifying message) |
+| `bbo_tready` | 1 | backpressure from the BBO consumer |
+| `bbo_changed` | 1 | the BBO changed vs. the previous one (`changed` semantics of the golden) |
+| `cross_events` | 32 | counter of crossed books in continuous trading |
+| `anomaly_count` | 32 | counter of unknown refs / non-aborting invalid operations |
+| `error` | 1 | violated invariant (duplicate ref, qty ≤ 0, level overflow) — fail with signal |
 
-**Casos de abuso del dominio** (cada uno con su escenario `SEC-` en Gherkin):
+**Domain abuse cases** (each with its `SEC-` scenario in Gherkin):
 
-- **Hazards RAW:** dos mensajes consecutivos sobre la misma orden/nivel
-  (add→execute, add→cancel, replace→execute) → el segundo ve el estado del
-  primero (forwarding o stall selectivo). — SEC-HZ-01/02.
-- **Replace atómico:** nunca un BBO intermedio con la orden ausente; el BBO del
-  `U` refleja el estado final. — SEC-U-01.
-- **Doble cuenta:** execute/cancel/delete no descuentan dos veces la cantidad
-  de la orden ni del nivel. — SEC-DC-01.
-- **Overflow:** qty de nivel/orden, contador de refs, y niveles > `P` se
-  señalizan, nunca envuelven silenciosamente. La operación inválida no emite un
-  BBO y el siguiente mensaje válido se acepta. — SEC-OV-01.
-- **Ref desconocida** en E/X/D/U → anomalía contada, no aborta, el stream
-  continúa. — SEC-AN-01.
-- **Bid ≥ ask en trading continuo** → `cross_events` cuenta, no aborta. — SEC-CR-01.
-- **Símbolo vacío**: un locate sin órdenes permanece aislado mientras se opera
-  otro locate y no emite un evento espurio; en el símbolo activo, cualquier
-  lado vacío se representa como (0,0). — BBO-02/SEC-EM-01.
+- **RAW hazards:** two consecutive messages on the same order/level
+  (add→execute, add→cancel, replace→execute) → the second sees the state of the
+  first (forwarding or selective stall). — SEC-HZ-01/02.
+- **Atomic replace:** never an intermediate BBO with the order absent; the BBO
+  of the `U` reflects the final state. — SEC-U-01.
+- **Double-count:** execute/cancel/delete do not subtract the order's or the
+  level's qty twice. — SEC-DC-01.
+- **Overflow:** level/order qty, ref counter, and levels > `P` are signalled,
+  never wrapped silently. The invalid operation emits no BBO and the next valid
+  message is accepted. — SEC-OV-01.
+- **Unknown ref** in E/X/D/U → counted anomaly, no abort, stream continues. —
+  SEC-AN-01.
+- **Bid ≥ ask in continuous trading** → `cross_events` counts, no abort. —
+  SEC-CR-01.
+- **Empty symbol**: a locate with no orders stays isolated while another locate
+  is operated and emits no spurious event; in the active symbol any empty side
+  is represented as (0,0). — BBO-02/SEC-EM-01.
 
-**Qué se arriesga del maestro:** la **latencia determinista** y la **corrección
-estricta del estado** (doble cuenta/hazard = BBO incorrecto = el peor fallo de
-un pipeline de trading). El libro es la etapa donde un error de estado no se
-detecta por el parser: la verificación bit a bit contra el golden es la única
-red.
+**What is at risk from the master:** **deterministic latency** and **strict
+state correctness** (double-count/hazard = incorrect BBO = the worst failure of
+a trading pipeline). The book is the stage where a state error is not caught by
+the parser: bit-exact verification against the golden is the only net.
 
-## Reuso
+## Reuse
 
-- `golden_model/src/book.py` — **oráculo de referencia** (fase 0). El RTL
-  replica su semántica; el testbench lo aplica sobre el mismo feed. Nada de
-  «el RTL es el golden»: son dos implementaciones comparadas bit a bit.
-- `golden_model/itch/messages.py` — **fuente única de layouts** de campo
-  (offsets del cuerpo por tipo). El decodificador RTL usa estos offsets; el
-  testbench re-parsea con `message_oracle` (independiente del RTL).
-- `rtl/parser/itch_parser.sv` — generador real de Anexo A (encadenado en el
-  testbench para el replay y para los vectores sintéticos).
-- `golden_model/src/message_oracle.py` — oráculo de mensajes de fase 1.
-- `requirements-dev.txt`, cocotb/Verilator — entorno ya instalado.
-- **Código nuevo que duplique** la semántica de `book.py` con otro literal
-  (precios/cantidades a mano) = FAIL de la lente de simplicidad de `/grade`.
+- `golden_model/src/book.py` — **reference oracle** (phase 0). The RTL
+  replicates its semantics; the testbench applies it over the same feed. No
+  "the RTL is the golden": two implementations compared bit-exact.
+- `golden_model/itch/messages.py` — **single source of field layouts** (body
+  offsets per type). The RTL decoder uses these offsets; the testbench re-parses
+  with `message_oracle` (independent of the RTL).
+- `rtl/parser/itch_parser.sv` — real Annex-A generator (chained in the
+  testbench for replay and synthetic vectors).
+- `golden_model/src/message_oracle.py` — phase-1 message oracle.
+- `requirements-dev.txt`, cocotb/Verilator — already-installed environment.
+- **New code that duplicates** `book.py` semantics with another literal
+  (hand-written prices/qtys) = FAIL of the `/grade` simplicity lens.
 
-## Criterios de aceptación (Definition of Done)
+## Acceptance criteria (Definition of Done)
 
-1. [ ] El book consume el Anexo A y mantiene la tabla de órdenes + niveles;
-     para una secuencia sintética de A/F/E/C/X/D/U, el BBO por símbolo es
-     **bit a bit idéntico al golden `book.py`** (mismo feed, mismo orden,
-     evento a evento, incluido `changed`).
+1. [ ] The book consumes Annex A and maintains the order table + levels; for a
+     synthetic A/F/E/C/X/D/U sequence, the per-symbol BBO is **bit-exact
+     against the golden `book.py`** (same feed, same order, event by event,
+     including `changed`).
      — Gherkin: `orderbook.feature` §BBO-01, §BBO-02
-2. [ ] **Replace `U` atómico**: el BBO emitido para un `U` es el del estado
-     final (delete+add), nunca un intermedio con la orden ausente.
+2. [ ] **Atomic `U` replace**: the BBO emitted for a `U` is that of the final
+     state (delete+add), never an intermediate with the order absent.
      — Gherkin: `orderbook.feature` §SEC-U-01
-3. [ ] **Hazards RAW**: dos mensajes consecutivos sobre la misma orden/nivel
-     (add→execute, add→cancel, replace→execute) producen el BBO correcto del
-     segundo (forwarding o stall selectivo), sin resultado incorrecto.
+3. [ ] **RAW hazards**: two consecutive messages on the same order/level
+     (add→execute, add→cancel, replace→execute) produce the correct BBO of the
+     second (forwarding or selective stall), without incorrect results.
      — Gherkin: `orderbook.feature` §SEC-HZ-01, §SEC-HZ-02
-4. [ ] **Doble cuenta**: execute/cancel/delete no descuentan dos veces; el
-     nivel y la orden quedan consistentes con el golden.
+4. [ ] **Double-count**: execute/cancel/delete do not subtract twice; the level
+     and the order stay consistent with the golden.
      — Gherkin: `orderbook.feature` §SEC-DC-01
-5. [ ] **Overflow**: qty de orden/nivel, número de niveles > `P` y contadores
-     se señalizan con `error`, nunca envuelven en silencio ni producen BBO para
-     la operación inválida; el mensaje válido inmediatamente posterior se
-     procesa con normalidad.
+5. [ ] **Overflow**: order/level qty, levels > `P` and counters are signalled
+     with `error`, never wrapped silently nor producing a BBO for the invalid
+     operation; the immediately following valid message is processed normally.
      — Gherkin: `orderbook.feature` §SEC-OV-01
-6. [ ] **Anomalías y cruzados**: ref desconocida cuenta en `anomaly_count`
-     (no aborta); bid ≥ ask en trading continuo cuenta en `cross_events`
-     (no aborta) — replica exacta del golden `strict_cross=False`.
+6. [ ] **Anomalies and crosses**: unknown ref counts in `anomaly_count`
+     (no abort); bid ≥ ask in continuous trading counts in `cross_events`
+     (no abort) — exact replica of the golden `strict_cross=False`.
      — Gherkin: `orderbook.feature` §SEC-AN-01, §SEC-CR-01
-7. [ ] **Multi-símbolo**: hasta N símbolos del subset con estado independiente
-     (niveles por locate+lado); los mensajes de un símbolo no contaminan otro.
+7. [ ] **Multi-symbol**: up to N subset symbols with independent state
+     (levels per locate+side); one symbol's messages do not contaminate another.
      — Gherkin: `orderbook.feature` §MULTI-01
-8. [ ] **Replay real (hybrid oracle)**: sobre el día local
-     `data/itch_sample/12302019…` (parser → book), la secuencia de BBO del
-     subset es **bit a bit idéntica** al golden `book.py` sobre el mismo feed;
-     además vectores congelados de BBO se commitean en
-     `verification/vectors/bbo/` y se reproducen.
+8. [ ] **Real replay (hybrid oracle)**: over the local day
+     `data/itch_sample/12302019…` (parser → book), the subset BBO sequence is
+     **bit-exact** against the golden `book.py` over the same feed; additionally
+     frozen BBO vectors are committed in `verification/vectors/bbo/` and
+     reproduced.
      — Gherkin: `orderbook.feature` §REPLAY-01, §REPLAY-02
-9. [ ] Cocotb + Verilator compilan el top con `--Wall` sin warnings reales
-     silenciados.
-     — Gate B/C de verify.
-10. [ ] Lint y estilo en verde sobre `rtl/orderbook/` (`verilator --lint-only
-     -Wall`; verible si se instala).
-     — Gate B/C de verify.
+9. [ ] Cocotb + Verilator compile the top with `--Wall` with no real warnings
+     silenced.
+     — Gate B/C of verify.
+10. [ ] Lint and style green over `rtl/orderbook/` (`verilator --lint-only
+     -Wall`; verible if installed).
+     — Gate B/C of verify.
 
-## Verificación
+## Verification
 
-| Criterio | Cómo se prueba |
+| Criterion | How it is tested |
 |---|---|
-| 1 | cocotb: corpus sintético multi-tipo → feed de Anexo A → comparar BBO contra `book.py` (evento a evento, bit a bit) |
-| 2 | cocotb: `U` con BBO previo no vacío → el evento emitido es el final (no intermedio); mutante de no-atomicidad lo mata |
-| 3 | cocotb: pares adyacentes add→execute, add→cancel, replace→execute sobre la misma ref; comparar contra golden |
-| 4 | cocotb: ejecutar/cancel/delete y verificar orden+nivel con `check_deep()` del golden (o conteo de qty) |
-| 5 | cocotb: inyectar overflow de qty/niveles → muestrear `error`, sin wrap ni BBO inválido, y aceptar el mensaje válido posterior |
-| 6 | cocotb: ref desconocida → `anomaly_count` incrementa; cross → `cross_events` incrementa; flujo continúa |
-| 7 | cocotb: mensajes intercalados de 2+ símbolos; BBO independiente por locate |
-| 8 | cocotb: replay del día local encadenado parser→book; comparar vs golden; vectores congelados commiteados |
-| 9/10 | `verilator --lint-only -Wall --top-module orderbook` + `verible-verilog-lint` (si instalado) |
+| 1 | cocotb: synthetic multi-type corpus → Annex-A feed → compare BBO vs `book.py` (event by event, bit-exact) |
+| 2 | cocotb: `U` with non-empty prior BBO → the emitted event is the final one (not intermediate); a non-atomicity mutant kills it |
+| 3 | cocotb: adjacent pairs add→execute, add→cancel, replace→execute over the same ref; compare vs golden |
+| 4 | cocotb: execute/cancel/delete and verify order+level with the golden's `check_deep()` (or qty count) |
+| 5 | cocotb: inject qty/level overflow → sample `error`, no wrap nor invalid BBO, and accept the following valid message |
+| 6 | cocotb: unknown ref → `anomaly_count` increments; cross → `cross_events` increments; flow continues |
+| 7 | cocotb: interleaved messages from 2+ symbols; independent BBO per locate |
+| 8 | cocotb: local-day replay chained parser→book; compare vs golden; committed frozen vectors |
+| 9/10 | `verilator --lint-only -Wall --top-module orderbook` + `verible-verilog-lint` (if installed) |
 
-Régimen completo: skill `verify`. Gates: A = cocotb en
-`verification/testbenches/orderbook/`; B/C = lint+estilo; D = cobertura
-funcional (estados de la FSM de aplicación + tabla spec↔tests por criterio);
-E = mutación HDL sobre `rtl/orderbook/` (flips de: `>`/`>=` en best bid/ask,
-off-by-one de nivel, `U` no atómico, doble descuento, comparador de ref) —
-cada uno muerto por un test; F = espejos Gherkin
-(`specs/gherkin-espejos.json` → `verification/testbenches/orderbook`);
-G = G0/G2/G3 (datos reales fuera del repo; libro sin ventana de inconsistencia;
-comparación bit a bit). G timing/Vivado: NO EJECUTADO hasta fase 3 (justificado
-en verify-report).
+Full regime: skill `verify`. Gates: A = cocotb in
+`verification/testbenches/orderbook/`; B/C = lint+style; D = functional
+coverage (application FSM states + spec↔test table per criterion); E = HDL
+mutation over `rtl/orderbook/` (flips of: `>`/`>=` in best bid/ask, level
+off-by-one, non-atomic `U`, double subtract, ref comparator) — each killed by a
+test; F = Gherkin mirrors (`specs/gherkin-espejos.json` →
+`verification/testbenches/orderbook`); G = G0/G2/G3 (real data outside the repo;
+book without inconsistency window; bit-exact comparison). G timing/Vivado: NOT
+EXECUTED until phase 3 (justified in the verify-report).
 
-**Contratos sin gate** — invariantes que pueden romperse con suite y lint en
-verde:
+**Geless contracts** — invariants that can break with suite and lint green:
 
-1. **Semántica heredada mal transcrita** entre `book.py` y el RTL (p. ej. `C`
-   que altera el precio, `U` que no es atómico, ejecutado sobre nivel vacío).
-   Guardarraíl: los vectores del test son **literales** construidos desde
-   `messages.py` (independientes del RTL), y el oráculo es `book.py` (nunca el
-   propio RTL).
-2. **Layout del Anexo A mal decodificado** (offsets del cuerpo corridos).
-   Guardarraíl: el decodificador usa offsets de `messages.py`; el testbench
-   re-parsea el mismo feed con `message_oracle` y compara BBO, no campos sueltos.
-3. **Overflow no señalizado** (wrap silencioso de qty/niveles).
-   Guardarraíl: escenarios `SEC-OV-01` con mutante de ancho reducido.
-4. **El book «pierde» órdenes** por dimensionado de la tabla de órdenes
-   (2^K < peak del subset). Guardarraíl: `check_deep()` del golden tras el
-   replay real; si hay pérdida, `error`/anomalía — nunca resultado silencioso.
+1. **Mis-transcribed inherited semantics** between `book.py` and the RTL (e.g.
+   `C` that alters the price, non-atomic `U`, execute on an empty level).
+   Guardrail: test vectors are **literals** built from `messages.py`
+   (independent of the RTL), and the oracle is `book.py` (never the RTL itself).
+2. **Mis-decoded Annex-A layout** (shifted body offsets). Guardrail: the decoder
+   uses `messages.py` offsets; the testbench re-parses the same feed with
+   `message_oracle` and compares BBO, not loose fields.
+3. **Unsignalled overflow** (silent qty/level wrap). Guardrail: `SEC-OV-01`
+   scenarios with a reduced-width mutant.
+4. **The book "loses" orders** due to order-table sizing (2^K < subset peak).
+   Guardrail: golden `check_deep()` after the real replay; if there is loss,
+   `error`/anomaly — never a silent result.
 
 ## Loop
 
-Stop limit: **5 iteraciones**. Cadencia: encadenar build→verify→grade mientras
-quede cola. Al agotar el límite con criterios en FAIL, escala al owner.
+Stop limit: **5 iterations**. Cadence: chain build→verify→grade while there is a
+queue. When the limit is reached with criteria in FAIL, escalate to the owner.

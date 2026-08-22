@@ -1,14 +1,14 @@
-"""Vectores de referencia: el contrato bit a bit entre golden model y RTL.
+"""Reference vectors: the bit-exact contract between golden model and RTL.
 
-Layout canónico del registro (Anexo A de specs/fase0-golden-model/spec.md —
-cambiarlo es un edit explícito de spec): 40 bytes, little-endian:
+Canonical record layout (Annex A of specs/fase0-golden-model/spec.md —
+changing it is an explicit spec edit): 40 bytes, little-endian:
 
     msg_idx u64 | ts_ns u64 | bid_px u32 | bid_qty u32 | ask_px u32 |
     ask_qty u32 | locate u16 | msg_type u8 (ASCII) | flags u8 | reserved u32
 
-`flags` bit0 = 1 si el BBO cambió respecto al registro anterior del símbolo.
-Un registro por mensaje modificador (A/F/E/C/X/D/U) de cada símbolo del
-subset. Sin cabecera de fichero.
+`flags` bit0 = 1 if the BBO changed with respect to the previous record of
+the symbol. One record per modifying message (A/F/E/C/X/D/U) of each subset
+symbol. No file header.
 """
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ import struct
 from os import PathLike
 from typing import BinaryIO, Iterator, TextIO
 
-from ..src.book import BookEvent  # noqa: F401  (tipo del contrato, documentación)
+from ..src.book import BookEvent  # noqa: F401  (contract type, documentation)
 
 RECORD = struct.Struct("<QQIIIIHBBI")
 RECORD_SIZE = RECORD.size
 TEXT_HEADER = "# msg_idx,ts_ns,bid_px,bid_qty,ask_px,ask_qty,locate,msg_type,changed"
 
-#: tupla de registro decodificado: (msg_idx, ts_ns, bid_px, bid_qty, ask_px,
+#: decoded record tuple: (msg_idx, ts_ns, bid_px, bid_qty, ask_px,
 #: ask_qty, locate, msg_type, changed)
 Record = tuple[int, int, int, int, int, int, int, str, int]
 
@@ -36,7 +36,7 @@ def write_record(
     mtype: str,
     changed: int,
 ) -> None:
-    """Escribe un registro binario de 40 B (layout del Anexo A)."""
+    """Writes a 40 B binary record (Annex A layout)."""
     bid_px, bid_qty, ask_px, ask_qty = bbo
     out.write(
         RECORD.pack(
@@ -47,7 +47,7 @@ def write_record(
 
 
 def iter_records(source: str | PathLike[str] | BinaryIO) -> Iterator[Record]:
-    """Lee un fichero de vectores registro a registro (round-trip del writer)."""
+    """Reads a vector file record by record (round-trip of the writer)."""
     f = open(source, "rb") if not hasattr(source, "read") else source
     try:
         while True:
@@ -56,7 +56,7 @@ def iter_records(source: str | PathLike[str] | BinaryIO) -> Iterator[Record]:
                 return
             if len(blob) != RECORD_SIZE:
                 raise ValueError(
-                    f"registro truncado: {len(blob)} B de {RECORD_SIZE}"
+                    f"truncated record: {len(blob)} B of {RECORD_SIZE}"
                 )
             idx, ts, bid_px, bid_qty, ask_px, ask_qty, locate, mtype, flags, _ = (
                 RECORD.unpack(blob)
@@ -68,7 +68,7 @@ def iter_records(source: str | PathLike[str] | BinaryIO) -> Iterator[Record]:
 
 
 def dump_text(source: str | PathLike[str] | BinaryIO, out: TextIO) -> None:
-    """Vuelca un fichero binario de vectores a texto (un registro por línea)."""
+    """Dumps a binary vector file to text (one record per line)."""
     out.write(TEXT_HEADER + "\n")
     for rec in iter_records(source):
         out.write(
@@ -78,7 +78,7 @@ def dump_text(source: str | PathLike[str] | BinaryIO, out: TextIO) -> None:
 
 
 class VectorSink:
-    """Política de emisión: un registro por mensaje modificador del subset."""
+    """Emission policy: one record per subset modifying message."""
 
     def __init__(self, out: BinaryIO, subset: set[int]) -> None:
         self._out = out

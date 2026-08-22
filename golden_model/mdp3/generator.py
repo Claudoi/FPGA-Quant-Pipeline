@@ -1,9 +1,9 @@
-"""Generator de corpus sintético MDP 3.0 (determinista, seeded).
+"""Synthetic MDP 3.0 corpus generator (deterministic, seeded).
 
-Produce paquetes válidos del subset (46/47/52/53) y passthrough (templates
-reales no-subset y desconocidos). Todo el layout se deriva del schema. Los
-paquetes se exportan/importan como vectores JSON (base64) para los testbenches
-cocotb (iter 2+), y se conservan en verification/vectors/mdp3/.
+Produces valid subset packets (46/47/52/53) and passthrough (real non-subset
+and unknown templates). The whole layout is derived from the schema. Packets
+are exported/imported as JSON vectors (base64) for the cocotb testbenches
+(iter 2+), and kept in verification/vectors/mdp3/.
 """
 from __future__ import annotations
 
@@ -22,21 +22,21 @@ from golden_model.mdp3.codec import (
 )
 from golden_model.mdp3.schema import Schema, SUBSET_TEMPLATES
 
-PASSTHROUGH_TEMPLATES = (4, 12, 30, 37, 48)  # reales no-subset del schema v12
+PASSTHROUGH_TEMPLATES = (4, 12, 30, 37, 48)  # real non-subset of schema v12
 UNKNOWN_TEMPLATE = 777
 
 
 class Corpus:
-    """Corpus sintético: paquetes + records Anexo M esperados (oráculo)."""
+    """Synthetic corpus: packets + expected Annex M records (oracle)."""
 
     def __init__(self, schema: Schema, seed: int = 20260814):
         self.schema = schema
         self.rng = random.Random(seed)
         self.security_ids = (101, 202, 303, 404)
         self.packets: list[bytes] = []
-        self.expected: list[list[int]] = []  # words por record, en orden de emisión
+        self.expected: list[list[int]] = []  # words per record, in emission order
 
-    # ── construcción ──────────────────────────────────────────────────────────
+    # ── construction ──────────────────────────────────────────────────────────
 
     def _price(self):
         return {"mantissa": self.rng.randrange(-1_000_000_000, 1_000_000_001)}
@@ -134,10 +134,10 @@ class Corpus:
                     "MDEntryType": self.rng.randrange(0, 2),
                 } for _ in range(self.rng.randrange(0, 5))],
             })
-        raise ValueError(f"template fuera del subset: {template}")
+        raise ValueError(f"template outside the subset: {template}")
 
     def passthrough_message(self, unknown: bool = False) -> bytes:
-        """Mensaje crudo no decodificado: template real no-subset o desconocido."""
+        """Raw undecoded message: real non-subset or unknown template."""
         if unknown:
             body = bytes(self.rng.randrange(8, 64)
                          for _ in range(self.rng.randrange(8, 64)))
@@ -154,7 +154,7 @@ class Corpus:
             + (0).to_bytes(2, "little") + (0).to_bytes(2, "little") + body
 
     def add_packet(self, n_messages: int = 4, seq: int | None = None) -> bytes:
-        """Un paquete con n_messages mensajes mezclados; actualiza el oráculo."""
+        """A packet with n_messages mixed messages; updates the oracle."""
         if seq is None:
             seq = self.rng.randrange(0, 2**31)
         sending = self.rng.getrandbits(64)
@@ -177,7 +177,7 @@ class Corpus:
             self.add_packet()
         return self
 
-    # ── vectores ──────────────────────────────────────────────────────────────
+    # ── vectors ──────────────────────────────────────────────────────────────
 
     def save(self, path: str | Path):
         payloads = [p.hex() for p in self.packets]

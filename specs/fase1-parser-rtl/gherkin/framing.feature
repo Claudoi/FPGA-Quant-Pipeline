@@ -1,79 +1,79 @@
-# framing.feature — framing MoldUDP64, secuencia y detección de gaps
+# framing.feature — MoldUDP64 framing, sequence and gap detection
 
-Espejo de «Criterios de aceptación» 4 de `spec.md`.
+Mirror of "Acceptance criteria" 4 of `spec.md`.
 
-#language: es
-Funcionalidad: Framing MoldUDP64 y detección de gaps de secuencia
-  Como pipeline de market data
-  Quiero que el parser valide sesión, seq y count y detecte gaps de secuencia
-  Para manejar el feed real de MoldUDP64 sin perder mensajes
+# language: en
+Feature: MoldUDP64 framing and sequence-gap detection
+  As a market-data pipeline
+  I want the parser to validate session, seq and count and detect sequence gaps
+  So that the real MoldUDP64 feed is handled without losing messages
 
-Escenario: FRM-01 — el parser extrae sesión, seq y count de cada payload MoldUDP64
-  Dado un payload MoldUDP64 con una sesión, un sequence number y una cuenta de mensajes
-  Cuando el RTL procesa la cabecera de framing
-  Entonces extrae la sesión, el seq y el count correctamente
-  Y emite los mensajes de ese paquete en orden
+Scenario: FRM-01 — the parser extracts session, seq and count from each MoldUDP64 payload
+  Given a MoldUDP64 payload with a session, a sequence number and a message count
+  When the RTL processes the framing header
+  Then it extracts the session, seq and count correctly
+  And emits that packet's messages in order
 
-#language: es
-Escenario: FRM-02 — el seq esperado avanza como seq_prev más count_prev
-  Dado una secuencia de paquetes cuyos seq son consecutivos según el count previo
-  Cuando el RTL procesa la secuencia
-  Entonces el seq esperado del paquete n es seq del paquete n-1 más su count
-  Y no señaliza ningún gap
+# language: en
+Scenario: FRM-02 — the expected seq advances as seq_prev plus count_prev
+  Given a sequence of packets whose seq are consecutive per the previous count
+  When the RTL processes the sequence
+  Then the expected seq of packet n is the seq of packet n-1 plus its count
+  And it signals no gap
 
-#language: es
-Escenario: SEC-GAP-01 — un hueco de secuencia se señaliza, se cuenta y el parsing continúa
-  Dado una secuencia de paquetes donde seq_actual es mayor que el esperado
-  Cuando el RTL procesa el paquete con hueco
-  Entonces señaliza gap_detected y lo cuenta internamente
-  Y continúa procesando los mensajes del paquete sin abortar
+# language: en
+Scenario: SEC-GAP-01 — a sequence hole is signalled, counted and parsing continues
+  Given a sequence of packets where seq_actual is greater than expected
+  When the RTL processes the packet with the hole
+  Then it signals gap_detected and counts it internally
+  And continues processing the packet's messages without aborting
 
-#language: es
-Escenario: SEC-GAP-02 — un seq igual al esperado no señaliza gap
-  Dado una secuencia de paquetes consecutivos sin huecos
-  Cuando el RTL procesa cada paquete
-  Entonces no señaliza ningún gap_detected
+# language: en
+Scenario: SEC-GAP-02 — a seq equal to the expected does not signal a gap
+  Given a sequence of consecutive packets without holes
+  When the RTL processes each packet
+  Then it signals no gap_detected
 
-#language: es
-Escenario: SEC-FRM-03 — un cambio de sesión resetea el seq esperado
-  Dado un payload cuya sesión difiere del paquete anterior
-  Cuando el RTL procesa el cambio de sesión
-  Entonces reinicia el estado de secuencia esperada al primer seq de la nueva sesión
-  Y no cuenta el reinicio como gap
+# language: en
+Scenario: SEC-FRM-03 — a session change resets the expected seq
+  Given a payload whose session differs from the previous packet
+  When the RTL processes the session change
+  Then it resets the expected-sequence state to the first seq of the new session
+  And does not count the reset as a gap
 
-#language: es
-Escenario: SEC-FRM-04 — un paquete con count igual a cero es válido
-  Dado una sesión nueva con seq 100 y cuenta de mensajes cero
-  Y el payload de 20 bytes termina con tkeep igual a 8'b11110000 en DW=64
-  Cuando el siguiente paquete de la misma sesión llega en un burst nuevo también con seq 100
-  Entonces no emite ningún registro y no señaliza error
-  Y no señaliza gap porque el seq esperado avanzó por cero
+# language: en
+Scenario: SEC-FRM-04 — a packet with count equal to zero is valid
+  Given a new session with seq 100 and a zero message count
+  And the 20-byte payload ends with tkeep equal to 8'b11110000 at DW=64
+  When the next packet of the same session arrives in a new burst also with seq 100
+  Then it emits no record and signals no error
+  And signals no gap because the expected seq advanced by zero
 
-#language: es
-Escenario: SEC-FRM-05 — datagramas no alineados no comparten una palabra AXI
-  Dado dos payloads MoldUDP64 consecutivos cuyas longitudes no son múltiplos de ocho
-  Y cada payload usa su propio tlast y tkeep en la última palabra
-  Cuando el RTL procesa ambos bursts
-  Entonces extrae ambas cabeceras sin incorporar padding entre ellas
-  Y la salida completa coincide byte a byte con el golden
+# language: en
+Scenario: SEC-FRM-05 — unaligned datagrams do not share an AXI word
+  Given two consecutive MoldUDP64 payloads whose lengths are not multiples of eight
+  And each payload uses its own tlast and tkeep in the last word
+  When the RTL processes both bursts
+  Then it extracts both headers without incorporating padding between them
+  And the complete output is byte-exact against the golden
 
-#language: es
-Escenario: SEC-FRM-06 — una máscara tkeep inválida se descarta con señal
-  Dado un beat con tkeep cero, con huecos o parcial sin tlast
-  Cuando el RTL acepta el beat y después recibe un paquete íntegro
-  Entonces pulsa error y descarta el datagrama inválido
-  Y procesa el paquete posterior sin estado ni cabecera corruptos
+# language: en
+Scenario: SEC-FRM-06 — an invalid tkeep mask is discarded with a signal
+  Given a beat with zero tkeep, with holes, or partial without tlast
+  When the RTL accepts the beat and then receives an intact packet
+  Then it pulses error and discards the invalid datagram
+  And processes the following packet without corrupt state or header
 
-#language: es
-Escenario: SEC-FRM-07 — count y tlast deben cerrar el datagrama en el mismo byte
-  Dado un payload cuyo count termina antes de tlast, deja bytes residuales o vale cero con payload adicional
-  Cuando el RTL termina de consumir los mensajes declarados
-  Entonces pulsa error y drena los bytes restantes hasta tlast
-  Y nunca interpreta esos bytes como la cabecera de un paquete nuevo
+# language: en
+Scenario: SEC-FRM-07 — count and tlast must close the datagram at the same byte
+  Given a payload whose count ends before tlast, leaves residual bytes, or is zero with additional payload
+  When the RTL finishes consuming the declared messages
+  Then it pulses error and drains the remaining bytes up to tlast
+  And never interprets those bytes as the header of a new packet
 
-#language: es
-Escenario: SEC-FRM-08 — la entrada permanece estable durante backpressure
-  Dado un burst válido en el que el parser desactiva tready
-  Cuando tvalid permanece activo sin handshake
-  Entonces tdata, tkeep y tlast conservan exactamente su valor
-  Y el beat se transfiere una sola vez al volver tready
+# language: en
+Scenario: SEC-FRM-08 — the input stays stable during backpressure
+  Given a valid burst in which the parser deasserts tready
+  When tvalid stays active without handshake
+  Then tdata, tkeep and tlast keep their value exactly
+  And the beat transfers only once when tready returns

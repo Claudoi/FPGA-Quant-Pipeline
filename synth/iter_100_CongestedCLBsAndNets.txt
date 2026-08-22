@@ -1,8 +1,9 @@
 List of CLB Tiles
-CLEL_L_X5Y40
-CLEL_R_X5Y40
+CLEL_L_X15Y203
+CLEL_R_X15Y203
+CLEM_X13Y72
 
 List of Congested Nets
-u_book/price[16]
-u_book/lv_pr[5][16]_i_3_n_0
+u_book/p_2688_out[10]
+u_book/lv_qt[1][29]_i_13_n_0
 

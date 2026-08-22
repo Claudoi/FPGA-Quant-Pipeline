@@ -1,85 +1,95 @@
 # FPGA Quant Pipeline
 
-Pipeline de market data para trading de baja latencia sobre **AMD/Xilinx
-UltraScale+**: parser Nasdaq TotalView-ITCH 5.0 + order book con salida BBO.
-El RTL implementado empieza en MoldUDP64 ya decapsulado; MAC 10G y
-Ethernet/IP/UDP quedan fuera de este repositorio. Proyecto por fases del
-documento maestro
-(`Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`),
-orientado a perfil FPGA / low-latency trading infrastructure.
+A low-latency market-data pipeline for **AMD/Xilinx UltraScale+**: a
+Nasdaq TotalView-ITCH 5.0 parser and an order book with BBO / top-N output,
+plus a CME MDP3/SBE parser, all verified bit-exactly against an independent
+Python golden model.
 
-El repositorio empieza en el payload MoldUDP64 ya decapsulado. No implementa
-MAC 10G ni Ethernet/IP/UDP.
+The RTL starts at the already-decapsulated MoldUDP64 payload. The 10G MAC and
+Ethernet/IP/UDP layers are intentionally **out of scope** for this repository.
 
 ```
-MoldUDP64 → parser ITCH → order book (URAM) → BBO/top-N
+MoldUDP64  ->  ITCH parser  ->  order book (URAM)  ->  BBO / top-N
 ```
 
-## Estado del proyecto
+## Project status
 
-| Fase | Contenido | Estado |
+| Phase | Scope | Status |
 |---|---|---|
-| **0** | Golden model Python (parser ITCH + order book + vectores y tooling) | **Cerrada**; 22 tipos y replay de día real |
-| **1** | Parser RTL MoldUDP64/ITCH contra golden | **No cerrada**: framing `s_axis_tkeep` verde (91/91 `tlast`, gaps, backpressure, replay real bit a bit); pendiente REP-02 (medir `<=24` stalls en un tramo A/U real seleccionado del pcap sin índices manuales) |
-| **2** | Order book RTL del subset de 20 símbolos | **Cerrada funcionalmente**; 14/14 tests y replay real |
-| **3** | Variante DW=32, top-N y arquitectura URAM | **CERRADA la variante 64b/156,25 MHz (10G)**: WNS +0,015 ns, TNS 0, LUT 92,31 %, URAM 32/48 (run `fase3_156mhz.tcl`). 322 MHz sigue como capítulo de optimización abierto (mejor WNS -3,319). Evidencia de simulación verde en WSL (sim-rtm 4/4, sim-rtm64 1/1, sim-lat media 44,5 ≤ 48, gate E 30/30). REP-02 pendiente de pcap real. Detalle en `synth/reports/README.md` |
-| **4** | Parser CME MDP3/SBE | **No cerrada**: framing `s_axis_tkeep` verde y **criterios 5 y 10 cerrados (2026-08-19)** en WSL (suite DW=32/DW64 12/12 PASS + 2 SKIP, gate B limpio, gate E 9/9); **criterio 7 (máscaras con huecos) abierto**; timing no acreditado (sin Vivado MDP3) |
+| **0** | Python golden model (ITCH parser + order book + vectors + tooling) | **Closed** — 22 message types, full-day replay |
+| **1** | MoldUDP64/ITCH parser RTL, verified against golden | **Closed** — `s_axis_tkeep` framing, gaps, backpressure, 91/91 `tlast`; **REP-02 line-rate closed** (real A/U burst, 9 stalls <= 24) |
+| **2** | Order book RTL (20-symbol subset) | **Closed** — BBO bit-exact, atomic replace, real replay |
+| **3** | DW=32 variant, top-N and URAM architecture | **Functional closed end-to-end** (17.484 BBO events bit-exact, cross=0/anomaly=0/gaps=0). **156.25 MHz / 10G closed** (WNS +0.057 ns, URAM 32/48). **322 MHz open** — the internal datapath closes, but the output I/O (OBUF + clock) of the -2L part is the limit |
+| **4** | CME MDP3/SBE parser | **Functional closed** (14/14 DW=32/64, gate E 14/14). Timing open: the parser does not fit the XCKU3P (LUT over-utilization) |
 
-El documento de presentación del proyecto (arquitectura, hazards, latencia,
-timing y límites honestos) está en `docs/writeup/pipeline-itch-uram.md`.
+The main architecture write-up (hazards, latency, timing, honest limits) is in
+[`docs/writeup/pipeline-itch-uram.md`](docs/writeup/pipeline-itch-uram.md).
 
-### Evidencia de la fase 0 (día Nasdaq 2019-12-30, 3,5 GB reales)
+### Phase 0 evidence (Nasdaq 2019-12-30, 3.5 GB real capture)
 
-- **268.744.780 mensajes** parseados y procesados por el book en **17 min**
-  (objetivo de spec: ≤ 2 h). 0 anomalías de protocolo.
-- **14.427.667 vectores BBO** (registros de 40 B, layout fijado en
-  `specs/fase0-golden-model/spec.md` Anexo A) para un subset de 20 símbolos
-  elegido por actividad medida del propio fichero (AMZN, AAPL, MSFT…).
-- 29/29 tests, 5/5 mutantes HDL-par muertos, stdlib pura.
-- Contrato, Gherkin, verify-report y veredictos de grade en
+- **268,744,780 messages** parsed and processed by the book in **17 min**
+  (spec target: <= 2 h). 0 protocol anomalies.
+- **14,427,667 BBO vectors** (40 B records, layout in
+  `specs/fase0-golden-model/spec.md` Annex A) for a 20-symbol subset selected
+  by measured activity (AMZN, AAPL, MSFT, ...).
+- 29/29 tests, 5/5 HDL-paired mutants killed, pure stdlib.
+- Contract, Gherkin, verify report and grade verdicts in
   `specs/fase0-golden-model/`.
 
-## Estructura
+## Verified numbers
 
-| Directorio | Contenido |
+- **Latency** wire->BBO, DW=32/QB=46: **65.5 cycles = 203.3 ns** @ 322.265625 MHz
+  (mean, deterministic across re-runs). Histogram persisted in
+  `verification/vectors/latency/latency_dw32.json`.
+- **156.25 MHz variant**: 64b @ 156.25 MHz = 10G, **WNS +0.057 ns**, TNS 0,
+  WHS +0.021 ns, URAM **32/48**, DRC 0.
+- **322 MHz variant**: 32b @ 322.265625 MHz — the book's internal datapath
+  closes after splitting the `m_loc_idx -> sm_asel` timing path; the residual
+  WNS is dominated by the output I/O (source clock delay + OBUF) of the -2L
+  speed grade. Documented as an open chapter, not a closing claim.
+
+## Layout
+
+| Directory | Contents |
 |---|---|
-| `golden_model/` | Parser ITCH (`itch/`), order book (`src/book.py`), vectores (`src/vectors.py`), stats, CLIs (`scripts/`), tests espejo (`tests/`) |
-| `scripts/` | `fetch_itch.py` (descarga + md5, fail closed), `binaryfile_to_pcap.py` (BinaryFILE → pcap MoldUDP64/UDP/IP/Eth) |
-| `rtl/` | Parseres ITCH/MDP3, `orderbook/`, cadena y módulos comunes |
-| `verification/` | (fases 1+) testbenches cocotb; `vectors/` con muestras pequeñas y `subset_symbols.json` |
-| `specs/` | Contratos del ciclo por campaña: `spec.md` + `gherkin/` + `verify-report.md` |
-| `synth/` | (fase 3) constraints e informes Vivado |
-| `docs/` | `DESARROLLO.md` (setup/gates), `decisiones/`, `writeup/` |
-| `data/itch_sample/` | Datos reales — **nunca commiteados** (gitignored) |
+| `golden_model/` | ITCH parser (`itch/`), order book (`src/book.py`), vectors (`src/vectors.py`), stats, CLIs (`scripts/`), mirror tests (`tests/`) |
+| `scripts/` | `fetch_itch.py` (download + md5, fail-closed), `binaryfile_to_pcap.py` (BinaryFILE -> MoldUDP64/UDP/IP/Eth pcap) |
+| `rtl/` | ITCH/MDP3 parsers, `orderbook/`, chain, and common modules |
+| `verification/` | (phases 1+) cocotb testbenches; `vectors/` with small samples and `subset_symbols.json` |
+| `specs/` | Per-campaign contracts: `spec.md` + `gherkin/` + `verify-report.md` |
+| `synth/` | (phase 3) Vivado constraints and reports |
+| `docs/` | `DEVELOPMENT.md` (setup/gates), `decisions/`, `writeup/` |
+| `data/itch_sample/` | Real data — **never committed** (gitignored) |
 
-## Uso
+## Usage
 
 ```bash
-# regresión Python completa (ITCH + CME)
+# Full Python regression (ITCH + CME)
 python3 -m unittest discover -s golden_model/tests -t .
 
-# descargar un día de muestra de emi.nasdaq.com (verificación md5; fail closed)
+# Download one sample day from emi.nasdaq.com (md5 verification; fail-closed)
 python3 scripts/fetch_itch.py 12302019.NASDAQ_ITCH50.gz
 
-# run del golden model: stats + vectores para el subset
+# Golden-model run: stats + vectors for the subset
 python3 -m golden_model.scripts.run_golden data/itch_sample/12302019.NASDAQ_ITCH50.gz \
     --subset verification/vectors/subset_symbols.json --out data/itch_sample/out --text
 
-# BinaryFILE -> pcap MoldUDP64 para los testbenches RTL
+# BinaryFILE -> MoldUDP64 pcap for the RTL testbenches
 python3 scripts/binaryfile_to_pcap.py in.ITCH50 out.pcap
 ```
 
-Requisitos: Python 3.10+ stdlib pura (fase 0). Fases RTL: Verilator + cocotb
-+ Vivado (ver `docs/DESARROLLO.md`).
+Requirements: Python 3.10+ pure stdlib (phase 0). RTL phases: Verilator + cocotb
++ Vivado (see `docs/DEVELOPMENT.md`).
 
-## Proceso y estado
+## Process
 
-Cada campaña sigue el loop **spec → rojo/verde → verify → juicio
-adversarial**. Los gates A-G, el estado y el criterio de cierre están en
-`AGENTS.md`; cada contrato y su evidencia viven en `specs/<campaña>/`.
+Each campaign follows the loop **spec -> red/green -> verify -> adversarial
+review**. The A-G verification gates and the closing criteria live in the
+campaign specs under `specs/<campaign>/`; each contract and its evidence are
+kept together there.
 
-## Reglas
+## Rules
 
-- Datos de mercado reales jamás commiteados (`data/itch_sample/**` ignorado).
-- Commits en español, Conventional Commits.
-- La optimización 322 MHz es capítulo final, no punto de partida.
+- Real market data is never committed (`data/itch_sample/**` is ignored).
+- Commits follow Conventional Commits.
+- The 322 MHz optimization is a final chapter, not the starting point.

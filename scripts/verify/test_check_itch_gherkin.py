@@ -80,7 +80,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         spec.write_text(spec.read_text(encoding="utf-8").replace("REP-02", ""), encoding="utf-8")
 
         self.assertIn(
-            "fase1-parser-rtl/REP-02: ausente de spec.md",
+            "fase1-parser-rtl/REP-02: missing from spec.md",
             check_repo(self.root),
         )
 
@@ -89,7 +89,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         report.write_text(report.read_text(encoding="utf-8").replace("P32-02", ""), encoding="utf-8")
 
         self.assertIn(
-            "fase3-optimizacion/P32-02: ausente de verify-report.md",
+            "fase3-optimizacion/P32-02: missing from verify-report.md",
             check_repo(self.root),
         )
 
@@ -101,14 +101,14 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase3-uram/CHAIN-01: aparece 2 veces en su corpus Gherkin",
+            "fase3-uram/CHAIN-01: appears 2 times in its Gherkin corpus",
             check_repo(self.root),
         )
 
     def test_detecta_manifiesto_vacio(self):
         manifest = self.root / "specs/gherkin-espejos.json"
         manifest.write_text("{}", encoding="utf-8")
-        self.assertIn("manifiesto vacío", check_repo(self.root))
+        self.assertIn("empty manifest", check_repo(self.root))
 
     def test_detecta_mapping_de_campana_incoherente(self):
         manifest = self.root / "specs/gherkin-espejos.json"
@@ -119,8 +119,8 @@ class CheckItchGherkinTest(unittest.TestCase):
         data["specs/fase1-parser-rtl/gherkin"] = "verification/testbenches/phase3"
         manifest.write_text(json.dumps(data), encoding="utf-8")
         self.assertIn(
-            "specs/fase1-parser-rtl/gherkin: espejo "
-            "verification/testbenches/phase3, esperado verification/testbenches/parser",
+            "specs/fase1-parser-rtl/gherkin: mirror "
+            "verification/testbenches/phase3, expected verification/testbenches/parser",
             check_repo(self.root),
         )
 
@@ -132,7 +132,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         manifest.write_text(json.dumps(data), encoding="utf-8")
 
         self.assertIn(
-            "specs/campana-inexistente/gherkin: ruta Gherkin inexistente",
+            "specs/campana-inexistente/gherkin: nonexistent Gherkin path",
             check_repo(self.root),
         )
 
@@ -146,7 +146,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         manifest.write_text(json.dumps(data), encoding="utf-8")
 
         self.assertIn(
-            "specs/campana-extra/gherkin: ruta espejo inexistente: "
+            "specs/campana-extra/gherkin: nonexistent mirror path: "
             "verification/testbenches/inexistente",
             check_repo(self.root),
         )
@@ -159,7 +159,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase1-parser-rtl/REP-02: aparece 0 veces en su corpus Gherkin",
+            "fase1-parser-rtl/REP-02: appears 0 times in its Gherkin corpus",
             check_repo(self.root),
         )
 
@@ -174,7 +174,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase1-parser-rtl/REP-02: aparece 0 veces en su corpus Gherkin",
+            "fase1-parser-rtl/REP-02: appears 0 times in its Gherkin corpus",
             check_repo(self.root),
         )
 
@@ -189,7 +189,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase1-parser-rtl/REP-02: sin test espejo explícito en "
+            "fase1-parser-rtl/REP-02: no explicit mirror test in "
             "verification/testbenches/parser",
             check_repo(self.root),
         )
@@ -205,7 +205,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase1-parser-rtl/REP-02: sin test espejo explícito en "
+            "fase1-parser-rtl/REP-02: no explicit mirror test in "
             "verification/testbenches/parser",
             check_repo(self.root),
         )
@@ -221,7 +221,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase1-parser-rtl/REP-02: sin test espejo explícito en "
+            "fase1-parser-rtl/REP-02: no explicit mirror test in "
             "verification/testbenches/parser",
             check_repo(self.root),
         )
@@ -235,7 +235,7 @@ class CheckItchGherkinTest(unittest.TestCase):
         )
 
         self.assertIn(
-            "fase3-optimizacion/P32-01: sin test espejo explícito en "
+            "fase3-optimizacion/P32-01: no explicit mirror test in "
             "verification/testbenches/phase3",
             check_repo(self.root),
         )
@@ -248,7 +248,7 @@ class CheckItchGherkinTest(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertIn(
-            "fase3-uram/CHAIN-01: sin test espejo explícito en "
+            "fase3-uram/CHAIN-01: no explicit mirror test in "
             "verification/testbenches/phase3/test_chain32.py",
             check_repo(self.root),
         )

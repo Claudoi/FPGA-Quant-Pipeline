@@ -1,22 +1,22 @@
-"""Tabla canónica de layouts Nasdaq TotalView-ITCH 5.0.
+"""Canonical layout table for Nasdaq TotalView-ITCH 5.0.
 
-Transcrita de NQTVITCHSpecification.pdf (offsets y longitudes verificados
-campo a campo contra la sección 1.x del documento). Fuente única del
-protocolo: ningún literal de layout ITCH fuera de este fichero.
+Transcribed from NQTVITCHSpecification.pdf (offsets and lengths verified
+field by field against section 1.x of the document). Single source of
+the protocol: no ITCH layout literal lives outside this file.
 
-Nota DLCR: la revisión de abril 2023 añade el mensaje «Direct Listing with
-Capital Raise». Nuestra extracción del PDF muestra la letra 'O' en su tabla,
-en colisión con Operational Halt (2018); los datos de la campaña (2019) son
-anteriores a DLCR, así que se omite de la tabla a propósito: si algún día
-aparece en un fichero, el parser falla en ruido (tipo desconocido), que es
-el comportamiento diseñado.
+DLCR note: the April 2023 revision adds the "Direct Listing with
+Capital Raise" message. Our extraction of the PDF shows the letter 'O' in its table,
+colliding with Operational Halt (2018); the campaign data (2019)
+predate DLCR, so it is omitted from the table on purpose: if it ever
+shows up in a file, the parser fails as noise (unknown type), which is
+the designed behavior.
 """
 from __future__ import annotations
 
 import struct
 from typing import NamedTuple
 
-#: tipo -> (nombre, longitud total del payload en bytes, sin el prefijo BinaryFILE)
+#: type -> (name, total payload length in bytes, without the BinaryFILE prefix)
 MESSAGE_LENGTHS: dict[str, tuple[str, int]] = {
     "S": ("System Event", 12),
     "R": ("Stock Directory", 39),
@@ -44,11 +44,11 @@ MESSAGE_LENGTHS: dict[str, tuple[str, int]] = {
 
 
 class Layout(NamedTuple):
-    """Decoder de un tipo: struct big-endian + nombres de campo + índices alpha.
+    """Decoder for a type: big-endian struct + field names + alpha indices.
 
-    `fields` nombra los campos DESPUÉS de la cabecera común (tipo, locate,
-    tracking, ts). `alpha` son los índices dentro de la tupla completa de
-    valores cuyo bytes hay que decodificar a str (rstrip de espacios).
+    `fields` names the fields AFTER the common header (type, locate,
+    tracking, ts). `alpha` are the indices within the full tuple of
+    values whose bytes must be decoded to str (rstrip spaces).
     """
 
     fmt: struct.Struct
@@ -56,8 +56,8 @@ class Layout(NamedTuple):
     alpha: frozenset[int]
 
 
-#: Layouts con campos completos: subset del libro (A/F/E/C/X/D/U) + R, S, H.
-#: El resto de tipos se valida por longitud y se decodifica solo la cabecera.
+#: Layouts with full fields: book subset (A/F/E/C/X/D/U) + R, S, H.
+#: The rest of the types are validated by length and only the header is decoded.
 LAYOUTS: dict[str, Layout] = {
     "A": Layout(
         struct.Struct(">cHH6sQcI8sI"),
@@ -117,5 +117,5 @@ LAYOUTS: dict[str, Layout] = {
     ),
 }
 
-#: Tipos que modifican el libro (emite registro de vector el run).
+#: Types that modify the book (the run emits a vector record).
 BOOK_MODIFYING_TYPES = frozenset("AFECXDU")

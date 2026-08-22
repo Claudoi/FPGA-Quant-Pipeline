@@ -1,0 +1,33 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
+| Date         : Thu Aug 20 16:39:58 2026
+| Host         : atini running 64-bit major release  (build 9200)
+| Command      : report_ram_utilization -file <local-build-path>/synth/reports/mdp3/322mhz/ram_synth.txt
+| Design       : mdp3_parser
+| Device       : xcku3p-ffva676-2L-e
+| Speed File   : -2L
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+RAM Usage Information
+
+Table of Contents
+-----------------
+1. Summary
+
+1. Summary
+----------
+
++--------------------------+------------+-----------+-------+-----------+
+| Memory Type              | Total Used | Available | Util% | Inferred% |
++--------------------------+------------+-----------+-------+-----------+
+| URAM                     |          0 |        48 |  0.00 |      0.00 |
+| BlockRAM                 |          0 |       360 |  0.00 |      0.00 |
+| LUTMs as Distributed RAM |        264 |     99840 |  0.26 |    100.00 |
+|  LUTMs as RAM256X1D      |        264 |           |       |    100.00 |
++--------------------------+------------+-----------+-------+-----------+
+*  Each RAMB18 is calculated as 0.5 BlockRAM
+**  Tables 2, 3, 4 and 5 cover RAMs inferred by Vivado Synthesis using XPMs or RTL inference
+***  XRAMs are not reported for detailed tables
+
+

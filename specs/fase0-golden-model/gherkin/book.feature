@@ -1,66 +1,66 @@
-# language: es
-Característica: Order book del golden model
-  El book mantiene por simbolo la tabla de ordenes vivas (por order
-  reference), los niveles de precio agregados y el BBO. Es la semantica de
-  referencia que el RTL de la fase 2 debera reproducir bit a bit.
+# language: en
+Feature: Golden model order book
+  The book maintains per symbol the live order table (by order reference),
+  the aggregated price levels and the BBO. It is the reference semantics that
+  the phase-2 RTL must reproduce bit-exact.
 
-  Escenario: LIB-01 add order crea nivel y actualiza BBO
-    Dado un libro vacio para el simbolo de prueba
-    Cuando llega un mensaje A de compra a precio 1000000 y cantidad 100
-    Entonces el BBO del simbolo es bid 1000000 x100, ask 0 x0
-    Y el flag de cambio del registro emitido es 1
+  Scenario: LIB-01 add order creates a level and updates the BBO
+    Given an empty book for the test symbol
+    When an A buy message arrives at price 1000000 and qty 100
+    Then the symbol's BBO is bid 1000000 x100, ask 0 x0
+    And the change flag of the emitted record is 1
 
-  Escenario: LIB-02 execute parcial reduce cantidad sin mover el BBO en precio
-    Dado un libro con una orden de compra de 100 a precio 1000000 como mejor bid
-    Cuando llega un mensaje E de 40 sobre esa orden
-    Entonces el BBO es bid 1000000 x60
-    Y la orden sigue viva con cantidad restante 60
+  Scenario: LIB-02 partial execute reduces qty without moving the BBO price
+    Given a book with a buy order of 100 at price 1000000 as the best bid
+    When an E message of 40 arrives on that order
+    Then the BBO is bid 1000000 x60
+    And the order stays live with a remaining qty of 60
 
-  Escenario: LIB-03 execute total elimina la orden y retrae el BBO
-    Dado un libro con una unica orden de compra de 100 a precio 1000000
-    Cuando llega un mensaje E de 100 sobre esa orden
-    Entonces la orden deja de existir
-    Y el BBO pasa a bid 0 x0
+  Scenario: LIB-03 total execute deletes the order and retracts the BBO
+    Given a book with a single buy order of 100 at price 1000000
+    When an E message of 100 arrives on that order
+    Then the order ceases to exist
+    And the BBO becomes bid 0 x0
 
-  Escenario: LIB-04 cancel y delete mantienen niveles consistentes
-    Dado un libro con dos ordenes de venta al mismo precio 2000000 por 50 y 70
-    Cuando llega un X de 30 sobre la primera y un D sobre la segunda
-    Entonces el nivel ask 2000000 queda con cantidad 20
-    Y tras un X de 20 sobre la primera el nivel 2000000 desaparece
+  Scenario: LIB-04 cancel and delete keep levels consistent
+    Given a book with two sell orders at the same price 2000000 for 50 and 70
+    When an X of 30 arrives on the first and a D on the second
+    Then the ask level 2000000 is left with qty 20
+    And after an X of 20 on the first the 2000000 level disappears
 
-  Escenario: LIB-05 replace es atomico y emite un solo estado resultante
-    Dado un libro con una orden de compra de 100 a precio 1000000 como mejor bid
-    Cuando llega un mensaje U que la reemplaza por precio 990000 y cantidad 200
-    Entonces el BBO resultante es bid 990000 x200
-    Y solo se emite un registro para el mensaje U
-    Y la referencia original deja de existir y la nueva queda viva
+  Scenario: LIB-05 replace is atomic and emits a single resulting state
+    Given a book with a buy order of 100 at price 1000000 as the best bid
+    When a U message replaces it with price 990000 and qty 200
+    Then the resulting BBO is bid 990000 x200
+    And only one record is emitted for the U message
+    And the original reference ceases to exist and the new one stays live
 
-  Escenario: LIB-06 libro vacio emite BBO cero
-    Dado un libro cuyas ordenes han sido todas eliminadas
-    Cuando se emite el registro del ultimo mensaje modificador
-    Entonces bid y ask valen precio 0 y cantidad 0
+  Scenario: LIB-06 an empty book emits a zero BBO
+    Given a book whose orders have all been deleted
+    When the record of the last modifying message is emitted
+    Then bid and ask hold price 0 and qty 0
 
-  Escenario: SEC-04 operacion sobre order reference desconocida se cuenta como anomalia
-    Dado un libro en curso
-    Cuando llega un E, X, D o U sobre una referencia inexistente
-    Entonces la operacion se salta sin modificar el libro
-    Y el contador de anomalias se incrementa
-    Y el run no aborta
+  Scenario: SEC-04 operation on an unknown order reference is counted as an anomaly
+    Given a book in progress
+    When an E, X, D or U arrives on a nonexistent reference
+    Then the operation is skipped without modifying the book
+    And the anomaly counter increments
+    And the run does not abort
 
-  Escenario: SEC-05 libro cruzado en estado de subasta no dispara la invariante
-    Dado un simbolo en estado de trading distinto de continuo segun mensajes S y H
-    Cuando el mejor bid supera al mejor ask por ordenes cruzadas en subasta
-    Entonces el run continua sin violacion de invariante
-    Y el BBO se emite tal cual
+  Scenario: SEC-05 a crossed book in auction state does not trigger the invariant
+    Given a symbol in a trading state other than continuous per S and H messages
+    When the best bid exceeds the best ask by orders crossed in auction
+    Then the run continues without invariant violation
+    And the BBO is emitted as-is
 
-  Escenario: INV-01 invariantes del libro se chequean mensaje a mensaje
-    Dado un run con invariantes activas en modo estricto
-    Cuando cualquier mensaje dejara cantidades no positivas, referencias duplicadas, niveles inconsistentes o libro cerrado/cruzado en trading continuo
-    Entonces el run aborta indicando la invariante violada y el indice del mensaje
+  Scenario: INV-01 book invariants are checked message by message
+    Given a run with active invariants in strict mode
+    When any message would leave non-positive quantities, duplicate references, inconsistent levels, or a closed/crossed book in continuous trading
+    Then the run aborts indicating the violated invariant and the message index
 
-  Escenario: SEC-08 libro bloqueado en trading continuo en datos reales se cuenta, no aborta
-    Dado un libro en modo por defecto (no estricto)
-    Y un simbolo cuyo libro quedo bloqueado durante un halt y reanudo trading
-    Cuando llega el siguiente mensaje modificador de ese simbolo
-    Entonces el run no aborta
-    Y el evento de cruce se cuenta con su indice de mensaje
+  Scenario: SEC-08 a locked book in continuous trading on real data is counted, not aborted
+    Given a book in default mode (not strict)
+    And a symbol whose book stayed locked during a halt and resumed trading
+    When the next modifying message of that symbol arrives
+    Then the run does not abort
+    And the cross event is counted with its message index

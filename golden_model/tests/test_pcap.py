@@ -1,4 +1,4 @@
-"""Tests espejo de specs/fase0-golden-model/gherkin/pcap.feature."""
+"""Mirror tests of specs/fase0-golden-model/gherkin/pcap.feature."""
 from __future__ import annotations
 
 import shutil
@@ -35,7 +35,7 @@ class TestPcap(unittest.TestCase):
 
     def test_pca01_el_pcap_se_abre_con_tcpdump_sin_errores(self):
         if shutil.which("tcpdump") is None:
-            self.fail("tcpdump no instalado: requisito del gate (ver spec criterio 8)")
+            self.fail("tcpdump not installed: gate requirement (see spec criterion 8)")
         stats = self._convert()
         proc = subprocess.run(
             ["tcpdump", "-n", "-r", str(self.pcap_path)],
@@ -52,10 +52,10 @@ class TestPcap(unittest.TestCase):
         self.assertEqual(stats["messages"], len(self.payloads))
         for _seq, msgs, raw in iter_pcap_packets(self.pcap_path):
             self.assertLessEqual(len(raw), UDP_PAYLOAD_MAX)
-            # message count de MoldUDP64 == mensajes del datagrama
+            # MoldUDP64 message count == messages of the datagram
             count = struct.unpack(">H", raw[18:20])[0]  # session 10 + seq 8
             self.assertEqual(count, len(msgs))
-        # modo dirigido: 1 mensaje por paquete
+        # directed mode: 1 message per packet
         stats1 = self._convert(msgs_per_packet=1)
         self.assertEqual(stats1["packets"], len(self.payloads))
 
@@ -78,8 +78,8 @@ class TestPcap(unittest.TestCase):
         self.assertEqual(reconstruido, self.bf_path.read_bytes())
 
     def test_pca05_max_messages_recorta_el_stream_sin_perder_grupo(self):
-        """Recorte por max_messages: solo los primeros N mensajes y el ultimo
-        grupo parcial se flushea (regla G0: tramos de dia real reproducibles)."""
+        """Truncation by max_messages: only the first N messages and the last
+        partial group is flushed (rule G0: reproducible real-day segments)."""
         stats = self._convert(max_messages=3)
         self.assertEqual(stats["messages"], 3)
         reconstruido = b"".join(
@@ -93,9 +93,9 @@ class TestPcap(unittest.TestCase):
     def test_sec06_mensaje_mayor_que_el_payload_maximo_produce_error_claro(self):
         self.bf_path.write_bytes(binaryfile(p_a(ref=1)).getvalue())
         with self.assertRaises(OversizedMessageError) as ctx:
-            self._convert(max_payload=30)  # el mensaje A son 36 B + 2 de length
+            self._convert(max_payload=30)  # the A message is 36 B + 2 of length
         self.assertIn("38", str(ctx.exception))
-        self.assertIn("mensaje 0", str(ctx.exception))
+        self.assertIn("message 0", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -1,52 +1,52 @@
-# parser.feature — decodificación de mensajes del subset + manejo de tipos y longitudes
+# parser.feature — subset message decoding + type/length handling
 
-Espejo funcional de «Criterios de aceptación» 1, 6, 7 de `spec.md`.
+Functional mirror of "Acceptance criteria" 1, 6, 7 of `spec.md`.
 
-#language: es
-Funcionalidad: Decodificación de mensajes ITCH del subset y manejo de tipos/longitudes
-  Como pipeline de market data
-  Quiero que el parser decodifique los 10 tipos del subset a registros normalizados
-  y que valide tipos/longitudes sin romper el line rate
-  Para alimentar byte a byte el order book (fase 2)
+# language: en
+Feature: ITCH subset message decoding and type/length handling
+  As a market-data pipeline
+  I want the parser to decode the 10 subset types to normalized records
+  and validate types/lengths without breaking the line rate
+  So that the order book (phase 2) is fed byte-exact
 
-Escenario: PAR-01 — cada tipo del subset se decodifica a un registro byte a byte idéntico al golden
-  Dado un mensaje del subset de tipo T de {S, R, A, F, E, C, X, D, U, P} en un pcap sintético
-  Y el oráculo --emit-messages del golden model sobre el mismo pcap
-  Cuando el RTL procesa el stream de entrada
-  Entonces la salida del parser es byte a byte idéntica al oráculo para ese mensaje
-  Y el registro emite tlast al final del burst y msg_type coincide
+Scenario: PAR-01 — each subset type decodes to a record byte-exact against the golden
+  Given a subset message of type T from {S, R, A, F, E, C, X, D, U, P} in a synthetic pcap
+  And the golden model --emit-messages oracle over the same pcap
+  When the RTL processes the input stream
+  Then the parser output is byte-exact against the oracle for that message
+  And the record emits tlast at the end of the burst and msg_type matches
 
-#language: es
-Escenario: SEC-PAR-04 — un tipo fuera del subset se valida y avanza el índice sin emitir registro
-  Dado un pcap sintético que contiene un mensaje de tipo H (fuera del subset) entre mensajes del subset
-  Cuando el RTL procesa el stream
-  Entonces no emite ningún registro para el mensaje H
-  Y contabiliza H en el msg_idx global y continúa sin romper el line rate
-  Y el siguiente registro A refleja que H fue consumido
+# language: en
+Scenario: SEC-PAR-04 — an out-of-subset type is validated and advances the index without emitting a record
+  Given a synthetic pcap containing an H message (outside the subset) between subset messages
+  When the RTL processes the stream
+  Then it emits no record for the H message
+  And counts H in the global msg_idx and continues without breaking the line rate
+  And the following A record reflects that H was consumed
 
-Escenario: SEC-PAR-05 — un tipo conocido fuera del subset con longitud incorrecta da error
-  Dado un mensaje H que declara 24 bytes aunque su longitud canónica es 25
-  Cuando el RTL lo procesa entre dos mensajes A válidos
-  Entonces señaliza error y no emite ningún registro para H
-  Y continúa con el segundo mensaje A sin desalinearse
+Scenario: SEC-PAR-05 — a known out-of-subset type with an incorrect length gives an error
+  Given an H message declaring 24 bytes though its canonical length is 25
+  When the RTL processes it between two valid A messages
+  Then it signals error and emits no record for H
+  And continues with the second A message without misalignment
 
-#language: es
-Escenario: SEC-PAR-03 — una longitud declarada incoherente cancela el mensaje con error y continúa
-  Dado un stream de entrada que contiene un mensaje cuya longitud declarada no coincide con los bytes disponibles
-  Cuando el RTL procesa el stream
-  Entonces señaliza error y descarta el registro de ese mensaje
-  Y continúa procesando el siguiente mensaje sin abortar el stream
+# language: en
+Scenario: SEC-PAR-03 — an incoherent declared length cancels the message with error and continues
+  Given an input stream containing a message whose declared length does not match the available bytes
+  When the RTL processes the stream
+  Then it signals error and discards that message's record
+  And continues processing the next message without aborting the stream
 
-#language: es
-Escenario: SEC-FRM-01 — un frame truncado señaliza error y el parser continúa en el siguiente mensaje
-  Dado un pcap sintético cuyo payload termina a mitad de un mensaje sin los bytes declarados
-  Cuando el RTL procesa el stream
-  Entonces señaliza error en el mensaje truncado
-  Y descarta el resto del datagrama y continúa con el siguiente paquete íntegro
+# language: en
+Scenario: SEC-FRM-01 — a truncated frame signals error and the parser continues at the next message
+  Given a synthetic pcap whose payload ends in the middle of a message without the declared bytes
+  When the RTL processes the stream
+  Then it signals error on the truncated message
+  And discards the rest of the datagram and continues with the next intact packet
 
-#language: es
-Escenario: SEC-FRM-02 — un mensaje no puede partirse entre paquetes y se gestiona con firmeza
-  Dado un stream donde tlast llega en medio de un mensaje (count inconsistente con el cierre del paquete)
-  Cuando el RTL procesa el stream
-  Entonces señaliza error y no emite un registro parcial
-  Y reinicia el estado de parsing para el siguiente paquete
+# language: en
+Scenario: SEC-FRM-02 — a message cannot be split between packets and is handled firmly
+  Given a stream where tlast arrives in the middle of a message (count inconsistent with packet closure)
+  When the RTL processes the stream
+  Then it signals error and emits no partial record
+  And resets the parsing state for the next packet

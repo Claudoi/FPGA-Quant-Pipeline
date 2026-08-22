@@ -1,52 +1,52 @@
-"""Order book multi-símbolo del golden model (semántica de referencia del RTL).
+"""Multi-symbol order book of the golden model (reference semantics for the RTL).
 
-Estructuras deliberadamente simples (la corrección auditable prima sobre la
+Deliberately simple structures (auditable correctness beats
 cleverness):
 
-- `orders`: dict plano order_ref -> (locate, side, price, qty). El order
-  reference number es único por día en todo el mercado (spec ITCH), así que
-  un solo dict sirve para todos los símbolos.
-- `_levels`: dict (locate, side) -> {price: qty agregada}.
-- `_best`: cache del mejor precio por (locate, side); se recalcula solo
-  cuando el mejor nivel se vacía.
+- `orders`: flat dict order_ref -> (locate, side, price, qty). The order
+  reference number is unique per day across the whole market (ITCH spec), so
+  a single dict serves all symbols.
+- `_levels`: dict (locate, side) -> {price: aggregated qty}.
+- `_best`: cache of the best price per (locate, side); only recomputed
+  when the best level empties.
 
-Semántica (spec fase0, contrato consumido por el RTL en fases 1-2):
+Semantics (spec phase 0, contract consumed by the RTL in phases 1-2):
 
-- `U` (replace) es ATÓMICO: delete + add producen un solo estado resultante.
-- Lado vacío del BBO = precio 0, qty 0.
-- Operación sobre ref desconocida: anomalía contada, se salta, no aborta
-  (pasa en ventanas parciales del día).
-- `C` reduce como `E` (el exec_price no cambia el precio de la orden).
+- `U` (replace) is ATOMIC: delete + add produce a single resulting state.
+- Empty BBO side = price 0, qty 0.
+- Operation on an unknown ref: counted anomaly, skipped, does not abort
+  (happens in partial windows of the day).
+- `C` reduces like `E` (the exec_price does not change the order's price).
 
-Invariantes (criterio 3, corrección de iteración 2): refs duplicadas,
-cantidades no positivas y niveles inconsistentes abortan siempre. El libro
-bloqueado/cruzado en trading continuo (S en 'Q' y H en 'T') existe en datos
-reales (transiciones halt->trading; evidencia: día principal, msg 39778763,
-símbolo ZJZZT): por defecto se CUENTA en `cross_events` y el run lo reporta;
-con `strict_cross=True` aborta (modo que ejercitan los tests sintéticos).
-`check_deep()` revalida niveles contra órdenes (periódico + cierre).
+Invariants (criterion 3, iteration 2 correction): duplicate refs,
+non-positive quantities and inconsistent levels always abort. A locked/crossed
+book in continuous trading (S at 'Q' and H at 'T') exists in real data
+(halt->trading transitions; evidence: main day, msg 39778763,
+symbol ZJZZT): by default it is COUNTED in `cross_events` and the run reports it;
+with `strict_cross=True` it aborts (mode exercised by the synthetic tests).
+`check_deep()` revalidates levels against orders (periodic + at close).
 """
 from __future__ import annotations
 
 BID = "B"
 ASK = "S"
 
-#: estados de System Event que delimitan el trading continuo
+#: System Event states that delimit continuous trading
 _MARKET_OPEN = "Q"   # start of market hours
 _MARKET_CLOSE = "M"  # end of market hours
 _CONTINUOUS = "T"    # trading state: resumption/continuous trading
 
 
 class InvariantError(RuntimeError):
-    """Invariante del libro violada: el run debe abortar."""
+    """Book invariant violated: the run must abort."""
 
 
-#: evento emitido por apply(): (locate, (bid_px, bid_qty, ask_px, ask_qty), changed)
+#: event emitted by apply(): (locate, (bid_px, bid_qty, ask_px, ask_qty), changed)
 BookEvent = tuple[int, tuple[int, int, int, int], int]
 
 
 class Book:
-    """Libro de todo el mercado; emite BBO por mensaje modificador."""
+    """Book of the whole market; emits BBO per modifying message."""
 
     def __init__(self, strict_cross: bool = False) -> None:
         self.strict_cross = strict_cross
@@ -60,14 +60,14 @@ class Book:
         self.anomalies = 0
         self.live_per_locate: dict[int, int] = {}
 
-    # -- piezas internas ----------------------------------------------------
+    # -- internal pieces ----------------------------------------------------
 
     def _level_add(self, locate: int, side: str, price: int, delta: int) -> None:
         key = (locate, side)
         levels = self._levels.setdefault(key, {})
         new_qty = levels.get(price, 0) + delta
         if new_qty < 0:
-            raise InvariantError(f"nivel negativo en {key}@{price}: {new_qty}")
+            raise InvariantError(f"negative level at {key}@{price}: {new_qty}")
         if new_qty == 0:
             del levels[price]
         else:
@@ -103,7 +103,7 @@ class Book:
         ):
             if self.strict_cross:
                 raise InvariantError(
-                    f"mensaje {msg_idx}: libro cruzado en trading continuo "
+                    f"message {msg_idx}: crossed book in continuous trading "
                     f"(locate {locate}: bid {bid_px} >= ask {ask_px})"
                 )
             self.cross_events += 1
@@ -114,9 +114,9 @@ class Book:
 
     def _add(self, msg_idx: int, locate: int, ref: int, side: str, shares: int, price: int) -> None:
         if ref in self.orders:
-            raise InvariantError(f"mensaje {msg_idx}: order_ref duplicada {ref}")
+            raise InvariantError(f"message {msg_idx}: duplicate order_ref {ref}")
         if shares <= 0:
-            raise InvariantError(f"mensaje {msg_idx}: add con qty {shares}")
+            raise InvariantError(f"message {msg_idx}: add with qty {shares}")
         self.orders[ref] = (locate, side, price, shares)
         self.live_per_locate[locate] = self.live_per_locate.get(locate, 0) + 1
         self._level_add(locate, side, price, shares)
@@ -127,7 +127,7 @@ class Book:
         self._level_add(locate, side, price, -qty)
 
     def _reduce(self, msg_idx: int, ref: int, shares: int, kind: str) -> int | None:
-        """Reduce qty de una orden; devuelve su locate o None si es anomalía."""
+        """Reduces the qty of an order; returns its locate or None if it is an anomaly."""
         order = self.orders.get(ref)
         if order is None:
             self.anomalies += 1
@@ -136,7 +136,7 @@ class Book:
         rest = qty - shares
         if rest < 0:
             raise InvariantError(
-                f"mensaje {msg_idx}: {kind} de {shares} sobre orden con {qty} vivas"
+                f"message {msg_idx}: {kind} of {shares} on an order with {qty} live"
             )
         if rest == 0:
             self._remove(ref)
@@ -148,7 +148,7 @@ class Book:
     # -- API -----------------------------------------------------------------
 
     def apply(self, msg: tuple[int, str, int, int, int, tuple | None]) -> BookEvent | None:
-        """Aplica un mensaje del parser; emite evento BBO si modifica el libro."""
+        """Applies a parser message; emits a BBO event if it modifies the book."""
         msg_idx, mtype, locate, _tracking, _ts, fields = msg
         if mtype == "S":
             code = fields[0]  # type: ignore[index]
@@ -184,36 +184,36 @@ class Book:
                 self.anomalies += 1
                 return None
             if shares <= 0:
-                raise InvariantError(f"mensaje {msg_idx}: replace con qty {shares}")
+                raise InvariantError(f"message {msg_idx}: replace with qty {shares}")
             if new_ref in self.orders:
-                raise InvariantError(f"mensaje {msg_idx}: order_ref duplicada {new_ref}")
+                raise InvariantError(f"message {msg_idx}: duplicate order_ref {new_ref}")
             loc, side, _p, _q = orig
-            # delete + add atomicos: un solo estado resultante
+            # atomic delete + add: one single resulting state
             self._remove(orig_ref)
             self.orders[new_ref] = (loc, side, price, shares)
             self.live_per_locate[loc] += 1
             self._level_add(loc, side, price, shares)
             return self._emit(loc, msg_idx)
-        return None  # resto de tipos: no tocan el libro
+        return None  # remaining types: they do not touch the book
 
     def level_count(self, locate: int) -> int:
-        """Número de niveles de precio vivos del símbolo (bid + ask)."""
+        """Number of live price levels of the symbol (bid + ask)."""
         return len(self._levels.get((locate, BID), ())) + len(
             self._levels.get((locate, ASK), ())
         )
 
     def check_deep(self) -> None:
-        """Revalida niveles contra órdenes (el run lo llama periódicamente)."""
+        """Revalidates levels against orders (the run calls it periodically)."""
         esperados: dict[tuple[int, str], dict[int, int]] = {}
         for ref, (locate, side, price, qty) in self.orders.items():
             if qty <= 0:
-                raise InvariantError(f"orden {ref} con qty {qty}")
+                raise InvariantError(f"order {ref} with qty {qty}")
             esperados.setdefault((locate, side), {})[price] = (
                 esperados.setdefault((locate, side), {}).get(price, 0) + qty
             )
         for key, levels in self._levels.items():
             for price, qty in levels.items():
                 if qty <= 0:
-                    raise InvariantError(f"nivel vacío {key}@{price}")
+                    raise InvariantError(f"empty level {key}@{price}")
         if esperados != {k: v for k, v in self._levels.items() if v}:
-            raise InvariantError("niveles inconsistentes con las órdenes vivas")
+            raise InvariantError("levels inconsistent with the live orders")

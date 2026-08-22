@@ -1,18 +1,18 @@
-"""Testbench cocotb del parser a DW=32 (fase 3, criterio 1) — área phase3.
+"""Cocotb testbench for the DW=32 parser (phase 3, criterion 1) — area phase3.
 
-Espejos P32-01/P32-02: el parser parametrizado a DW=32 emite el Anexo A de
-32 bits bit a bit contra el oráculo, y sostiene el line-rate (0 stalls) en el
-peor caso probado. Layout 32 (Anexo A recortado, campaña fase3-uram):
+Mirrors P32-01/P32-02: the parser parameterized at DW=32 emits the 32-bit
+Annex A bit-exact against the oracle, and sustains the line rate (0 stalls) in
+the worst probed case. 32 layout (trimmed Annex A, fase3-uram campaign):
 
     w0 = {msg_type[7:0], locate[15:0], length[7:0]}
     w1 = msg_idx[31:0]
-    w2.. = cuerpo (MSB-first, relleno 0)
+    w2.. = body (MSB-first, padding 0)
 
-(sin words de timestamp: el book no las consume; contrato enmendado por
-specs/fase3-uram/spec.md, criterio 1).
+(without timestamp words: the book does not consume them; contract amended by
+specs/fase3-uram/spec.md, criterion 1).
 
-Adversariales INV-P32: backpressure de salida sin pérdida (espejo OUT-02 de la
-fase 1, ahora a 32 bits) y replay del pcap real del día local (espejo REP-02).
+Adversarials INV-P32: output backpressure without loss (mirror OUT-02 of phase
+1, now at 32 bits) and replay of the local-day real pcap (mirror REP-02).
 """
 import cocotb
 import os
@@ -27,8 +27,8 @@ REAL_SUBSET_PCAP = "/tmp/real_subset.pcap"
 
 
 def oracle_words32(packets):
-    """Palabras de 32 bits esperadas para los paquetes (layout Anexo A 32
-    recortado: w0 context, w1 idx, w2.. cuerpo — sin words de ts)."""
+    """Expected 32-bit words for the packets (trimmed 32-bit Annex A layout: w0
+    context, w1 idx, w2.. body — without ts words)."""
     words = []
     for w0_64, ts, body in message_oracle.iter_message_records(packets):
         words.append(((w0_64 >> 56) & 0xFF) << 24 |
@@ -48,7 +48,7 @@ def run_oracle32(msgs):
 async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
                       beats=None, expected_tlast=1, expected_errors=0,
                       error_on_handshakes=()):
-    """Conduce un datagrama en beats AXI de 4 B y devuelve (words, stalls)."""
+    """Drives one datagram in 4 B AXI beats and returns (words, stalls)."""
     await _reset(dut)
     beats = packet_beats([payload], 4) if beats is None else beats
     n = len(beats)
@@ -73,11 +73,11 @@ async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
         accepted_tlast += took_last
         errors += int(dut.error.value)
         if pending_error_handshake is not None:
-            # `error` es registrado: se observa en este punto un ciclo después
-            # del handshake inválido que lo originó.
+            # `error` is registered: it is observed here one cycle after
+            # the invalid handshake that caused it.
             assert int(dut.error.value) == 1, (
-                f"beat inválido {pending_error_handshake} aceptado sin pulso "
-                "error asociado")
+                f"invalid beat {pending_error_handshake} accepted without the "
+                "associated error pulse")
             error_handshakes_seen.add(pending_error_handshake)
             pending_error_handshake = None
         if tv == 1 and tr == 0:
@@ -95,18 +95,18 @@ async def drive_raw32(dut, payload, out_tready=(1,), max_cycles=60000,
         if quiet > 80:
             break
     assert accepted_tlast == expected_tlast, (
-        f"tlast aceptados={accepted_tlast}, esperados={expected_tlast}")
+        f"accepted tlast={accepted_tlast}, expected={expected_tlast}")
     assert errors == expected_errors, (
-        f"pulsos error={errors}, esperados={expected_errors}")
+        f"error pulses={errors}, expected={expected_errors}")
     assert error_handshakes_seen == set(error_on_handshakes), (
-        f"handshakes inválidos observados={error_handshakes_seen}, "
-        f"esperados={set(error_on_handshakes)}")
+        f"invalid handshakes observed={error_handshakes_seen}, "
+        f"expected={set(error_on_handshakes)}")
     return out, stalls
 
 
 @cocotb.test()
 async def test_p32_01_anexo_a_32_bits(dut):
-    """Espejo §P32-01: el parser a DW=32 emite el Anexo A de 32 bits bit a bit."""
+    """Mirror §P32-01: the DW=32 parser emits the 32-bit Annex A bit-exact."""
     msgs = corpus_all_types()
     expected = run_oracle32(msgs)
     got, _ = await drive_raw32(dut, _packet_seq(msgs, 1))
@@ -117,22 +117,22 @@ async def test_p32_01_anexo_a_32_bits(dut):
 
 @cocotb.test()
 async def test_p32_02_peor_caso_una_palabra_ciclo(dut):
-    """Espejo §P32-02: mensajes back-to-back -> stalls ACOTADOS con downstream
-    consumiendo (iter 6, QB=64: 0 stalls -> ~15 acotados; el régimen de fase 1
-    ya documenta la limitación del feed infinito, LIN-01 alcance)."""
+    """Mirror §P32-02: back-to-back messages -> BOUNDED stalls with downstream
+    consuming (iter 6, QB=64: 0 stalls -> ~15 bounded; the phase 1 regime
+    already documents the infinite feed limitation, LIN-01 scope)."""
     msgs = [corpus_all_types()[2] if i % 2 == 0 else corpus_all_types()[8]
             for i in range(4)]
     words, stalls = await drive_raw32(dut, _packet_seq(msgs, 1))
     expected = run_oracle32(msgs)
     assert words == expected, f"P32-02: got({len(words)}) exp({len(expected)})"
     assert stalls <= 24, (
-        f"P32-02: {stalls} ciclos de stall con downstream consumiendo "
-        f"(acotados <= 24, QB=64, iter 6)")
+        f"P32-02: {stalls} stall cycles with downstream consuming "
+        f"(bounded <= 24, QB=64, iter 6)")
 
 
 @cocotb.test()
 async def test_inv_p32_01_backpressure_salida_sin_perdida(dut):
-    """INV/OUT-02 (32 bits): con tready bajo el parser retiene sin pérdida ni duplicado."""
+    """INV/OUT-02 (32 bits): with tready low the parser holds without loss or duplication."""
     msgs = corpus_all_types()
     words, _ = await drive_raw32(dut, _packet_seq(msgs, 1), out_tready=(1, 1, 0))
     expected = run_oracle32(msgs)
@@ -142,10 +142,10 @@ async def test_inv_p32_01_backpressure_salida_sin_perdida(dut):
 
 
 # ---------------------------------------------------------------------------
-# P32-03 (REP-02 a 32 bits): replay del pcap real del día local
+# P32-03 (REP-02 at 32 bits): replay of the local-day real pcap
 # ---------------------------------------------------------------------------
 async def drive_pcap32(dut, pcap_path, max_cycles=3_000_000):
-    """Decap del pcap (Ethernet/IPv4/UDP -> MoldUDP64) por datagrama -> RTL."""
+    """Decapsulates the pcap (Ethernet/IPv4/UDP -> MoldUDP64) per datagram -> RTL."""
     import sys
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -153,8 +153,8 @@ async def drive_pcap32(dut, pcap_path, max_cycles=3_000_000):
     from binaryfile_to_pcap import iter_pcap_packets
     packets = list(iter_pcap_packets(pcap_path))
     payloads = [payload for _seq, _msgs, payload in packets]
-    assert packets, "P32-03: pcap existente sin datagramas MoldUDP64"
-    assert all(payloads), "P32-03: pcap existente con payload MoldUDP64 vacío"
+    assert packets, "P32-03: existing pcap without MoldUDP64 datagrams"
+    assert all(payloads), "P32-03: existing pcap with empty MoldUDP64 payload"
 
     await _reset(dut)
     beats = packet_beats(payloads, 4)
@@ -180,27 +180,27 @@ async def drive_pcap32(dut, pcap_path, max_cycles=3_000_000):
         if quiet > 8000:
             break
     assert accepted_tlast == len(payloads), (
-        f"P32-03: tlast aceptados={accepted_tlast}, esperados={len(payloads)}")
+        f"P32-03: accepted tlast={accepted_tlast}, expected={len(payloads)}")
     exp = oracle_words32(packets)
-    assert exp, "P32-03: pcap existente sin salida esperada del subset ITCH"
+    assert exp, "P32-03: existing pcap without expected ITCH subset output"
     return out, exp, len(packets)
 
 
 @cocotb.test(skip=not os.path.exists(REAL_SUBSET_PCAP))
 async def test_p32_03_replay_pcap_real_32(dut):
-    """Espejo §P32-01 (evidencia real): el parser 32 sobre el pcap del día local
-    coincide bit a bit (pcap no commiteado; se omite si no existe)."""
-    assert os.path.exists(REAL_SUBSET_PCAP), "P32-03 OMITIDO: pcap local ausente"
+    """Mirror §P32-01 (real evidence): the 32-bit parser over the local-day pcap
+    matches bit-exact (pcap not committed; skipped if absent)."""
+    assert os.path.exists(REAL_SUBSET_PCAP), "P32-03 SKIPPED: local pcap absent"
     out, exp, npack = await drive_pcap32(dut, REAL_SUBSET_PCAP)
     assert out == exp, (
-        f"P32-03: got({len(out)}) exp({len(exp)}) sobre {npack} paquetes:\n"
+        f"P32-03: got({len(out)}) exp({len(exp)}) over {npack} packets:\n"
         f" got={out}\n exp={exp}")
-    cocotb.log.info(f"P32-03 OK: {npack} paquetes, {len(out)} words de 32 bits bit a bit")
+    cocotb.log.info(f"P32-03 OK: {npack} packets, {len(out)} 32-bit words bit-exact")
 
 
 @cocotb.test()
 async def test_p32_tkeep_invalido_y_truncados_recuperan(dut):
-    """AXI-KEEP-04/10: máscaras inválidas y truncados 1..3 B recuperan."""
+    """AXI-KEEP-04/10: invalid masks and 1..3 B truncations recover."""
     malformed = _packet_seq([], 1)
     recovery = corpus_all_types()[2]
     recovered = _packet_seq([recovery], 2)
@@ -234,4 +234,4 @@ async def test_p32_tkeep_invalido_y_truncados_recuperan(dut):
             beats=packet_beats([truncated, recovered], 4),
             expected_tlast=2, expected_errors=1)
         assert got == run_oracle32([first, recovery]), (
-            f"truncado {missing} B: got={got}")
+            f"truncation {missing} B: got={got}")

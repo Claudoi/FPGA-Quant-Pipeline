@@ -1,0 +1,31 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
+| Date         : Thu Aug 20 06:55:40 2026
+| Host         : atini running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file <local-build-path>/synth/reports/util_synth.txt
+| Design       : itch_chain_synth
+| Device       : xcku3p-ffva676-2L-e
+| Speed File   : -2L
+| Design State : Synthesized
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
+|       Instance       |    Module   | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | URAM | DSP Blocks |
++----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
+| itch_chain_synth     |       (top) |     154371 |     154321 |      50 |    0 | 94936 |      0 |      0 |   32 |          0 |
+|   (itch_chain_synth) |       (top) |         56 |          6 |      50 |    0 |   126 |      0 |      0 |    0 |          0 |
+|   u_book             |   orderbook |     150466 |     150466 |       0 |    0 | 93884 |      0 |      0 |   32 |          0 |
+|   u_parser           | itch_parser |       3849 |       3849 |       0 |    0 |   926 |      0 |      0 |    0 |          0 |
++----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
+
+

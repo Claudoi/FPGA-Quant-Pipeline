@@ -1,20 +1,20 @@
-// mdp3_parser.sv — parser CME MDP 3.0 (SBE) a line-rate (fase 4, Anexo M).
+// mdp3_parser.sv — CME MDP 3.0 (SBE) parser at line-rate (phase 4, Annex M).
 //
-// Consume el payload UDP ya decapado: paquete = MsgSeqNum u32 LE + SendingTime
-// u64 LE (12 B), seguido de mensajes con framing por msg_size (u16 LE que
-// INCLUYE el prefijo de 10 B: msg_size + cabecera SBE 8 B con
-// blockLength/templateId/schemaId/version u16 LE). Cada paquete llega como un
-// burst AXI-Stream (tlast = fin de paquete). Emite records normalizados del
-// Anexo M (words de 32 bits MSB-first, tlast por record) bit a bit contra el
-// golden model (golden_model/mdp3/, schema templates_FixBinary_v12.xml).
+// Consumes the already-decapsulated UDP payload: packet = MsgSeqNum u32 LE +
+// SendingTime u64 LE (12 B), followed by messages with msg_size framing
+// (u16 LE that INCLUDES the 10 B prefix: msg_size + 8 B SBE header with
+// blockLength/templateId/schemaId/version u16 LE). Each packet arrives as an
+// AXI-Stream burst (tlast = end of packet). Emits normalized Annex-M records
+// (32-bit words MSB-first, tlast per record) bit-exact against the golden
+// model (golden_model/mdp3/, schema templates_FixBinary_v12.xml).
 //
-// Subset de libro (offsets constantes derivados del schema v12):
+// Book subset (constant offsets derived from the v12 schema):
 //   46 MDIncrementalRefreshBook: root TS/MEI (bl 11), NoMDEntries (groupSize,
 //      bl 32: Px@0,Sz@8,Sec@12,Rpt@16,No@20,Lvl@24,Act@25,Typ@26) +
 //      NoOrderIDEntries (groupSize8Byte, bl 24: OrderID@0,Priority@8,Dq@16,
-//      Ref@20,OA@21). MBP = 13 words; MBOFD = 18 words con ReferenceID
-//      resuelto contra la entry MBP del MISMO mensaje (fuera de rango:
-//      error + ceros, contrato #5).
+//      Ref@20,OA@21). MBP = 13 words; MBOFD = 18 words with ReferenceID
+//      resolved against the MBP entry of the SAME message (out of range:
+//      error + zeros, contract #5).
 //   47 MDIncrementalRefreshOrderBook: root TS/MEI (bl 11), NoMDEntries
 //      (groupSize, bl 40: OrderID@0,Priority@8,Px@16,Dq@24,Sec@28,Act@32,
 //      Typ@33). MBOFD.
@@ -22,23 +22,23 @@
 //      (groupSize, bl 22: Px@0,Sz@8,No@12,Lvl@16,Typ@21). MBP.
 //   53 SnapshotFullRefreshOrderBook: root (bl 28: Sec@8,TS@20), NoMDEntries
 //      (groupSize, bl 29: OrderID@0,Priority@8,Px@16,Dq@24,Typ@28). MBOFD.
-// PRICE9/PRICENULL9: mantissa i64 LE; el exponent constante -9 NO se
-// transmite (w10/w15 = 0xF7 << 24). Resto de templates: passthrough crudo
-// (w0 = tpl<<16|msg_size, w1 = sid<<16|version, cuerpo crudo rellenado).
+// PRICE9/PRICENULL9: i64 LE mantissa; the constant -9 exponent is NOT
+// transmitted (w10/w15 = 0xF7 << 24). Rest of templates: raw passthrough
+// (w0 = tpl<<16|msg_size, w1 = sid<<16|version, raw body zero-padded).
 //
-// ARQUITECTURA: captura ping-pong a line-rate. La entrada (1 palabra/ciclo)
-// se acumula en una cola de bytes; el FSM de captura consume el framing
-// (header de paquete de 12 B, msg_size, cuerpo) escribiendo los mensajes
-// completos en dos buffers alternos (MAX_MSG bytes). Al completar un mensaje
-// se marca (occ) para decodificación mientras la entrada llena el otro
-// buffer; la decodificación (FSM de 32 bits por palabra) arma los records en
-// rrec y los empuja a una FIFO de salida que el emisor drena a AXI-Stream.
-// La entrada solo se para si ambos buffers están ocupados (mensajes MBOFD
-// emiten 72 B por ~43 B de entrada: limitación inherente al Anexo M, igual
-// que LIN-01 de fase 1). Sin RAM: el 46 resuelve el ReferenceID releyendo la
-// entry MBP del mismo buffer. DW=32 en esta iteración (Anexo M definido en
-// words de 32 bits). DW parametriza solo la entrada; la salida Anexo M queda
-// fija a 32 bits para representar records MBP de 13 words sin tkeep.
+// ARCHITECTURE: ping-pong capture at line-rate. The input (1 word/cycle)
+// accumulates in a byte queue; the capture FSM consumes the framing (12 B
+// packet header, msg_size, body) writing complete messages into two alternate
+// buffers (MAX_MSG bytes). On completing a message it is marked (occ) for
+// decoding while the input fills the other buffer; decoding (a 32-bit-per-word
+// FSM) assembles the records into rrec and pushes them to an output FIFO that
+// the emitter drains to AXI-Stream. The input only stalls if both buffers are
+// busy (MBOFD messages emit 72 B per ~43 B of input: inherent limitation of
+// Annex M, same as phase-1 LIN-01). No RAM: 46 resolves the ReferenceID by
+// re-reading the MBP entry of the same buffer. DW=32 in this iteration (Annex
+// M defined in 32-bit words). DW parameterizes only the input; the Annex-M
+// output stays fixed at 32 bits to represent 13-word MBP records without
+// tkeep.
 module mdp3_parser #(
     parameter int DW = 32
 ) (
@@ -58,26 +58,26 @@ module mdp3_parser #(
 );
 
 localparam logic [3:0]  BYTES      = 4'(DW / 8);
-    localparam logic [8:0]  MAX_MSG    = 256;   // bytes por buffer (corpus <= ~250 B)
-    localparam logic [8:0]  FIFO_DEPTH = 256;   // words de salida (32 bits c/u)
+    localparam logic [8:0]  MAX_MSG    = 256;   // bytes per buffer (corpus <= ~250 B)
+    localparam logic [8:0]  FIFO_DEPTH = 256;   // output words (32 bits each)
     localparam logic [7:0]  PKT_HDR    = 12;
     localparam logic [7:0]  MSG_PREFIX = 10;
     localparam logic [7:0]  EXP_BYTE   = 8'hF7; // PRICE9/PRICENULL9 exponent = -9
 
     localparam logic [15:0] TPL_46 = 16'd46, TPL_47 = 16'd47, TPL_52 = 16'd52, TPL_53 = 16'd53;
-    // firma del schema pinned templates_FixBinary_v12.xml (criterio 5): el
-    // subset decodificable exige template en {46,47,52,53} Y schema_id==1 Y
-    // version==12; cualquier otra combinacion va a passthrough.
+    // signature of the pinned templates_FixBinary_v12.xml schema (criterion
+    // 5): the decodable subset requires template in {46,47,52,53} AND
+    // schema_id==1 AND version==12; any other combination goes to passthrough.
     localparam logic [15:0] SCHEMA_ID = 16'd1;
     localparam logic [15:0] SCHEMA_VER = 16'd12;
 
-    // ── tkeep (addendum framing tkeep, 2026-08-18) ───────────────────────────
-    // bytes válidos del beat por s_axis_tkeep; el contrato exige la máscara
-    // MSB-contigua (los lanes válidos son los bytes altos del word). Un lane
-    // con tkeep=0 nunca aporta bytes al apend ni completa una longitud
-    // declarada; un beat con tkeep=0 se consume sin aportar y sin trabarse.
-    // La validación de máscaras con huecos queda fuera del alcance de este
-    // loop (criterio 7, loop separado según el addendum).
+    // ── tkeep (framing tkeep addendum, 2026-08-18) ───────────────────────────
+    // valid bytes of the beat via s_axis_tkeep; the contract requires the mask
+    // MSB-contiguous (the valid lanes are the high bytes of the word). A lane
+    // with tkeep=0 never contributes bytes to the append nor completes a
+    // declared length; a beat with tkeep=0 is consumed without contributing
+    // and without stalling. Validation of masks with holes stays out of scope
+    // of this loop (criterion 7, separate loop per the addendum).
     function automatic [3:0] tkeep_cnt;
         input [DW/8-1:0] tk;
         integer k;
@@ -89,16 +89,16 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     endfunction
     wire [3:0] tk_cnt = tkeep_cnt(s_axis_tkeep);
 
-    // validación del framing (criterio 7): el tkeep debe ser MSB-contiguo
-    // (los lanes válidos son los altos); un beat parcial solo es legal en
-    // el último beat del burst, con tlast
+    // framing validation (criterion 7): the tkeep must be MSB-contiguous (the
+    // valid lanes are the high ones); a partial beat is only legal on the last
+    // beat of the burst, with tlast
     wire tk_huecos = (s_axis_tkeep != 0) &&
                      ((s_axis_tkeep | (s_axis_tkeep - 1)) != {BYTES{1'b1}});
     wire tk_parcial_no_tlast = (tk_cnt != 0) && (tk_cnt < BYTES) &&
                                !s_axis_tlast;
     wire tk_invalido = s_axis_tvalid && (tk_huecos || tk_parcial_no_tlast);
 
-    // offsets dentro del cuerpo (desde byte 10 del mensaje), LE
+    // offsets within the body (from byte 10 of the message), LE
     localparam logic [31:0] O46_TS=0, O46_MEI=8, O46_DIM=11, O46_ENT=14, O46_BL1=32, O46_BL2=24;
     localparam logic [31:0] O46_PX=0, O46_SZ=8, O46_SEC=12, O46_RPT=16, O46_NO=20, O46_LVL=24,
                       O46_ACT=25, O46_TYP=26;
@@ -110,10 +110,10 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     localparam logic [31:0] O53_SEC=8, O53_TS=20, O53_DIM=28, O53_ENT=31, O53_BL=29;
     localparam logic [31:0] O53_OID=0, O53_PRI=8, O53_PX=16, O53_DQ=24, O53_TYP=28;
 
-    // ── cola de bytes de entrada (FIFO circular de MAX_MSG bytes) ──────────
-    // qw = puntero de escritura, qh = puntero de lectura (mod MAX_MSG).
-    // qavail = bytes ya escritos sin consumir; qbyte() lee del FIFO y, para
-    // el word que entra en este ciclo (k >= qavail), directamente de tdata.
+    // ── input byte queue (circular FIFO of MAX_MSG bytes) ───────────────────
+    // qw = write pointer, qh = read pointer (mod MAX_MSG). qavail = bytes
+    // already written but not consumed; qbyte() reads from the FIFO and, for
+    // the word entering this cycle (k >= qavail), directly from tdata.
     reg [7:0] qbytes [MAX_MSG];
     reg [7:0] qw, qh;
 
@@ -129,7 +129,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     wire [15:0] qavail_eff =
         16'(qavail) + (s_axis_tvalid && s_axis_tready ? 16'(tk_cnt) : 16'd0);
 
-    // ── buffers de mensaje ping-pong ─────────────────────────────────────────
+    // ── ping-pong message buffers ─────────────────────────────────────────
     reg [7:0] mbuf0 [MAX_MSG];
     reg [7:0] mbuf1 [MAX_MSG];
     reg       occ [2];
@@ -159,26 +159,26 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     endfunction
 
     function automatic [15:0] hdr_cons;
-        // bytes consumibles del header de paquete en este ciclo (CS_HDR)
+        // consumable bytes of the packet header in this cycle (CS_HDR)
         hdr_cons = (qavail_eff > 16'(PKT_HDR) - 16'(hdr_pos)) ?
                    (16'(PKT_HDR) - 16'(hdr_pos)) : qavail_eff;
     endfunction
 
-    // ── captura ──────────────────────────────────────────────────────────────
-    reg [2:0]  cst;   // CS_WAIT=4 → 3 bits mínimo
+    // ── capture ──────────────────────────────────────────────────────────────
+    reg [2:0]  cst;   // CS_WAIT=4 → 3 bits minimum
     localparam logic [2:0] CS_HDR=0, CS_SIZE=1, CS_BODY=2, CS_SKIP=3, CS_WAIT=4,
                       CS_DISCARD=5;
     reg [7:0]  hdr_pos;
     reg        gap_check;
     reg        first_pkt;
-    reg        pkt_end;    // tlast aceptado; se conserva hasta drenar la cola
-    reg        wait_hdr;   // CS_WAIT entrado por tlast → reanudar en CS_HDR
+    reg        pkt_end;    // tlast accepted; kept until the queue is drained
+    reg        wait_hdr;   // CS_WAIT entered by tlast → resume at CS_HDR
     reg [31:0] seq, exp_seq;
     reg        cap_sel;
     reg [15:0] cap_len;
     reg [15:0] cap_size, skip_left;
 
-    // ── decodificación ───────────────────────────────────────────────────────
+    // ── decoding ───────────────────────────────────────────────────────
     reg [3:0]  dst;
     localparam logic [3:0] DS_IDLE=0, DS_HDR=1, DS_ROOT=2, DS_G1=3, DS_G1_ENT=4, DS_PUSH=5,
                      DS_G2_DIM=6, DS_G2_ENT=7, DS_PASS=8, DS_DONE=9;
@@ -197,16 +197,16 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
     reg [31:0] p_word;
     reg [4:0]  p_cnt;
 
-    // ── FIFO de salida (32 bits/palabra) ─────────────────────────────────────
+    // ── output FIFO (32 bits/word) ─────────────────────────────────────
     reg [31:0] f_mem [FIFO_DEPTH];
     reg        f_tl  [FIFO_DEPTH];
-    reg [8:0]  f_cnt;          // words ocupadas (push - pop, un solo escritor)
-    reg [7:0]  f_head, f_tail; // punteros circulares (wrappean solos)
+    reg [8:0]  f_cnt;          // occupied words (push - pop, single writer)
+    reg [7:0]  f_head, f_tail; // circular pointers (they wrap on their own)
 
 
-    // push/pop de la FIFO: el núcleo emite push_commit (combinacional sobre su
-    // estado) y el emisor muestra/popa. f_cnt se actualiza en el núcleo con el
-    // balance neto; f_head solo en el emisor (single-driver).
+    // FIFO push/pop: the core emits push_commit (combinational over its state)
+    // and the emitter shows/pops. f_cnt is updated in the core with the net
+    // balance; f_head only in the emitter (single-driver).
     wire pop = m_axis_tvalid && m_axis_tready;
     wire in_hs = s_axis_tvalid && s_axis_tready;
     wire pkt_end_eff = pkt_end || (in_hs && s_axis_tlast);
@@ -217,7 +217,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
           p_n == 1 ||
           (p_n == 2 && p_off < d_size && (p_cnt == 3 || p_off + 1 == d_size))));
 
-    // ── emisor: FIFO → m_axis ────────────────────────────────────────────────
+    // ── emitter: FIFO → m_axis ────────────────────────────────────────────────
     always @(posedge clk) begin
         if (!rst_n) begin
             m_axis_tvalid <= 0;
@@ -235,7 +235,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
         end
     end
 
-    // ── núcleo: captura + decodificación + push a FIFO ───────────────────────
+    // ── core: capture + decoding + push to FIFO ───────────────────────
     always @(posedge clk) begin
         if (!rst_n) begin
             s_axis_tready <= 0;
@@ -257,12 +257,12 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
             gap_detected <= 0;
             error <= 0;
 
-            // cola de bytes: apend de los lanes válidos del word entrante
-            // (solo tkeep=1; los bytes de los lanes 0 no se escriben ni
-            // avanzan qw — mecánica del addendum framing tkeep). Un beat
-            // con tkeep inválido (criterio 7) o un beat de un paquete en
-            // descarte no se apendan: su bytes no deben llegar al
-            // decodificador jamás.
+            // byte queue: append of the valid lanes of the incoming word
+            // (only tkeep=1; the bytes of lanes 0 are not written nor
+            // advance qw — mechanics of the framing tkeep addendum). A beat
+            // with invalid tkeep (criterion 7) or a beat of a packet being
+            // discarded are not appended: their bytes must never reach the
+            // decoder.
             if (s_axis_tvalid && s_axis_tready && !tk_invalido &&
                 cst != CS_DISCARD) begin
                 for (integer k = 0; k < BYTES; k = k + 1)
@@ -274,12 +274,12 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                     pkt_end <= 1;
             end
 
-            // ── captura ────────────────────────────────────────────────────
-            // ── descarte por framing inválido (criterio 7) ─────────────────
-            // Un beat con tkeep no MSB-contiguo o parcial sin tlast pulsa
-            // error y descarta el paquete completo: drena la entrada hasta
-            // el tlast sin apendar nada, resetea colas y captura y vuelve a
-            // CS_HDR; el siguiente burst (recovery) se procesa normal.
+            // ── capture ────────────────────────────────────────────────────
+            // ── discard on invalid framing (criterion 7) ────────────────────
+            // A beat with non-MSB-contiguous tkeep or partial without tlast pulses
+            // error and discards the whole packet: drains the input until tlast
+            // appending nothing, resets queues and capture, then returns to CS_HDR;
+            // the next burst (recovery) is processed normally.
             if (in_hs && tk_invalido && cst != CS_DISCARD) begin
                 error <= 1;
                 if (s_axis_tlast) begin
@@ -339,13 +339,13 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                             end
                         end else if (pkt_end_eff &&
                                      qavail_eff < {qbyte(1), qbyte(0)}) begin
-                            error <= 1;  // mensaje declarado cruza el tlast
+                            error <= 1;  // declared message crosses tlast
                             qh <= 0; qw <= 0; pkt_end <= 0;
                             hdr_pos <= 0;
                             cst <= CS_HDR;
                         end else begin
-                            // msg_size (2 B) forma parte del mensaje: se
-                            // almacena en mbuf[0..1] antes del cuerpo
+                            // msg_size (2 B) is part of the message: it is
+                            // stored in mbuf[0..1] before the body
                             if (cap_sel)
                                 mbuf1[0] <= qbyte(0);
                             else
@@ -364,7 +364,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
 
                 CS_BODY: begin
                     if (32'(qavail_eff) >= 32'(cap_size) - 32'(cap_len)) begin
-                        // mensaje completo
+                        // complete message
                         for (integer k = 0; k < 3*BYTES; k = k + 1)
                             if (k < 32'(cap_size) - 32'(cap_len))
                                 if (cap_sel)
@@ -373,10 +373,10 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                                     mbuf0[(32'(cap_len) + k) % 32'(MAX_MSG)] <= qbyte(k);
                         occ[cap_sel] <= 1;
                         if (pkt_end_eff) begin
-                            // paquete termina en el borde del mensaje: descartar
-                            // el padding residual (burst a alinear a palabra) y
-                            // el header de 12 B del siguiente paquete se lee
-                            // desde un burst nuevo (colas reset ad hoc)
+                            // packet ends on the message edge: discard the
+                            // residual padding (burst to align to a word) and
+                            // the 12 B header of the next packet is read from
+                            // a new burst (queues reset ad hoc)
                             qh <= 0; qw <= 0; pkt_end <= 0;
                             hdr_pos <= 0;
                             if (occ[~cap_sel] == 0) begin
@@ -408,7 +408,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                         cap_len <= cap_len + qavail_eff;
                         qh <= 8'((32'(qh) + 32'(qavail_eff)) % 32'(MAX_MSG));
                         if (pkt_end_eff) begin
-                            error <= 1;   // mensaje truncado por tlast
+                            error <= 1;   // message truncated by tlast
                             qh <= 0; qw <= 0; pkt_end <= 0;
                             cap_len <= 0;
                             hdr_pos <= 0;
@@ -449,25 +449,25 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                     end
                 end
                 default: begin
-                    // cst 6..7 no se alcanza con la lógica actual; por
-                    // robustez se vuelve a CS_HDR (recuperación ante X)
+                    // cst 6..7 is unreachable with the current logic; for
+                    // robustness we return to CS_HDR (recovery against X)
                     error <= 1;
                     hdr_pos <= 0;
                     cst <= CS_HDR;
                 end
             endcase
-            end  // fin del descarte por framing inválido (criterio 7)
+            end  // end of the discard-on-invalid-framing block (criterion 7)
 
-            // tready del régimen verificado (<= MAX_MSG): la cola admite
-            // hasta 256 bytes de mensaje; el mensaje máximo se procesa porque
-            // el parser drena a mbuf incrementalmente (12 B/ciclo > 4 B/ciclo
-            // de entrada en DW=32). Un slot reservado (<) rompía el régimen
-            // de backpressure de M3-FRM-03 (racha > 16 stalls) y M3-INV-03.
+            // tready of the verified regime (<= MAX_MSG): the queue admits up
+            // to 256 bytes of message; the maximum message is processed
+            // because the parser drains to mbuf incrementally (12 B/cycle >
+            // 4 B/cycle of input at DW=32). A reserved slot (<) broke the
+            // backpressure regime of M3-FRM-03 (run > 16 stalls) and M3-INV-03.
             s_axis_tready <= ((16'(qavail) + 16'(tk_cnt) <= 16'(MAX_MSG)) ||
                               tk_invalido || cst == CS_DISCARD) &&
                              (cst != CS_WAIT) && !pkt_end_eff;
 
-            // ── decodificación ─────────────────────────────────────────────
+            // ── decoding ─────────────────────────────────────────────
             case (dst)
                 DS_IDLE: begin
                     if (occ[0] || occ[1]) begin
@@ -480,7 +480,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                     d_sid  <= mru16(6, dec_sel);
                     d_ver  <= mru16(8, dec_sel);
                     d_size <= mru16(0, dec_sel);
-                    p_n    <= 0;   // passthrough vuelve a arrancar en w0
+                    p_n    <= 0;   // passthrough restarts at w0
                     dst <= ((mru16(4, dec_sel) == TPL_46 ||
                              mru16(4, dec_sel) == TPL_47 ||
                              mru16(4, dec_sel) == TPL_52 ||
@@ -531,8 +531,8 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                         dst <= DS_DONE;
                     end else if (g1_n == 0) begin
                         if (d_tpl == TPL_46) dst <= DS_G2_DIM;
-                        else dst <= DS_DONE;   // 47/52/53 con grupo vacío: el
-                                               // golden no emite (anexo_m=[])
+                        else dst <= DS_DONE;   // 47/52/53 with empty group: the
+                                               // golden emits nothing (anexo_m=[])
                     end else
                         dst <= DS_G1_ENT;
                 end
@@ -618,7 +618,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                                 end
                             end
                             3: dst <= DS_DONE;
-                            default: dst <= DS_DONE;   // recuperación ante X
+                            default: dst <= DS_DONE;   // recovery against X
                         endcase
                     end
                 end
@@ -627,12 +627,12 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                     dst <= DS_IDLE;
                 end
                 default: begin
-                    // dst no puede alcanzar 10..15; recuperación segura
+                    // dst cannot reach 10..15; safe recovery
                     dst <= DS_DONE;
                 end
             endcase
 
-            // ── preparación de records (en DS_G1_ENT / DS_G2_ENT) ──────────
+            // ── record preparation (in DS_G1_ENT / DS_G2_ENT) ──────────
             case (dst)
                 DS_G1_ENT: begin
                     if (g_idx < g1_n) begin
@@ -640,7 +640,9 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                             TPL_46: begin
                                 // MBP (46 NoMDEntries): 13 words
                                 reg [31:0] eb;
+                                reg [31:0] no32;
                                 eb = 32'(g1_base) + 32'(g_idx) * 32'(O46_BL1);
+                                no32 = mru32(eb + O46_NO, dec_sel);
                                 rlen <= 13;
                                 rrec[0] <= {d_tpl, d_size};
                                 rrec[1] <= {d_sid, d_ver};
@@ -657,7 +659,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                                 rrec[9] <= mru32(eb + O46_PX + 4, dec_sel);
                                 rrec[10] <= {EXP_BYTE, 24'h0};
                                 rrec[11] <= mru32(eb + O46_SZ, dec_sel);
-                                rrec[12] <= {mru32(eb + O46_NO, dec_sel)[15:0],
+                                rrec[12] <= {no32[15:0],
                                              8'h0,
                                              mrb(eb + O46_LVL, dec_sel)};
                             end
@@ -691,7 +693,9 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                             TPL_52: begin
                                 // MBP (52 NoMDEntries): 13 words, sec/rpt root
                                 reg [31:0] eb;
+                                reg [31:0] no32;
                                 eb = 32'(g1_base) + 32'(g_idx) * 32'(O52_BL);
+                                no32 = mru32(eb + O52_NO, dec_sel);
                                 rlen <= 13;
                                 rrec[0] <= {d_tpl, d_size};
                                 rrec[1] <= {d_sid, d_ver};
@@ -706,7 +710,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                                 rrec[9] <= mru32(eb + O52_PX + 4, dec_sel);
                                 rrec[10] <= {EXP_BYTE, 24'h0};
                                 rrec[11] <= mru32(eb + O52_SZ, dec_sel);
-                                rrec[12] <= {mru32(eb + O52_NO, dec_sel)[15:0],
+                                rrec[12] <= {no32[15:0],
                                              8'h0,
                                              mrb(eb + O52_LVL, dec_sel)};
                             end
@@ -745,7 +749,7 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                 DS_G2_ENT: begin
                     if (g_idx < g2_n) begin
                         // MBOFD (46 NoOrderIDEntries): 18 words, ReferenceID
-                        // contra la entry MBP del mismo mensaje
+                        // against the MBP entry of the same message
                         reg [31:0] eb, src;
                         reg [7:0]  rref;
                         eb   = 32'(g2_base) + 32'(g_idx) * 32'(O46_BL2);
@@ -772,15 +776,15 @@ localparam logic [3:0]  BYTES      = 4'(DW / 8);
                         rrec[15] <= (rref < g1_n) ? {EXP_BYTE, 24'h0} : 32'd0;
                         rrec[16] <= mru32(eb + O46_DQ, dec_sel);
                         rrec[17] <= 0;
-                        if (rref >= g1_n) error <= 1;   // contrato #5
+                        if (rref >= g1_n) error <= 1;   // contract #5
                     end
                 end
-                default: ;   // solo G1_ENT/G2_ENT se preparan aquí
+                default: ;   // only G1_ENT/G2_ENT are prepared here
             endcase
 
-            // FIFO: balance neto de esta ciclo (push del decodificador menos
-            // pop del emisor). push_commit/pop son combinacionales sobre el
-            // estado previo al flanco, igual que las ramas que escriben f_mem.
+            // FIFO: net balance of this cycle (decoder push minus emitter pop).
+            // push_commit/pop are combinational over the pre-edge state, like
+            // the branches that write f_mem.
 f_cnt <= f_cnt + (push_commit ? 9'd1 : 9'd0) -
                         (pop ? 9'd1 : 9'd0);
         end

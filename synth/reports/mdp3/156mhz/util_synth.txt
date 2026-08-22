@@ -1,0 +1,28 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
+| Date         : Thu Aug 20 18:51:49 2026
+| Host         : atini running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file <local-build-path>/synth/reports/mdp3/156mhz/util_synth.txt
+| Design       : mdp3_parser
+| Device       : xcku3p-ffva676-2L-e
+| Speed File   : -2L
+| Design State : Synthesized
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++-------------+--------+------------+------------+---------+------+------+--------+--------+------+------------+
+|   Instance  | Module | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | URAM | DSP Blocks |
++-------------+--------+------------+------------+---------+------+------+--------+--------+------+------------+
+| mdp3_parser |  (top) |     283695 |     283431 |     264 |    0 | 7579 |      0 |      0 |    0 |          0 |
++-------------+--------+------------+------------+---------+------+------+--------+--------+------+------------+
+
+

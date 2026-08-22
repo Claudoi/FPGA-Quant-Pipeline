@@ -1,9 +1,9 @@
-"""Tests espejo de specs/fase4-mdp3-parser/gherkin/mdp3.feature (criterio 1).
+"""Mirror tests of specs/fase4-mdp3-parser/gherkin/mdp3.feature (criterion 1).
 
-M3-GEN-01 y M3-GEN-02: round-trip decode(encode(m)) == m y tamaños esperados
-derivados del schema SBE XML oficial de CME (templates_FixBinary_v12.xml).
-El schema se lee desde data/mdp3/ (gitignored, regla G0); el fetch es
-scripts/fetch_mdp3_schema.py (fail closed con md5).
+M3-GEN-01 and M3-GEN-02: round-trip decode(encode(m)) == m and expected sizes
+derived from the official CME SBE XML schema (templates_FixBinary_v12.xml).
+The schema is read from data/mdp3/ (gitignored, rule G0); the fetch is
+scripts/fetch_mdp3_schema.py (fail closed with md5).
 """
 from __future__ import annotations
 
@@ -42,17 +42,17 @@ class TestM3Gen(unittest.TestCase):
                 decoded = decode_message(schema, pm)
                 self.assertEqual(pm.template_id, template_id)
                 for f in msg_def.fields:
-                    self.assertIn(f.name, decoded, f"campo {f.name} ausente")
+                    self.assertIn(f.name, decoded, f"missing field {f.name}")
                 for g in msg_def.groups:
-                    self.assertIn(g.name, decoded, f"grupo {g.name} ausente")
+                    self.assertIn(g.name, decoded, f"missing group {g.name}")
                     for entry in decoded[g.name]:
                         for gf in g.fields:
                             self.assertIn(gf.name, entry,
-                                          f"campo {gf.name} ausente en {g.name}")
-                # round-trip de bytes: decode(encode(m)) re-encodeado es idéntico
+                                          f"missing field {gf.name} in {g.name}")
+                # byte round-trip: decode(encode(m)) re-encoded is identical
                 re_encoded = encode_message(schema, template_id, decoded)
                 self.assertEqual(re_encoded, raw,
-                                 f"round-trip byte a byte del template {template_id}")
+                                 f"byte-for-byte round-trip of template {template_id}")
 
     def test_m3gen01_el_encoder_preserva_valores_no_cero_del_subset(self):
         schema = self.schema
@@ -60,7 +60,7 @@ class TestM3Gen(unittest.TestCase):
         def assert_preserved(expected, actual, path=""):
             if isinstance(expected, dict):
                 for key, value in expected.items():
-                    self.assertIn(key, actual, f"campo ausente: {path}{key}")
+                    self.assertIn(key, actual, f"missing field: {path}{key}")
                     assert_preserved(value, actual[key], f"{path}{key}.")
             elif isinstance(expected, list):
                 self.assertEqual(len(actual), len(expected), path.rstrip("."))
@@ -176,23 +176,23 @@ class TestM3Gen(unittest.TestCase):
             raw = corpus.passthrough_message(unknown=unknown)
             pm = next(iter_packet_messages(encode_packet(schema, 1, 2, [raw])))
             decoded = decode_message(schema, pm)
-            self.assertEqual(decoded, {}, "un passthrough no se decodifica")
+            self.assertEqual(decoded, {}, "a passthrough is not decoded")
             self.assertEqual(message_body_bytes(pm), raw[MESSAGE_PREFIX_SIZE:],
-                             "el cuerpo crudo del passthrough se preserva bit a bit")
+                             "the passthrough raw body is preserved bit-for-bit")
         self.assertNotIn(UNKNOWN_TEMPLATE, schema.messages)
 
     def test_m3gen02_el_loader_deriva_los_tamanos_esperados_desde_el_xml(self):
         schema = self.schema
-        # tamaños root del XML v12: incremental 11, snapshot 52=59, 53=28
+        # root sizes of XML v12: incremental 11, snapshot 52=59, 53=28
         self.assertEqual(schema.messages[46].block_length, 11)
         self.assertEqual(schema.messages[47].block_length, 11)
         self.assertEqual(schema.messages[52].block_length, 59)
         self.assertEqual(schema.messages[53].block_length, 28)
         self.assertEqual(schema.header_size, 8)
-        # dimensiones de grupo derivadas del XML
+        # group dimensions derived from the XML
         self.assertEqual(schema.group_dim_size(schema.messages[46].groups[0]), 3)
         self.assertEqual(schema.group_dim_size(schema.messages[46].groups[1]), 8)
-        # msg_size de cada mensaje del corpus == 10 + root + Σ(dim + n·blockLength)
+        # msg_size of each corpus message == 10 + root + Σ(dim + n·blockLength)
         corpus = Corpus(schema, seed=42)
         for _ in range(20):
             for template_id in (46, 47, 52, 53):
@@ -204,8 +204,8 @@ class TestM3Gen(unittest.TestCase):
                     expected += schema.group_dim_size(g) \
                         + len(decoded.get(g.name, [])) * g.block_length
                 self.assertEqual(pm.msg_size, expected,
-                                 f"tamaño esperado (XML) del template {template_id}")
-        # caso mínimo: 47 con una entry = 10 + 11 + 3 + 40 = 64 bytes
+                                 f"expected size (XML) of template {template_id}")
+        # minimal case: 47 with one entry = 10 + 11 + 3 + 40 = 64 bytes
         raw = encode_message(schema, 47, {
             "TransactTime": 123, "MatchEventIndicator": 1,
             "NoMDEntries": [{
@@ -218,73 +218,22 @@ class TestM3Gen(unittest.TestCase):
         self.assertEqual(pm.msg_size, 64)
 
     def test_m3sch01_los_localparams_rtl_coinciden_con_el_schema_v12(self):
-        schema = self.schema
-        rtl = Path("rtl/parser/mdp3_parser.sv").read_text()
-
-        def field_offset(fields, name):
-            return next(field.offset for field in fields if field.name == name)
-
-        m46, m47 = schema.messages[46], schema.messages[47]
-        m52, m53 = schema.messages[52], schema.messages[53]
-        g46_mbp, g46_oid = m46.groups
-        g47, g52, g53 = m47.groups[0], m52.groups[0], m53.groups[0]
-        expected = {
-            "MSG_PREFIX": 2 + schema.header_size,
-            "TPL_46": 46, "TPL_47": 47, "TPL_52": 52, "TPL_53": 53,
-            "O46_TS": field_offset(m46.fields, "TransactTime"),
-            "O46_MEI": field_offset(m46.fields, "MatchEventIndicator"),
-            "O46_DIM": m46.block_length,
-            "O46_ENT": m46.block_length + schema.group_dim_size(g46_mbp),
-            "O46_BL1": g46_mbp.block_length, "O46_BL2": g46_oid.block_length,
-            "O46_PX": field_offset(g46_mbp.fields, "MDEntryPx"),
-            "O46_SZ": field_offset(g46_mbp.fields, "MDEntrySize"),
-            "O46_SEC": field_offset(g46_mbp.fields, "SecurityID"),
-            "O46_RPT": field_offset(g46_mbp.fields, "RptSeq"),
-            "O46_NO": field_offset(g46_mbp.fields, "NumberOfOrders"),
-            "O46_LVL": field_offset(g46_mbp.fields, "MDPriceLevel"),
-            "O46_ACT": field_offset(g46_mbp.fields, "MDUpdateAction"),
-            "O46_TYP": field_offset(g46_mbp.fields, "MDEntryType"),
-            "O46_OID": field_offset(g46_oid.fields, "OrderID"),
-            "O46_PRI": field_offset(g46_oid.fields, "MDOrderPriority"),
-            "O46_DQ": field_offset(g46_oid.fields, "MDDisplayQty"),
-            "O46_REF": field_offset(g46_oid.fields, "ReferenceID"),
-            "O46_OA": field_offset(g46_oid.fields, "OrderUpdateAction"),
-            "O47_OID": field_offset(g47.fields, "OrderID"),
-            "O47_PRI": field_offset(g47.fields, "MDOrderPriority"),
-            "O47_PX": field_offset(g47.fields, "MDEntryPx"),
-            "O47_DQ": field_offset(g47.fields, "MDDisplayQty"),
-            "O47_SEC": field_offset(g47.fields, "SecurityID"),
-            "O47_ACT": field_offset(g47.fields, "MDUpdateAction"),
-            "O47_TYP": field_offset(g47.fields, "MDEntryType"),
-            "O47_BL": g47.block_length,
-            "O52_SEC": field_offset(m52.fields, "SecurityID"),
-            "O52_RPT": field_offset(m52.fields, "RptSeq"),
-            "O52_TS": field_offset(m52.fields, "TransactTime"),
-            "O52_DIM": m52.block_length,
-            "O52_ENT": m52.block_length + schema.group_dim_size(g52),
-            "O52_BL": g52.block_length,
-            "O52_PX": field_offset(g52.fields, "MDEntryPx"),
-            "O52_SZ": field_offset(g52.fields, "MDEntrySize"),
-            "O52_NO": field_offset(g52.fields, "NumberOfOrders"),
-            "O52_LVL": field_offset(g52.fields, "MDPriceLevel"),
-            "O52_TYP": field_offset(g52.fields, "MDEntryType"),
-            "O53_SEC": field_offset(m53.fields, "SecurityID"),
-            "O53_TS": field_offset(m53.fields, "TransactTime"),
-            "O53_DIM": m53.block_length,
-            "O53_ENT": m53.block_length + schema.group_dim_size(g53),
-            "O53_BL": g53.block_length,
-            "O53_OID": field_offset(g53.fields, "OrderID"),
-            "O53_PRI": field_offset(g53.fields, "MDOrderPriority"),
-            "O53_PX": field_offset(g53.fields, "MDEntryPx"),
-            "O53_DQ": field_offset(g53.fields, "MDDisplayQty"),
-            "O53_TYP": field_offset(g53.fields, "MDEntryType"),
-        }
-        for name, value in expected.items():
-            match = re.search(
-                rf"\b{re.escape(name)}\s*=\s*(?:(?:\d+)'d)?(\d+)\b", rtl)
-            self.assertIsNotNone(match, f"localparam RTL ausente: {name}")
-            self.assertEqual(int(match.group(1)), value,
-                             f"drift schema v12↔RTL en {name}")
+        # Single table in scripts/verify/check_mdp3_schema.py (CLO-SCH-01):
+        # the unittest delegates to the gate G script, does not duplicate the table.
+        import subprocess
+        import sys as _sys
+        root = Path(__file__).resolve().parents[2]
+        script = root / "scripts/verify/check_mdp3_schema.py"
+        proc = subprocess.run(
+            [_sys.executable, str(script)],
+            capture_output=True, text=True, cwd=root,
+        )
+        self.assertEqual(
+            proc.returncode, 0,
+            f"check_mdp3_schema.py rc={proc.returncode}: "
+            f"{proc.stdout}\n{proc.stderr}",
+        )
+        self.assertIn("PASS", proc.stdout)
 
 
 if __name__ == "__main__":

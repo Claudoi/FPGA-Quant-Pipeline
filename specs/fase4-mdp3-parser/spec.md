@@ -1,134 +1,131 @@
-# fase4-mdp3-parser (fase 4 del maestro — Stretch: port a CME MDP 3.0)
+# fase4-mdp3-parser (phase 4 of the master plan — Stretch: port to CME MDP 3.0)
 
 ## Goal
 
-Portar el parser del pipeline de ITCH a **CME MDP 3.0** (SBE — Simple Binary
-Encoding): un parser RTL que decodifica el paquete MDP 3.0 (Binary Packet
-Header + mensajes SBE con su framing) y emite registros normalizados
-("Anexo M") para el subset de templates de libro (incremental book + snapshot),
-con **passthrough crudo** del resto de templates, verificado **bit a bit contra
-un golden model Python generado desde el schema XML oficial de CME**.
+Port the ITCH pipeline parser to **CME MDP 3.0** (SBE — Simple Binary Encoding):
+an RTL parser that decodes the MDP 3.0 packet (Binary Packet Header + SBE
+messages with their framing) and emits normalized records ("Annex M") for the
+subset of book templates (incremental book + snapshot), with **raw passthrough**
+of the remaining templates, verified **bit-exact against a Python golden model
+generated from the official CME XML schema**.
 
-El maestro lo fija como capítulo final: *«portar tu pipeline de ITCH a MDP3
-(aunque sea solo el parser SBE verificado con paquetes sintéticos generados
-desde los schemas XML) demuestra generalidad de diseño y conocimiento del
-protocolo del mayor mercado de futuros del mundo»*.
+The master fixes it as the final chapter: *"porting your ITCH pipeline to MDP3
+(even if only the SBE parser verified with synthetic packets generated from the
+XML schemas) demonstrates design generality and protocol knowledge of the
+largest futures market in the world"*.
 
 ## Scope
 
 **In scope:**
 
-- **Golden model MDP3** (`golden_model/mdp3/`): loader del schema SBE XML
-  (templates, campos con offsets, grupos repetitivos, tipos compuestos),
-  decoder (paquete → mensajes → registros Anexo M), generator (corpus
-  sintético SBE válido) y vectores.
-- **Fetch del schema**: `scripts/fetch_mdp3_schema.py` (CME FTP por HTTPS,
-  con **fallback al archivo oficial vía Wayback Machine** y md5 pinned
-  fail-closed, porque cmegroup.com responde 403 al bot) →
-  `data/mdp3/` (gitignored, regla G0: los schemas son spec, no
-  datos de mercado, pero se mantienen fuera del repo igualmente). Schema
-  pinned: `templates_FixBinary_v12.xml` (2021-03-10, id=1 version=12,
-  byteOrder=littleEndian), md5 en el propio script.
-- **RTL `rtl/parser/mdp3_parser.sv`** (módulo propio):
-  decodifica el paquete (MsgSeqNum u32 + SendingTime u64, 12 B), el framing
-  por mensaje (MessageSize u16 + cabecera SBE 8 B: blockLength/templateId/
-  schemaId/version) y el subset de templates; emite Anexo M por AXI-Stream.
-  DW parametrizado (32 objetivo @ 322,265625 MHz; 64 en regresión).
-- **Gaps de secuencia por canal**: contiguidad de MsgSeqNum (un canal por
-  instancia) → `gap_detected` (misma semántica que MoldUDP64 en fase 1).
-- **Verificación**: cocotb vs golden bit a bit (corpus sintético +
-  invariantes) + mutación del parser MDP3 + regresión de fases 1-3.
+- **MDP3 golden model** (`golden_model/mdp3/`): loader of the SBE XML schema
+  (templates, fields with offsets, repeating groups, composite types), decoder
+  (packet → messages → Annex-M records), generator (valid synthetic SBE corpus)
+  and vectors.
+- **Schema fetch**: `scripts/fetch_mdp3_schema.py` (CME FTP over HTTPS, with
+  **fallback to the official archive via the Wayback Machine** and a pinned md5
+  fail-closed, because cmegroup.com answers 403 to the bot) → `data/mdp3/`
+  (gitignored, rule G0: schemas are spec, not market data, but are kept out of
+  the repo anyway). Pinned schema: `templates_FixBinary_v12.xml` (2021-03-10,
+  id=1 version=12, byteOrder=littleEndian), md5 in the script itself.
+- **RTL `rtl/parser/mdp3_parser.sv`** (its own module): decodes the packet
+  (MsgSeqNum u32 + SendingTime u64, 12 B), the per-message framing (MessageSize
+  u16 + 8 B SBE header: blockLength/templateId/schemaId/version) and the subset
+  of templates; emits Annex M on AXI-Stream. Parameterized DW (32 target @
+  322.265625 MHz; 64 in regression).
+- **Per-channel sequence gaps**: MsgSeqNum contiguity (one channel per instance)
+  → `gap_detected` (same semantics as MoldUDP64 in phase 1).
+- **Verification**: cocotb vs golden bit-exact (synthetic corpus + invariants) +
+  mutation of the MDP3 parser + phases 1–3 regression.
 
 **Out of scope (non-goals):**
 
-- Port del order book a MDP3 (campaña 4b posterior; el Anexo M está diseñado
-  para alimentarla).
-- Arbitraje de feeds A/B, TCP recovery, demux multi-canal (config.xml):
-  una instancia = un canal.
-- Decodificar el campo a campo de templates no-libro (statistics, trades,
-  instrument definitions, security status): passthrough crudo con su
-  template_id (routing transparente).
-- Datos reales de DataMine (de pago): el corpus es sintético, generado desde
-  el schema. Si algún día se paga por pcaps, se re-alimenta el mismo banco
-  (REPLAY-03 opcional, no bloqueante).
-- iLink 3 (SBE de órdenes de cliente): solo market data.
+- Porting the order book to MDP3 (campaign 4b later; Annex M is designed to feed
+  it).
+- A/B feed arbitration, TCP recovery, multi-channel demux (config.xml): one
+  instance = one channel.
+- Field-by-field decoding of non-book templates (statistics, trades, instrument
+  definitions, security status): raw passthrough with their template_id
+  (transparent routing).
+- Real DataMine data (paid): the corpus is synthetic, generated from the schema.
+  If pcaps are ever paid for, the same bank is re-fed (optional REPLAY-03, not
+  blocking).
+- iLink 3 (SBE of client orders): market data only.
 
-**Radio histórico de la construcción original (2026-08-14):**
-`mdp3_parser.sv` se añadió sin conectar ni modificar la cadena ITCH. La campaña
-de framing reabierta en 2026-08-15 amplía el radio a `itch_parser`,
-`itch_chain`, sus testbenches de entrada, el XDC y `synth_check.py`; el
-`orderbook` y el enlace normalizado parser→book permanecen sin cambios.
+**Historical radius of the original build (2026-08-14):** `mdp3_parser.sv` was
+added without connecting or modifying the ITCH chain. The framing campaign
+reopened in 2026-08-15 widens the radius to `itch_parser`, `itch_chain`, their
+input testbenches, the XDC and `synth_check.py`; the `orderbook` and the
+normalized parser→book link remain unchanged.
 
-**Changelog 2026-08-14 (edit de build con evidencia):** el schema oficial
-`templates_FixBinary_v12.xml` (archivado de cmegroup.com vía Wayback, md5
-verificado) corrige el contrato: **byte-order little-endian** (la spec decía
-big-endian), **IDs del subset 46/47/52/53** (la spec esperaba los de la era
-pre-event 27/30/32), **msg_size incluye el prefijo de 10 B** (evidencia
-roq-cme `parser.cpp`), y **dos dimensionTypes de grupo** (`groupSize` 3 B /
-`groupSize8Byte` 8 B). El Anexo M gana el record MBOFD (18 words) con
-`record_type` en w7[23] y la tabla de derivación por template. Los criterios
-1-9 y el Gherkin no cambiaron en aquella iteración. Las reaperturas posteriores
-se reflejan en el Definition of Done vigente de este documento.
+**Changelog 2026-08-14 (build edit with evidence):** the official schema
+`templates_FixBinary_v12.xml` (archived from cmegroup.com via Wayback, md5
+verified) corrects the contract: **little-endian byte-order** (the spec said
+big-endian), **subset IDs 46/47/52/53** (the spec expected the pre-event-era
+27/30/32), **msg_size includes the 10 B prefix** (evidence roq-cme `parser.cpp`),
+and **two group dimensionTypes** (`groupSize` 3 B / `groupSize8Byte` 8 B). Annex
+M gains the MBOFD record (18 words) with `record_type` in w7[23] and the per-
+template derivation table. Criteria 1–9 and the Gherkin did not change in that
+iteration. Later reopenings are reflected in the current Definition of Done of
+this document.
 
 ## Constraints
 
-- **Familia/part objetivo:** UltraScale+ (misma familia que fases 1-3);
-  frecuencia 322,265625 MHz (DW=32) y 156,25 MHz (DW=64) — mismo régimen.
-- **Régimen de entrada:** el datapath presenta una palabra por ciclo y solo
-  cuenta backpressure cuando `s_axis_tvalid && !s_axis_tready`. El vector
-  pactado M3-FRM-03 son 24 mensajes literales del template 47, cada uno con
-  una entry (64 B derivados del XML); la racha máxima admitida es 16 ciclos.
-  No se promete un feed infinito sin stalls: un record Anexo M MBOFD expande
-  64 B de mensaje a 72 B de salida.
-- **Schema = fuente única:** los offsets, blockLength, tipos compuestos y
-  valores de enumeraciones se derivan del schema XML en el golden. El RTL
-  especializado puede materializarlos como `localparam` solo si el checker los
-  contrasta automáticamente con el XML pinned; los tests no mantienen una
-  segunda tabla manual de offsets.
-- **SBE:** little-endian (byteOrder del XML oficial de CME; confirmado por la
-  implementación de referencia roq-cme, `little_endian_to_host`); cabecera de
-  mensaje 8 B; grupos con dimensión de dos formas — `groupSize` = blockLength
-  u16 + numInGroup u8 (3 B) y `groupSize8Byte` = blockLength u16 + 5 B de pad
-  + numInGroup u8 (8 B, usada por NoOrderIDEntries). El RTL consume
-  `msg_size` sin re-derivar alineación (los offsets viven en el XML y el
-  golden los respeta tal cual).
-- **Determinismo:** mismo stream → misma secuencia de Anexo M, bit a bit;
-  sin pérdida ni doble cuenta, con y sin backpressure de salida.
-- **Bytes válidos AXI:** la entrada incluye `s_axis_tkeep[DW/8-1:0]` con la
-  asociación estándar bit↔lane y máscaras restringidas a palabra completa o
-  prefijo MSB contiguo. Los lanes con `tkeep=0` no cuentan para `msg_size`.
-  Máscaras con huecos, cero o parciales sin `tlast` pulsan `error` y descartan
-  el paquete, drenándolo hasta `tlast` si el beat inválido no era final.
-  Contrato completo:
-  `docs/decisiones/003-axis-tkeep-framing.md`.
-- **Framing confirmado:** paquete = MsgSeqNum(u32) + SendingTime(u64, ns
-  desde epoch) = 12 B; cada mensaje = **MessageSize(u16) que INCLUYE los
-  10 B de prefijo** (MessageSize + cabecera SBE de 8 B: blockLength/
-  templateId/schemaId/version) + cuerpo (blockLength + grupos). Varios
-  mensajes por paquete. La cabecera de mensaje y las dimensiones de grupo
-  viven en el XML (`messageHeader`, `groupSize`, `groupSize8Byte`).
+- **Target family/part:** UltraScale+ (same family as phases 1–3); frequency
+  322.265625 MHz (DW=32) and 156.25 MHz (DW=64) — same regime.
+- **Input regime:** the datapath presents one word per cycle and only counts
+  backpressure when `s_axis_tvalid && !s_axis_tready`. The agreed vector
+  M3-FRM-03 is 24 literal template-47 messages, each with one entry (64 B derived
+  from the XML); the maximum admitted stall run is 16 cycles. No infinite
+  stall-free feed is promised: an Annex-M MBOFD record expands 64 B of message to
+  72 B of output.
+- **Schema = single source:** offsets, blockLength, composite types and
+  enumeration values are derived from the XML schema in the golden. The
+  specialized RTL may materialize them as `localparam` only if the checker
+  compares them automatically against the pinned XML; the tests maintain no
+  second manual offset table.
+- **SBE:** little-endian (byteOrder of the official CME XML; confirmed by the
+  roq-cme reference implementation, `little_endian_to_host`); 8 B message header;
+  groups with two dimension forms — `groupSize` = blockLength u16 + numInGroup u8
+  (3 B) and `groupSize8Byte` = blockLength u16 + 5 B pad + numInGroup u8 (8 B,
+  used by NoOrderIDEntries). The RTL consumes `msg_size` without re-deriving
+  alignment (offsets live in the XML and the golden respects them as-is).
+- **Determinism:** same stream → same Annex-M sequence, bit-exact; no loss or
+  double-count, with and without output backpressure.
+- **Valid AXI bytes:** the input includes `s_axis_tkeep[DW/8-1:0]` with the
+  standard bit↔lane association and masks restricted to full word or a contiguous
+  MSB prefix. Lanes with `tkeep=0` do not count for `msg_size`. Masks with holes,
+  zero or partial without `tlast` pulse `error` and discard the packet, draining
+  it to `tlast` if the invalid beat was not final. Full contract:
+  `docs/decisions/003-axis-tkeep-framing.md`.
+- **Confirmed framing:** packet = MsgSeqNum(u32) + SendingTime(u64, ns from
+  epoch) = 12 B; each message = **MessageSize(u16) that INCLUDES the 10 B
+  prefix** (MessageSize + 8 B SBE header: blockLength/templateId/schemaId/
+  version) + body (blockLength + groups). Several messages per packet. The
+  message header and group dimensions live in the XML (`messageHeader`,
+  `groupSize`, `groupSize8Byte`).
 
-## Superficie y amenazas
+## Surface and threats
 
-**Puertos de `mdp3_parser`** (convención AXI-Stream de fase 1):
+**Ports of `mdp3_parser`** (phase-1 AXI-Stream convention):
 
-| Señal | Ancho | Descripción |
+| Signal | Width | Description |
 |---|---|---|
-| `clk`, `rst_n` | 1 | reloj del datapath |
-| `s_axis_tdata/tkeep/tvalid/tready/tlast` | DW/(DW/8)/1/1/1 | payload UDP decapado; `tkeep` marca bytes válidos del beat |
-| `m_axis_tdata/tvalid/tready/tlast` | 32/1/1/1 | words de 32 bits del Anexo M; DW solo parametriza la entrada |
-| `gap_detected` | 1 | pulso: MsgSeqNum != exp_seq (por canal) |
-| `error` | 1 | pulso: mensaje/paquete incoherente (msg_size < 10, desborde de paquete) |
+| `clk`, `rst_n` | 1 | datapath clock |
+| `s_axis_tdata/tkeep/tvalid/tready/tlast` | DW/(DW/8)/1/1/1 | stripped UDP payload; `tkeep` marks the beat's valid bytes |
+| `m_axis_tdata/tvalid/tready/tlast` | 32/1/1/1 | Annex-M 32-bit words; DW only parameterizes the input |
+| `gap_detected` | 1 | pulse: MsgSeqNum != exp_seq (per channel) |
+| `error` | 1 | pulse: incoherent message/packet (msg_size < 10, packet overflow) |
 
-**Anexo M** (registro normalizado por mensaje; un record por ENTRY para los
-templates de libro; layout MSB-first por palabra, DW=32). Dos tipos de
-record, distinguidos por `record_type` en w7[23]: **MBP** (13 words) y
-**MBOFD** (18 words); el burst de cada record termina con `tlast` y el
-consumidor sabe el largo por el propio tipo.
+**Annex M** (normalized record per message; one record per ENTRY for book
+templates; MSB-first per word layout, DW=32). Two record types, distinguished by
+`record_type` in w7[23]: **MBP** (13 words) and **MBOFD** (18 words); each
+record's burst ends with `tlast` and the consumer knows the length by the type
+itself.
 
 Record **MBP** (46 NoMDEntries, 52 NoMDEntries):
 
-| Word | Contenido (subset decodificado) |
+| Word | Content (decoded subset) |
 |---|---|
 | w0 | `{template_id[15:0], msg_size[15:0]}` |
 | w1 | `{schema_id[15:0], version[15:0]}` |
@@ -144,315 +141,303 @@ Record **MBP** (46 NoMDEntries, 52 NoMDEntries):
 
 Record **MBOFD** (46 NoOrderIDEntries, 47 NoMDEntries, 53 NoMDEntries):
 
-| Word | Contenido |
+| Word | Content |
 |---|---|
-| w0-w6 | igual que MBP (misma semántica; la derivación por template fija qué campo alimenta cada word) |
-| w7 | `{record_type[7:0]=1, action[7:0], md_entry_type[7:0], 16'b0}` (action: 279 en 47, 37708 en 46) |
+| w0–w6 | same as MBP (same semantics; the per-template derivation fixes which field feeds each word) |
+| w7 | `{record_type[7:0]=1, action[7:0], md_entry_type[7:0], 16'b0}` (action: 279 in 47, 37708 in 46) |
 | w8, w9 | `order_id[63:0]` (u64) |
 | w10, w11 | `md_order_priority[63:0]` (u64NULL) |
-| w12 | `{reference_id[7:0], 24'b0}` (9633; 0 si no aplica) |
+| w12 | `{reference_id[7:0], 24'b0}` (9633; 0 if not applicable) |
 | w13, w14 | `md_entry_px.mantissa[63:0]` (i64) |
-| w15 | `{md_entry_px.exponent[7:0], 24'b0}` (i8; PRICE9 ⇒ -9 constante) |
+| w15 | `{md_entry_px.exponent[7:0], 24'b0}` (i8; PRICE9 ⇒ −9 constant) |
 | w16 | `md_display_qty[31:0]` (i32) |
-| w17 | `32'b0` (reservado) |
+| w17 | `32'b0` (reserved) |
 
-Passthrough (resto de templates): `w0, w1` + cuerpo crudo byte a byte
-(relleno 0 al final), sin decodificar. El burst termina con `tlast`
-(convención fase 1); campos del subset ausentes en un template concreto →
-0 (la tabla de derivación es la autoridad).
+Passthrough (remaining templates): `w0, w1` + raw body byte by byte (0 padding
+at the end), without decoding. The burst ends with `tlast` (phase-1 convention);
+subset fields absent from a concrete template → 0 (the derivation table is the
+authority).
 
-**Subset decodificado** (los IDs numéricos se derivan del schema; el schema
-pinned es `templates_FixBinary_v12.xml`, 2021-03-10, que ya no usa los IDs de
-la era pre-event 27/30/32):
+**Decoded subset** (the numeric IDs derive from the schema; the pinned schema is
+`templates_FixBinary_v12.xml`, 2021-03-10, which no longer uses the pre-event
+27/30/32 IDs):
 
-- **46 = MDIncrementalRefreshBook** (X, combined MBP+MBOFD): root
-  blockLength=11 (TransactTime 60, MatchEventIndicator 5799); grupo
-  **NoMDEntries** (268, blockLength=32, MBP) con por entry: MDEntryPx (270,
-  PRICENULL9 = mantissa i64 + exponent i8), MDEntrySize (271), SecurityID
-  (48), RptSeq (83), NumberOfOrders (346), MDPriceLevel (1023), MDUpdateAction
-  (279), MDEntryType (269), TradeableSize (37719); grupo **NoOrderIDEntries**
-  (37705, blockLength=24, `groupSize8Byte`, MBOFD) con por entry: OrderID
-  (37), MDOrderPriority (37707), MDDisplayQty (37706), ReferenceID (9633 →
-  índice de la entry MBP del mismo mensaje), OrderUpdateAction (37708).
-- **47 = MDIncrementalRefreshOrderBook** (X, MBOFD only): root 11; grupo
-  NoMDEntries (268, blockLength=40) con por entry: OrderID (37 u64NULL),
+- **46 = MDIncrementalRefreshBook** (X, combined MBP+MBOFD): root blockLength=11
+  (TransactTime 60, MatchEventIndicator 5799); group **NoMDEntries** (268,
+  blockLength=32, MBP) with per entry: MDEntryPx (270, PRICENULL9 = i64 mantissa
+  + i8 exponent), MDEntrySize (271), SecurityID (48), RptSeq (83),
+  NumberOfOrders (346), MDPriceLevel (1023), MDUpdateAction (279), MDEntryType
+  (269), TradeableSize (37719); group **NoOrderIDEntries** (37705, blockLength=24,
+  `groupSize8Byte`, MBOFD) with per entry: OrderID (37), MDOrderPriority (37707),
+  MDDisplayQty (37706), ReferenceID (9633 → index of the MBP entry of the same
+  message), OrderUpdateAction (37708).
+- **47 = MDIncrementalRefreshOrderBook** (X, MBOFD only): root 11; group
+  NoMDEntries (268, blockLength=40) with per entry: OrderID (37 u64NULL),
   MDOrderPriority (37707), MDEntryPx (270 PRICENULL9), MDDisplayQty (37706),
   SecurityID (48), MDUpdateAction (279), MDEntryType (269).
-- **52 = SnapshotFullRefresh** (W, MBP): root blockLength=59 (incluye
+- **52 = SnapshotFullRefresh** (W, MBP): root blockLength=59 (includes
   LastMsgSeqNumProcessed 369, TotNumReports 911, SecurityID 48, RptSeq 83,
-  TransactTime 60, límites 1149/1148/1143); grupo NoMDEntries (268,
-  blockLength=22, MBP) sin MDUpdateAction ni SecurityID/RptSeq por entry
-  (viven en el root) y MDEntryType (269) genérico.
-- **53 = SnapshotFullRefreshOrderBook** (W, MBOFD): root 28 (incluye
-  SecurityID 48, NoChunks 37709, CurrentChunk 37710, TransactTime 60); grupo
-  NoMDEntries (268, blockLength=29) con por entry: OrderID (37 u64),
-  MDOrderPriority (37707), MDEntryPx (270 PRICE9 = mantissa i64, exponent
-  constante -9), MDDisplayQty (37706 Int32), MDEntryType (269). Sin action
-  (snapshot).
-- El resto (admin 4/12/15/16, SecurityStatus 30, Volume 37, QuoteRequest 39,
-  TradeSummary 48, statistics 49-51, instrument definitions 54-58, etc.):
+  TransactTime 60, limits 1149/1148/1143); group NoMDEntries (268, blockLength=22,
+  MBP) without MDUpdateAction nor SecurityID/RptSeq per entry (they live in the
+  root) and generic MDEntryType (269).
+- **53 = SnapshotFullRefreshOrderBook** (W, MBOFD): root 28 (includes SecurityID
+  48, NoChunks 37709, CurrentChunk 37710, TransactTime 60); group NoMDEntries
+  (268, blockLength=29) with per entry: OrderID (37 u64), MDOrderPriority (37707),
+  MDEntryPx (270 PRICE9 = i64 mantissa, exponent constant −9), MDDisplayQty
+  (37706 Int32), MDEntryType (269). No action (snapshot).
+- The rest (admin 4/12/15/16, SecurityStatus 30, Volume 37, QuoteRequest 39,
+  TradeSummary 48, statistics 49–51, instrument definitions 54–58, etc.):
   passthrough.
 
-**Derivación del Anexo M por template** (qué campo alimenta cada word; el
-golden y el RTL la aplican, y el bit a bit la verifica):
+**Annex-M derivation per template** (which field feeds each word; the golden and
+the RTL apply it, and bit-exact verification checks it):
 
-| Template | record_type (w7[23]) | w5 security_id | w6 rpt_seq | w7 action | px (w8-w10) | w11 size | w12 {num_orders, price_level} | w8-w9/w10-w11/w12/w16 (MBOFD) |
+| Template | record_type (w7[23]) | w5 security_id | w6 rpt_seq | w7 action | px (w8–w10) | w11 size | w12 {num_orders, price_level} | w8–w9/w10–w11/w12/w16 (MBOFD) |
 |---|---|---|---|---|---|---|---|---|
 | 46 MBP | 0 | 48 entry | 83 entry | 279 entry | 270 entry | 271 entry | {346, 1023} | — |
-| 46 MBOFD | 1 | 48 del MBP linkeado (ReferenceID) | 83 del MBP linkeado | 37708 entry | 270 del MBP linkeado | — (w16 = 37706 display_qty) | — | order_id 37, priority 37707, reference 9633 |
-| 47 | 1 | 48 entry | 0 (ausente) | 279 entry | 270 entry | — (w16 = 37706) | — | order_id 37, priority 37707, reference 0 |
-| 52 | 0 | 48 root | 83 root | 0 (sin action) | 270 entry | 271 entry | {346, 1023} | — |
-| 53 | 1 | 48 root | 0 (ausente) | 0 (sin action) | 270 entry (PRICE9, exponent -9 const) | — (w16 = 37706) | — | order_id 37, priority 37707, reference 0 |
+| 46 MBOFD | 1 | 48 of the linked MBP (ReferenceID) | 83 of the linked MBP | 37708 entry | 270 of the linked MBP | — (w16 = 37706 display_qty) | — | order_id 37, priority 37707, reference 9633 |
+| 47 | 1 | 48 entry | 0 (absent) | 279 entry | 270 entry | — (w16 = 37706) | — | order_id 37, priority 37707, reference 0 |
+| 52 | 0 | 48 root | 83 root | 0 (no action) | 270 entry | 271 entry | {346, 1023} | — |
+| 53 | 1 | 48 root | 0 (absent) | 0 (no action) | 270 entry (PRICE9, exponent −9 const) | — (w16 = 37706) | — | order_id 37, priority 37707, reference 0 |
 
-**Casos de abuso del dominio** (cada uno con escenario `SEC-`/`INV-`):
+**Domain abuse cases** (each with a `SEC-`/`INV-` scenario):
 
-- **Mensaje mínimo back-to-back** (paquete lleno de mensajes mínimos) →
-  peor caso line-rate. — M3-FRM-03.
-- **Mensaje que cruza límites de palabra** → alineación correcta. Si cruza
-  `tlast`, el datagrama está truncado: se cancela el mensaje incompleto, nunca
-  se reanuda con bytes del paquete siguiente. — M3-FRM-02, M3-INV-02.
-- **Truncado sub-word**: faltan entre 1 y `DW/8-1` bytes antes de `tlast`; los
-  lanes inválidos no pueden completar `msg_size`. — M3-INV-02.
-- **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
-  `error`, descarte y recuperación. — M3-INV-04.
-- **Cierre exacto de paquete**: 12 bytes sin mensajes son válidos; un byte
-  residual que no complete `msg_size` es truncado y no bloquea. — M3-FRM-04.
-- **Gap de secuencia** (MsgSeqNum salta) → `gap_detected` sin abortar;
-  canal nuevo (seq reiniciado) → reset del esperado. — M3-GAP-01.
-- **`msg_size` incoherente** (menor que la cabecera SBE o desborda el
-  paquete) → `error`, jamás cuelgue ni corrupción silenciosa. — M3-INV-01.
-- **Entry mal formado dentro del mensaje** (grupo con numInGroup 0 o
-  tamaño que excede `msg_size`) → `error`/anomalía, no truncado. — M3-INV-03.
-- **Templates desconocidos** (schemaId/version fuera del subset) →
-  passthrough crudo, nunca aborto. — M3-PASS-01.
+- **Minimum message back-to-back** (packet full of minimum messages) → worst-case
+  line rate. — M3-FRM-03.
+- **Message crossing word boundaries** → correct alignment. If it crosses `tlast`,
+  the datagram is truncated: the incomplete message is cancelled, never resumed
+  with the next packet's bytes. — M3-FRM-02, M3-INV-02.
+- **Sub-word truncation**: between 1 and `DW/8-1` bytes missing before `tlast`;
+  invalid lanes cannot complete `msg_size`. — M3-INV-02.
+- **Invalid `tkeep`**: mask with holes, zero, or partial without `tlast` →
+  `error`, discard and recovery. — M3-INV-04.
+- **Exact packet closure**: 12 bytes with no messages are valid; a residual byte
+  that does not complete `msg_size` is truncated and does not block. — M3-FRM-04.
+- **Sequence gap** (MsgSeqNum jumps) → `gap_detected` without abort; new channel
+  (seq reset) → expected reset. — M3-GAP-01.
+- **Incoherent `msg_size`** (smaller than the SBE header or overflows the packet)
+  → `error`, never a hang nor silent corruption. — M3-INV-01.
+- **Malformed entry within the message** (group with numInGroup 0 or size that
+  exceeds `msg_size`) → `error`/anomaly, no truncation. — M3-INV-03.
+- **Unknown templates** (schemaId/version outside the subset) → raw passthrough,
+  never abort. — M3-PASS-01.
 
-**Qué se arriesga del maestro:** la **generalidad de diseño** (un pipeline
-ITCH que no se porta a otro exchange = sospechoso), la **verificación sin
-datos reales** (el corpus sintético desde el schema es el sustituto honesto
-de DataMine) y el **line-rate** del datapath parametrizado.
+**What is at risk from the master:** the **design generality** (an ITCH pipeline
+that does not port to another exchange = suspect), the **verification without
+real data** (the schema-driven synthetic corpus is the honest substitute for
+DataMine) and the **line rate** of the parameterized datapath.
 
-## Reuso
+## Reuse
 
-- `rtl/parser/itch_parser.sv` e `rtl/itch_chain.sv` — reciben y propagan
-  `s_axis_tkeep` por la campaña de framing común; no cambia su salida
-  normalizada ni el enlace al order book.
-- `golden_model/itch/messages.py` — patrón de «fuente única de offsets»;
-  el equivalente MDP3 es el schema XML (nada a mano).
-- Testbenches fases 1-3: helpers de driver AXI-Stream (`_reset`, conducción
-  de words, muestreo de pulsos). El constructor `payload→beats` se comparte
-  entre las áreas ITCH; MDP3 puede conservar un helper local, pero debe aplicar
-  y monitorizar literalmente el mismo contrato `data/keep/last`.
-- `scripts/fetch_itch.py` — patrón fail-closed con md5 para
-  `fetch_mdp3_schema.py`.
-- Los `localparam` estructurales especializados del RTL deben coincidir con el
-  schema pinned mediante checker; una tabla manual adicional en tests o golden
-  es FAIL de la lente 6 de `/grade`.
+- `rtl/parser/itch_parser.sv` and `rtl/itch_chain.sv` — receive and propagate
+  `s_axis_tkeep` by the common framing campaign; their normalized output and the
+  link to the order book do not change.
+- `golden_model/itch/messages.py` — "single source of offsets" pattern; the MDP3
+  equivalent is the XML schema (nothing by hand).
+- Phases 1–3 testbenches: AXI-Stream driver helpers (`_reset`, word driving,
+  pulse sampling). The `payload→beats` constructor is shared among the ITCH
+  areas; MDP3 may keep a local helper, but must apply and monitor literally the
+  same `data/keep/last` contract.
+- `scripts/fetch_itch.py` — fail-closed-with-md5 pattern for `fetch_mdp3_schema.py`.
+- The specialized structural RTL `localparam`s must match the pinned schema via
+  checker; an additional manual table in tests or golden is FAIL of the `/grade`
+  lens 6.
 
-## Criterios de aceptación (Definition of Done)
+## Acceptance criteria (Definition of Done)
 
-1. [ ] **Golden MDP3**: loader del schema XML + decoder bit a bit + generator
-     sintético con round-trip `decode(encode(m)) == m` para el subset y
-     passthrough; tests Python espejo. El round-trip debe partir de vectores
-     conocidos con valores no cero y demostrar campo a campo que se preservan
-     root, composites —incluido `PRICE9.mantissa`— y grupos multi-entry; la
-     igualdad de bytes tras re-encodear el propio decode no basta como oráculo.
-     El loader conserva también `schemaId=1` y `version=12`, y el encoder los
-     usa por defecto desde el XML pinned.
+1. [ ] **MDP3 golden**: XML-schema loader + bit-exact decoder + synthetic
+     generator with `decode(encode(m)) == m` round-trip for the subset and
+     passthrough; mirror Python tests. The round-trip must start from known
+     vectors with non-zero values and demonstrate field-by-field preservation of
+     root, composites — including `PRICE9.mantissa` — and multi-entry groups; the
+     byte equality after re-encoding one's own decode is not enough as an oracle.
+     The loader also keeps `schemaId=1` and `version=12`, and the encoder uses
+     them by default from the pinned XML.
      — Gherkin: `mdp3.feature` §M3-GEN-01, §M3-GEN-02, §M3-GEN-03
-2. [ ] **Framing**: paquete (12 B) + mensajes (u16 size + cabecera SBE) →
-     secuencia de Anexo M bit a bit vs golden; mensajes que cruzan límites
-     de palabra; un burst AXI independiente por payload con `tkeep` correcto.
-     Un paquete de solo header es vacío válido y cualquier residual incompleto
-     antes de `tlast` se rechaza sin bloqueo. — §M3-FRM-01/02/04
-3. [ ] **Régimen de entrada**: 24 mensajes literales template 47, de una
-     entry y 64 B cada uno, se presentan a 1 palabra/ciclo; stalls reales
-     (`tvalid && !tready`) con racha máxima <= 16. Durante cada stall,
-     `(s_axis_tdata,s_axis_tkeep,s_axis_tlast)` permanece estable hasta el
-     handshake. — §M3-FRM-03, §M3-BP-02
-4. [x] **Subset decodificado**: records de libro (46/47/52/53) bit a bit vs
-     golden, incluido el precio compuesto (mantissa+exponente) y grupos
-     multi-entry. — §M3-SUB-01, §M3-SUB-02
-5. [ ] **Passthrough**: templates no-subset → w0/w1 + cuerpo crudo bit a bit;
-     un template 46/47/52/53 con schemaId/version no soportados también es
-     passthrough, no decode especializado. El máximo soportado en esta
-     implementación es `msg_size <= 256` bytes, inclusive; 257 o más pulsa
-     `error`, no emite record parcial, drena el paquete y permite recuperar en
-     el siguiente. — §M3-PASS-01, §M3-PASS-02
-6. [x] **Gaps de secuencia**: `gap_detected` en saltos; reset al cambiar de
-     canal (secuencia reiniciada). — §M3-GAP-01
-7. [ ] **Robustez**: `msg_size` incoherente y grupos mal formados → `error`
-     señalizado, sin cuelgue ni corrupción silenciosa; `tlast` de entrada
-     truncado (incluidos 1..`DW/8-1` bytes ausentes) y máscaras `tkeep`
-     inválidas manejados. — §M3-INV-01/02/03/04
-8. [ ] **Regresión**: fases 1-3 verdes tras propagar `tkeep` por la entrada de
-     `itch_chain`; DW=64 del mdp3_parser en regresión. — §M3-REG-01
-9. [ ] Lint `--Wall` limpio sobre `mdp3_parser.sv` (+ verible si se
-     instala); checker XML↔localparams para IDs, offsets y blockLength del
-     subset; espejos Gherkin 1:1. — §M3-SCH-01, gates B/C/F.
-10. [ ] **Backpressure de salida**: con `m_axis_tvalid && !m_axis_tready`,
-     `m_axis_tdata`, `m_axis_tvalid` y `m_axis_tlast` permanecen estables; al
-     liberar no hay pérdida ni duplicación. — §M3-BP-01
+2. [ ] **Framing**: packet (12 B) + messages (u16 size + SBE header) → Annex-M
+     sequence bit-exact vs golden; messages crossing word boundaries; an
+     independent AXI burst per payload with correct `tkeep`. A header-only packet
+     is a valid empty and any incomplete residual before `tlast` is rejected
+     without blocking. — §M3-FRM-01/02/04
+3. [ ] **Input regime**: 24 literal template-47 messages, one entry and 64 B
+     each, presented at 1 word/cycle; real stalls (`tvalid && !tready`) with max
+     run ≤ 16. During each stall `(s_axis_tdata, s_axis_tkeep, s_axis_tlast)` stay
+     stable until handshake. — §M3-FRM-03, §M3-BP-02
+4. [x] **Decoded subset**: book records (46/47/52/53) bit-exact vs golden,
+     including the composite price (mantissa+exponent) and multi-entry groups. —
+     §M3-SUB-01, §M3-SUB-02
+5. [ ] **Passthrough**: non-subset templates → w0/w1 + raw body bit-exact; a
+     46/47/52/53 template with unsupported schemaId/version is also passthrough,
+     not specialized decode. The maximum supported in this implementation is
+     `msg_size <= 256` bytes, inclusive; 257 or more pulses `error`, emits no
+     partial record, drains the packet and recovers in the next. — §M3-PASS-01,
+     §M3-PASS-02
+6. [x] **Sequence gaps**: `gap_detected` on jumps; reset on channel change
+     (sequence restarted). — §M3-GAP-01
+7. [ ] **Robustness**: incoherent `msg_size` and malformed groups → signalled
+     `error`, no hang nor silent corruption; truncated input `tlast` (including
+     1..`DW/8-1` missing bytes) and invalid `tkeep` masks handled. —
+     §M3-INV-01/02/03/04
+8. [ ] **Regression**: phases 1–3 green after propagating `tkeep` through the
+     `itch_chain` input; DW=64 of the mdp3_parser in regression. — §M3-REG-01
+9. [ ] Lint `--Wall` clean over `mdp3_parser.sv` (+ verible if installed); XML↔
+     localparams checker for subset IDs, offsets and blockLength; 1:1 Gherkin
+     mirrors. — §M3-SCH-01, gates B/C/F.
+10. [ ] **Output backpressure**: with `m_axis_tvalid && !m_axis_tready`,
+     `m_axis_tdata`, `m_axis_tvalid` and `m_axis_tlast` stay stable; on release
+     no loss or duplication. — §M3-BP-01
 
-## Verificación
+## Verification
 
-| Criterio | Cómo se prueba |
+| Criterion | How it is tested |
 |---|---|
-| 1 | `python3 -m unittest` (área del golden MDP3, espejos) + round-trip + schemaId/version literales desde XML |
-| 2 | cocotb `testbenches/mdp3`: corpus sintético → Anexo M bit a bit vs golden; words con mensaje partido, header-only/residual y un burst por paquete |
-| 3 | cocotb: 24 mensajes literales template 47 de 64 B; medir `tvalid && !tready`, racha <= 16 y tupla de entrada estable en DW=32/64 |
-| 4 | cocotb: records de 46/47/52/53 vs golden; precio compuesto y multi-entry |
-| 5 | cocotb: templates no-subset; 46/47/52/53 con schema/version incompatible; passthrough de 256 B y rechazo+recuperación de 257 B |
-| 6 | cocotb: secuencia con salto y reinicio de canal → pulsos de gap correctos |
-| 7 | cocotb: `msg_size` inválido, numInGroup 0, truncados por 1..`DW/8-1` bytes y `tkeep` inválido con recuperación |
-| 8 | `make sim` en `testbenches/{parser,orderbook,phase3}` con el contrato `tkeep` propagado |
-| 9 | `verilator --lint-only -Wall` + checker schema v12↔RTL + `specs/gherkin-espejos.json` |
-| 10 | cocotb: stall de salida adaptativo, tupla de salida estable y secuencia completa al liberar |
+| 1 | `python3 -m unittest` (MDP3 golden area, mirrors) + round-trip + schemaId/version literals from XML |
+| 2 | cocotb `testbenches/mdp3`: synthetic corpus → Annex M bit-exact vs golden; split-message words, header-only/residual and one burst per packet |
+| 3 | cocotb: 24 literal template-47 messages of 64 B; measure `tvalid && !tready`, run ≤ 16 and stable input tuple at DW=32/64 |
+| 4 | cocotb: 46/47/52/53 records vs golden; composite price and multi-entry |
+| 5 | cocotb: non-subset templates; 46/47/52/53 with incompatible schema/version; 256 B passthrough and 257 B rejection+recovery |
+| 6 | cocotb: sequence with jump and channel restart → correct gap pulses |
+| 7 | cocotb: invalid `msg_size`, numInGroup 0, truncation by 1..`DW/8-1` bytes and invalid `tkeep` with recovery |
+| 8 | `make sim` in `testbenches/{parser,orderbook,phase3}` with the propagated `tkeep` contract |
+| 9 | `verilator --lint-only -Wall` + version-12↔RTL schema checker + `specs/gherkin-espejos.json` |
+| 10 | cocotb: adaptive output stall, stable output tuple and complete sequence on release |
 
-Régimen completo: skill `verify` (gates A-G). Gate E: runner de mutación
-nuevo `scripts/verify/mutate_mdp3.py` (flips: template lookup off-by-one,
-msg_size sin comprobar contra paquete, seq sin comparar, grupo con
-numInGroup mal contado, passthrough sin bytes, precio con mantissa/
-exponente intercambiados). Gate F: espejos `mdp3.feature` ↔
-`verification/testbenches/mdp3`. Gate G: G0 (schema y corpus sintético en
-vectores/derivados; sin datos de mercado reales jamás).
+Full regime: skill `verify` (gates A–G). Gate E: new mutation runner
+`scripts/verify/mutate_mdp3.py` (flips: template lookup off-by-one, msg_size
+unchecked against packet, seq uncompared, group with miscounted numInGroup,
+passthrough without bytes, price with mantissa/exponent swapped). Gate F:
+`mdp3.feature` ↔ `verification/testbenches/mdp3` mirrors. Gate G: G0 (schema and
+synthetic corpus in vectors/derived; never real market data).
 
-**Contratos sin gate** — invariantes que pueden romperse con suite y lint en
-verde:
+**Geless contracts** — invariants that can break with suite and lint green:
 
-1. **Significado de `msg_size`** (¿incluye la cabecera SBE de 8 B o solo el
-   cuerpo?): **resuelto por evidencia** — roq-cme `parser.cpp`:
-   `length = message_size.length - (2 + MessageHeader::encodedLength())`
-   ⇒ msg_size incluye los 10 B de prefijo. El M3-GEN-01 lo pincha con el
-   round-trip semántico de vectores conocidos y el tamaño literal esperado.
-2. **Alineación root a 8 B**: el RTL consume `msg_size` y no re-deriva la
-   alineación (no le importa); el golden la aplica al generar (los blockLength
-   de los templates de libro vienen del XML: 11/11/59/28). Si el golden la
-   aplicara mal, el bit a bit con el decoder propio no lo detectaría →
-   escenario M3-GEN-02 pincha el layout con tamaños esperados desde el XML.
-3. **Grupos anidados / doble grupo**: el template 46 lleva DOS grupos
-   decodificados (NoMDEntries MBP y NoOrderIDEntries MBOFD con dimensionType
-   `groupSize8Byte`, 8 B); el resto de grupos de otros templates (var-data de
-   passthrough, p. ej. instrument definitions) no se decodifican (crudo) → el
-   riesgo es solo del golden, que debe respetar los dimensionTypes del XML.
-4. **Multi-entry → multi-record**: la decisión de emitir un record por entry
-   (no uno por mensaje) es contrato; si el book 4b esperara otra cosa, se
-   cambia aquí, no en el RTL.
-5. **Referencia cruzada del 46** (ReferenceID → entry MBP del mismo mensaje):
-   el px/security/rpt_seq del record MBOFD del 46 se resuelven por índice
-   dentro del mensaje; fuera de rango ⇒ `error` (anomalía, no corrupción).
+1. **Meaning of `msg_size`** (does it include the 8 B SBE header or only the
+   body?): **resolved by evidence** — roq-cme `parser.cpp`:
+   `length = message_size.length - (2 + MessageHeader::encodedLength())` ⇒
+   msg_size includes the 10 B prefix. M3-GEN-01 pinches it with the semantic
+   round-trip of known vectors and the expected literal size.
+2. **8 B root alignment**: the RTL consumes `msg_size` and does not re-derive the
+   alignment (does not care); the golden applies it when generating (the book
+   template blockLengths come from the XML: 11/11/59/28). If the golden applied
+   it wrong, the bit-exact against its own decoder would not notice → M3-GEN-02
+   pinches the layout with expected sizes from the XML.
+3. **Nested / double groups**: template 46 carries TWO decoded groups (NoMDEntries
+   MBP and NoOrderIDEntries MBOFD with dimensionType `groupSize8Byte`, 8 B); the
+   other templates' groups (passthrough var-data, e.g. instrument definitions)
+   are not decoded (raw) → the risk is only the golden's, which must respect the
+   XML dimensionTypes.
+4. **Multi-entry → multi-record**: the decision to emit one record per entry (not
+   one per message) is contract; if book 4b expected otherwise, it changes here,
+   not in the RTL.
+5. **46 cross-reference** (ReferenceID → MBP entry of the same message): the px/
+   security/rpt_seq of the 46 MBOFD record are resolved by index within the
+   message; out of range ⇒ `error` (anomaly, not corruption).
 
 ## Loop
 
-**Histórico:** la construcción inicial tuvo stop limit de 4 iteraciones:
-iter 1 (golden MDP3:
-loader+decoder+generator, espejos Python) → iter 2 (RTL framing + Anexo M
-bit a bit, line-rate) → iter 3 (subset + passthrough + gaps + robustez +
-regresión) → iter 4 (mutación, gates, grade). Los criterios reabiertos se
-resuelven ahora en loops independientes de framing, schema/passthrough,
-backpressure y síntesis; ningún output histórico los cierra por arrastre.
+**Historical:** the initial build had a stop limit of 4 iterations: iter 1 (MDP3
+golden: loader+decoder+generator, Python mirrors) → iter 2 (RTL framing + bit-
+exact Annex M, line rate) → iter 3 (subset + passthrough + gaps + robustness +
+regression) → iter 4 (mutation, gates, grade). The reopened criteria are now
+resolved in independent framing, schema/passthrough, backpressure and synthesis
+loops; no historical output closes them by inertia.
 
-### Addendum framing tkeep (2026-08-18, enmendado tras el verde) — contrato del loop
+### Addendum framing tkeep (2026-08-18, amended after green) — loop contract
 
-El framing `s_axis_tkeep` de la fase 4 está **implementado y verde en
-WSL (2026-08-18)**: puerto del RTL `mdp3_parser` (commit `62e4e46`),
-suite DW=32 **9/9** y DW=64 **9/9**, gate B limpio y gate E 9/9 (incluye
-el mutante `TKCNT-ALWAYS`) — evidencia en el verify-report. El contrato
-del loop, ya cerrado por sus criterios 2 y 8 en su brazo tkeep:
+The phase-4 `s_axis_tkeep` framing is **implemented and green in WSL
+(2026-08-18)**: RTL port `mdp3_parser` (commit `62e4e46`), suite DW=32 **9/9**
+and DW=64 **9/9**, clean gate B and gate E 9/9 (including the mutant
+`TKCNT-ALWAYS`) — evidence in the verify-report. The loop contract, already
+closed by its criteria 2 and 8 in their tkeep arm:
 
-1. **Contrato de puertos:** `s_axis_tkeep[DW/8-1:0]` de entrada, máscara
-   MSB-contigua por beat (los lanes válidos son los bytes altos del word).
-   El apend de la cola (`qbytes`/`qw`) contabiliza solo los lanes con
-   `tkeep=1`; un lane con `tkeep=0` nunca aporta bytes ni completa una
-   longitud declarada (misma mecánica que el contrato común de fases 1-3).
-   Implementación: `tk_cnt = popcount(tkeep)`, `qavail_eff` y el tready
-   usan `tk_cnt`; el apend solo escribe `k < tk_cnt`; un beat con `tkeep=0`
-   se consume sin aportar y sin trabarse. `tlast` cierra el burst del
-   paquete igual que hoy; el último beat parcial es el truncado: si la
-   longitud declarada de un mensaje cae en lanes `tkeep=0`, se señaliza
-   `error` y el paquete siguiente se recupera íntegro.
-2. **Cierre (hecho):** rojo→verde de M3-FRM-05 (a) framing nominal,
-   (b) truncado por máscara → `error` + recuperación, (c) beat vacío en
-   medio del burst → no se traba. Corregido el test (b): la máscara del
-   último beat se deriva de `nv` (bytes reales de la máscara nominal), no
-   de `DW/8` — a DW=64 el último beat del paquete suele ser parcial y
-   declarar `DW/8-1` lanes válidas añadía los ceros de relleno, completando
-   falsamente la longitud declarada.
-3. **Regresión (hecho):** la suite del área mdp3 completa DW=32 y DW=64
-   verde (M3-FRM-01..03, M3-SUB-01/02, M3-PASS-01, M3-GAP-01, M3-INV-01/02/03,
-   M3-FRM-05) sin regresión del contrato común.
-4. **Declaración:** los criterios 2 y 8 (en su brazo tkeep) de esta campaña
-   se actualizan en el verify-report **solo** con los outputs reales del
-   área (gate A) y el gate E del mutante tkeep; permanecen **abiertos**
-   (loops separados) el criterio 5 (schema/version, MAX_MSG 256/257), el
-   criterio 7 restante (máscaras con huecos, loop separado), el criterio 10
-   (backpressure de salida) y el timing (sin Vivado MDP3).
+1. **Port contract:** input `s_axis_tkeep[DW/8-1:0]`, MSB-contiguous mask per
+   beat (the valid lanes are the high bytes of the word). The queue append
+   (`qbytes`/`qw`) counts only the lanes with `tkeep=1`; a lane with `tkeep=0`
+   never contributes bytes nor completes a declared length (same mechanic as the
+   common phases 1-3 contract). Implementation: `tk_cnt = popcount(tkeep)`,
+   `qavail_eff` and the tready use `tk_cnt`; the append only writes `k < tk_cnt`;
+   a beat with `tkeep=0` is consumed without contributing and without stalling.
+   `tlast` closes the packet burst as today; the last partial beat is the
+   truncated one: if the declared length of a message falls on `tkeep=0` lanes,
+   `error` is signalled and the next packet recovers intact.
+2. **Closure (done):** red→green of M3-FRM-05 (a) nominal framing, (b) mask-
+   truncation → `error` + recovery, (c) empty beat mid-burst → no stall. Fixed
+   test (b): the last-beat mask derives from `nv` (real bytes of the nominal
+   mask), not from `DW/8` — at DW=64 the last packet beat is usually partial and
+   declaring `DW/8-1` valid lanes added the padding zeros, falsely completing the
+   declared length.
+3. **Regression (done):** the full mdp3-area suite DW=32 and DW=64 green
+   (M3-FRM-01..03, M3-SUB-01/02, M3-PASS-01, M3-GAP-01, M3-INV-01/02/03,
+   M3-FRM-05) without regression of the common contract.
+4. **Statement:** criteria 2 and 8 (in their tkeep arm) of this campaign are
+   updated in the verify-report **only** with the area's real outputs (gate A)
+   and the gate E of the tkeep mutant; they remain **open** (separate loops):
+   criterion 5 (schema/version, MAX_MSG 256/257), the remaining criterion 7
+   (masks with holes, separate loop), criterion 10 (output backpressure) and the
+   timing (no Vivado MDP3).
 
-## Addendum criterio 5 (2026-08-19) — passthrough por schema/version + MAX_MSG
+## Addendum criterion 5 (2026-08-19) — passthrough by schema/version + MAX_MSG
 
-El criterio 5 exige dos cosas que hoy no cubre el test M3-PASS-01 (que solo
-prueba un template normal y uno desconocido):
+Criterion 5 demands two things that today the M3-PASS-01 test does not cover
+(which only tests a normal template and an unknown one):
 
-1. **Un template del subset (46/47/52/53) con `schema_id` o `version` no
-   soportados es passthrough, NO decode.** El subset de libro decodificable
-   es: `template_id in {46,47,52,53} AND schema_id == SCHEMA_ID AND
-   version == SCHEMA_VERSION`, con `SCHEMA_ID = 1` y `SCHEMA_VERSION = 12`
-   (schema pinned `templates_FixBinary_v12.xml`, `id=1 version=12`). Cualquier
-   otra combinación de cabecera SBE emite w0/w1 + cuerpo crudo rellenado
-   (mismo `passthrough_record` que un template desconocido). Es un cambio de
-   oráculo+: el golden `decode_message`/`anexo_m_records` debe decidir el
-   subset con estas tres condiciones, y el RTL (`DS_HDR`) debe guardar el
-   decode con `d_sid==1 && d_ver==12`. Contrato de cabecera SBE LE:
-   `block_length(t2)`, `template_id(t2)`, `schema_id(t2)`, `version(t2)`.
-2. **Límite de tamaño de mensaje `MAX_MSG = 256` bytes, inclusive; 257 o más
-   pulsa `error`, no emite record parcial, drena el paquete y recupera el
-   siguiente.** Ya existe `MAX_MSG=256` y la validación de `msg_size`, pero
-   el test debe probar explícitamente 256 B (aceptado) y 257 B (rechazo +
-   recuperación).
+1. **A subset template (46/47/52/53) with unsupported `schema_id` or `version`
+   is passthrough, NOT decode.** The decodable book subset is: `template_id in
+   {46,47,52,53} AND schema_id == SCHEMA_ID AND version == SCHEMA_VERSION`, with
+   `SCHEMA_ID = 1` and `SCHEMA_VERSION = 12` (pinned schema
+   `templates_FixBinary_v12.xml`, `id=1 version=12`). Any other SBE-header
+   combination emits w0/w1 + raw body padded (same `passthrough_record` as an
+   unknown template). It is an oracle+ change: the golden
+   `decode_message`/`anexo_m_records` must decide the subset with these three
+   conditions, and the RTL (`DS_HDR`) must gate the decode with `d_sid==1 &&
+   d_ver==12`. LE SBE-header contract: `block_length(t2)`, `template_id(t2)`,
+   `schema_id(t2)`, `version(t2)`.
+2. **Message-size limit `MAX_MSG = 256` bytes, inclusive; 257 or more pulses
+   `error`, emits no partial record, drains the packet and recovers the next.**
+   `MAX_MSG=256` and the `msg_size` validation already exist, but the test must
+   prove explicitly 256 B (accepted) and 257 B (rejection + recovery).
 
 Tests:
-- `M3-PASS-02` (espejo §M3-PASS-02): un template 47 con `schema_id=2` y uno
-  46/47/52/53 con schema_id correcto pero `version=13` van a passthrough;
-  sus records son `passthrough_record` (no el Anexo M decodificado).
-- `M3-SIZE-01`/`M3-SIZE-02`: un mensaje de exactamente 256 B se acepta y
-  decodifica; uno de 257 B pulsa `error`, sin record parcial, y el paquete
-  siguiente íntegro se recupera bit a bit.
+- `M3-PASS-02` (mirror §M3-PASS-02): a template 47 with `schema_id=2` and one
+  46/47/52/53 with correct schema_id but `version=13` go to passthrough; their
+  records are `passthrough_record` (not the decoded Annex M).
+- `M3-SIZE-01`/`M3-SIZE-02`: a message of exactly 256 B is accepted and decoded;
+  one of 257 B pulses `error`, no partial record, and the next intact packet
+  recovers bit-exact.
 
-Regla del golden: `decode_message` devuelve `{}` (passthrough) si
-`template_id not in SUBSET_TEMPLATES or schema_id != SCHEMA_ID or
-version != SCHEMA_VERSION`. `oracle_bytes` usa `passthrough_record` en esos
-casos. El RTL replica exactamente esa puerta en `DS_HDR`.
+Golden rule: `decode_message` returns `{}` (passthrough) if `template_id not in
+SUBSET_TEMPLATES or schema_id != SCHEMA_ID or version != SCHEMA_VERSION`.
+`oracle_bytes` uses `passthrough_record` in those cases. The RTL replicates that
+gate exactly in `DS_HDR`.
 
-## Addendum criterio 7 (2026-08-19) — validación de máscara tkeep
+## Addendum criterion 7 (2026-08-19) — tkeep mask validation
 
-El criterio 7 exige que las **máscaras inválidas** de `s_axis_tkeep` pulsan
-`error` y descartan el paquete (loop separado del framing tkeep del
-addendum 2026-08-18, que solo restringía a máscaras MSB-contiguas sin
-validarlas). Contrato:
+Criterion 7 demands that the **invalid masks** of `s_axis_tkeep` pulse `error`
+and discard the packet (a loop separate from the 2026-08-18 tkeep framing
+addendum, which only restricted to MSB-contiguous masks without validating
+them). Contract:
 
-1. **Máscara con huecos** (no MSB-contigua, p. ej. `0b0101` en DW=32): en
-   cualquier beat pulsa `error` y descarta el paquete actual, drenándolo
-   hasta `tlast` (el beat inválido no final) o aceptando el nuevo
-   inmediatamente (si lleva `tlast`).
-2. **Palabra parcial sin `tlast`**: una máscara MSB-contigua con
-   `nv < DW/8` en un beat NO final (sin `tlast`) es framing inválido →
-   `error` y descarte del paquete.
-3. **`tkeep == 0` completo**: permitido (se consume sin aportar, sin
-   `error`; es un beat vacío válido del framing tkeep).
-4. Las máscaras MSB-contiguas con `tlast` son el caso nominal (el beat
-   final parcial declara solo sus bytes reales).
+1. **Mask with holes** (not MSB-contiguous, e.g. `0b0101` at DW=32): in any beat
+   pulses `error` and discards the current packet, draining it to `tlast` (the
+   invalid non-final beat) or accepting the new one immediately (if it carries
+   `tlast`).
+2. **Partial word without `tlast`**: an MSB-contiguous mask with `nv < DW/8` in a
+   NON-final beat (without `tlast`) is invalid framing → `error` and packet
+   discard.
+3. **Full `tkeep == 0`**: allowed (consumed without contributing, without
+   `error`; a valid empty beat of the tkeep framing).
+4. MSB-contiguous masks with `tlast` are the nominal case (the partial final beat
+   declares only its real bytes).
 
-Validación RTL: `tkeep` es MSB-contigua si no existe ningún `0` entre dos
-`1` (leyendo del MSB al LSB); equivale a `tkeep & (tkeep >> 1)` no "parte"
-el bloque de unos — o, computacionalmente,
-`tkeep` no tiene la forma `...0...1...` con un `1` a la derecha de un `0`.
-Implementación simple y sintetizable: `mask_invalida = |(tkeep & (~tkeep +
-1)) & ...` NO — usar la propiedad del popcount: `tkeep` es contigua MSB si
-`tkeep == (({DW/8{1'b1}} >> (DW/8 - tk_cnt)) << (DW/8 - tk_cnt))`... mejor:
-`tkeep` contigua ⟺ `(tkeep | (tkeep - 1)) == {DW/8{1'b1}}` (el OR con
-`tkeep-1` rellena los huecos internos del bloque de unos hasta llegar al
-LSB del bloque; si hay un hueco, queda un `0`). Un parcial sin `tlast`:
-máscara contigua con `tk_cnt < DW/8` y `!s_axis_tlast`.
+RTL validation: `tkeep` is MSB-contiguous if there is no `0` between two `1`
+(reading MSB→LSB); equivalently `tkeep & (tkeep >> 1)` does not "split" the ones
+block — or, computationally, `tkeep` does not have the form `...0...1...` with a
+`1` to the right of a `0`. Simple synthesizable implementation: `tkeep` contiguous
+⟺ `(tkeep | (tkeep - 1)) == {DW/8{1'b1}}` (the OR with `tkeep-1` fills the
+internal holes of the ones block up to the block LSB; if there is a hole, a `0`
+remains). A partial without `tlast`: contiguous mask with `tk_cnt < DW/8` and
+`!s_axis_tlast`.
 
-Test: `M3-INV-04` (máscara con huecos → error + recuperación; parcial sin
-`tlast` → error). El driver inyecta `beats_override` con `tkeep` inválido
-en medio de un burst válido.
+Test: `M3-INV-04` (mask with holes → error + recovery; partial without `tlast` →
+error). The driver injects `beats_override` with invalid `tkeep` in the middle of
+a valid burst.

@@ -1,9 +1,9 @@
-"""Loader del schema SBE XML de CME MDP 3.0 — fuente única de layout.
+"""Loader for the CME MDP 3.0 SBE XML schema — single source of layout.
 
-Deriva de `templates_FixBinary_v12.xml`: tipos, composites, enums, sets,
-cabecera de mensaje, mensajes con sus campos (offset/sinceVersion) y grupos
-(blockLength/dimensionType). La codificación se hace SOLO con los componentes
-no-constante de un composite (regla SBE: presence="constant" no se emite).
+Derives from `templates_FixBinary_v12.xml`: types, composites, enums, sets,
+message header, messages with their fields (offset/sinceVersion) and groups
+(blockLength/dimensionType). Encoding uses ONLY the non-constant components
+of a composite (SBE rule: presence="constant" is not emitted).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ PRIMITIVE_SIZES = {
     "int64": 8, "uint64": 8,
 }
 
-# Los nombres de tipo de CME usan mayúsculas (uInt8, Int32, CHAR...).
+# CME type names use capitals (uInt8, Int32, CHAR...).
 TYPE_ALIASES = {
     "uInt8": "uint8", "uInt16": "uint16", "uInt32": "uint32", "uInt64": "uint64",
     "Int8": "int8", "Int16": "int16", "Int32": "int32", "Int64": "int64",
@@ -77,7 +77,7 @@ class SetDef:
 class FieldDef:
     name: str
     id: int
-    type: str  # nombre de type/composite/enum/set
+    type: str  # type/composite/enum/set name
     offset: int
     since_version: int = 0
 
@@ -116,7 +116,7 @@ class Schema:
     sets: dict[str, SetDef]
 
     def type_size(self, name: str) -> int:
-        """Tamaño codificado de un tipo: los componentes constantes no se emiten."""
+        """Encoded size of a type: constant components are not emitted."""
         if name in self.composites:
             return sum(c.type.size for c in self.composites[name]
                        if c.type.presence != "constant")
@@ -134,7 +134,7 @@ class Schema:
             return 8
         if group.dimension_type in ("groupSize", "groupSizeEncoding"):
             return 3
-        raise ValueError(f"dimensionType desconocido: {group.dimension_type}")
+        raise ValueError(f"unknown dimensionType: {group.dimension_type}")
 
 
 def _tag(elem) -> str:
@@ -223,7 +223,7 @@ def load_schema(path: str | Path) -> Schema:
     messages: dict[int, MessageDef] = {}
     by_name: dict[str, MessageDef] = {}
 
-    # La cabecera de mensaje = el composite messageHeader del schema (8 B:
+    # The message header = the messageHeader composite of the schema (8 B:
     # blockLength u16, templateId u16, schemaId u16, version u16).
     for comp in composites.get("messageHeader", []):
         header_fields.append(FieldDef(
@@ -288,5 +288,5 @@ def load_schema(path: str | Path) -> Schema:
     )
 
 
-# Subset de libro de la campaña: 46/47 (incremental) y 52/53 (snapshot).
+# Campaign book subset: 46/47 (incremental) and 52/53 (snapshot).
 SUBSET_TEMPLATES = (46, 47, 52, 53)

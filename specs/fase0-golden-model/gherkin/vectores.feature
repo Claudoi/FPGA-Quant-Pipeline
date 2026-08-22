@@ -1,29 +1,29 @@
-# language: es
-Característica: Vectores de referencia para el RTL
-  Los vectores son el contrato bit a bit contra el que se verificara el RTL
-  en las fases 1-2: un registro binario de 40 bytes por mensaje modificador
-  de los simbolos del subset, mas un volcado a texto para inspeccion.
+# language: en
+Feature: Reference vectors for the RTL
+  The vectors are the bit-exact contract against which the RTL will be verified
+  in phases 1-2: one 40-byte binary record per modifying message of the subset
+  symbols, plus a text dump for inspection.
 
-  Escenario: VEC-01 un registro por mensaje modificador del subset con flag de cambio
-    Dado un run sobre datos sinteticos con mensajes del subset y de otros simbolos
-    Cuando se generan los vectores
-    Entonces hay exactamente un registro por mensaje A/F/E/C/X/D/U de los simbolos del subset
-    Y ningun registro corresponde a mensajes de otros tipos ni de otros simbolos
-    Y el flag de cambio es 1 si y solo si el BBO difiere del registro anterior del mismo simbolo
+  Scenario: VEC-01 one record per subset modifying message with a change flag
+    Given a run over synthetic data with subset and other symbols' messages
+    When the vectors are generated
+    Then there is exactly one record per A/F/E/C/X/D/U message of the subset symbols
+    And no record corresponds to messages of other types or other symbols
+    And the change flag is 1 if and only if the BBO differs from the previous record of the same symbol
 
-  Escenario: VEC-02 layout binario fijo de 40 bytes por registro
-    Dado un fichero de vectores generado
-    Cuando se mide su tamano
-    Entonces es multiplo exacto de 40 bytes
-    Y cada registro decodificado con el layout del Anexo A produce campos validos
+  Scenario: VEC-02 fixed 40-byte binary layout per record
+    Given a generated vector file
+    When its size is measured
+    Then it is an exact multiple of 40 bytes
+    And each record decoded with the Annex-A layout produces valid fields
 
-  Escenario: VEC-03 round trip binario a texto conserva campos
-    Dado un fichero de vectores binario generado
-    Cuando se vuelca a texto y se relee el binario
-    Entonces cada linea de texto reproduce campo a campo su registro binario
+  Scenario: VEC-03 binary to text round trip preserves fields
+    Given a generated binary vector file
+    When it is dumped to text and the binary is re-read
+    Then each text line reproduces field by field its binary record
 
-  Escenario: VEC-04 indices de mensaje son globales y monotonicos
-    Dado un fichero de vectores generado sobre un stream con mensajes de varios simbolos
-    Cuando se recorren los registros
-    Entonces msg_idx es estrictamente creciente
-    Y msg_idx corresponde al indice del mensaje en el BinaryFILE original
+  Scenario: VEC-04 message indices are global and monotonic
+    Given a vector file generated over a stream with several symbols' messages
+    When the records are walked
+    Then msg_idx is strictly increasing
+    And msg_idx corresponds to the message index in the original BinaryFILE

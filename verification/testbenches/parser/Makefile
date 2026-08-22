@@ -1,14 +1,14 @@
-# Makefile — testbench cocotb del parser ITCH (fase 1)
-#   SIM=verilator, cocotb 2.x. Uso:
-#       make sim            # correr la suite del área
-#       make sim TESTCASE=test_par01   # un solo test
+# Makefile — cocotb testbench for the ITCH parser (phase 1)
+#   SIM=verilator, cocotb 2.x. Usage:
+#       make sim            # run the area's test suite
+#       make sim TESTCASE=test_par01   # a single test
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 TOPLEVEL = itch_parser
 MODULE ?= test_itch_parser
 
-# Fuentes RTL del parser (común + parser). Se ensamblan aquí en orden de
-# la jerarquía top => hojas.
+# Parser RTL sources (common + parser). Assembled here in order of the
+# hierarchy top => leaves.
 RTL_PARSER = $(CURDIR)/../../../rtl/parser
 RTL_COMMON = $(CURDIR)/../../../rtl/common
 
@@ -19,9 +19,9 @@ VERILOG_SOURCES = \
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 
 REPO_ROOT := $(CURDIR)/../../..
-# cocotb/Verilator exportan el PYTHONPATH que se pasa al intérprete Python
-# embebido: por defecto usa SOLO el del entorno cocotb, así que propagamos el
-# conjunto (raíz repo + golden_model + el área) aquí.
+# cocotb/Verilator export the PYTHONPATH passed to the embedded Python
+# interpreter: by default it uses ONLY the cocotb environment one, so we
+# propagate the set (repo root + golden_model + the area) here.
 export PYTHONPATH := $(REPO_ROOT):$(REPO_ROOT)/golden_model:$(CURDIR):$(PYTHONPATH)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

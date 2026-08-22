@@ -1,39 +1,39 @@
-// itch_parser.sv — parser ITCH 5.0 a line-rate (fase 1, Anexo A).
+// itch_parser.sv — ITCH 5.0 parser at line-rate (phase 1, Annex A).
 //
-// Consume el payload MoldUDP64 ya decapado de IP/UDP:
-//   session(10B) + seq u64be + count u16be + [len u16be + mensaje]*
-// Valida framing y gaps (seq esperado = seq_prev + count_prev), alinea
-// mensajes que cruzan límites de palabra y emite por AXI-Stream el registro
-// normalizado del Anexo A:
+// Consumes the MoldUDP64 payload already decapsulated from IP/UDP:
+//   session(10B) + seq u64be + count u16be + [len u16be + message]*
+// Validates framing and gaps (expected seq = seq_prev + count_prev), aligns
+// messages that cross word boundaries and emits over AXI-Stream the
+// normalized Annex-A register:
 //   word0 = {msg_type[7:0], locate[15:0], length[7:0], msg_idx[31:0]}
-//   word1 = ts_ns (48 bits útiles, en bits [47:0]; resto 0)
-//   words 2..N = cuerpo (msg[11:len], MSB-first, relleno 0)
-// A DW=32 (fase3-uram, recorte del Anexo A): w0={type,locate,len},
-// w1=msg_idx, w2..=cuerpo — SIN words de timestamp (el book no las consume;
-// contrato enmendado por specs/fase3-uram/spec.md, criterio 1).
+//   word1 = ts_ns (48 useful bits, in bits [47:0]; rest 0)
+//   words 2..N = body (msg[11:len], MSB-first, zero-padded)
+// At DW=32 (fase3-uram, Annex-A trim): w0={type,locate,len}, w1=msg_idx,
+// w2..=body — WITHOUT timestamp words (the book does not consume them;
+// contract amended by specs/fase3-uram/spec.md, criterion 1).
 //
-// ARQUITECTURA (captura a msg_reg): cuando el mensaje está COMPLETO en la
-// cola (2+len <= QB), se captura de una vez a msg_reg (emisor estable e
-// independiente del stream) y se drena el mensaje completo de la cola. Los
-// estados de emisión solo emiten desde msg_reg (no leen el stream): no hay
-// desincronía. La cola amortigua el peor caso (mensajes mínimos back-to-back)
-// entre el consumo puntual del CAP y la llegada de la entrada.
+// ARCHITECTURE (capture to msg_reg): when the message is COMPLETE in the
+// queue (2+len <= QB), it is captured at once into msg_reg (a stable emitter
+// independent of the stream) and the whole message is drained from the queue.
+// The emission states only emit from msg_reg (they do not read the stream):
+// there is no desynchronization. The queue buffers the worst case (minimum back-to-back messages)
+// between the CAP's punctual consumption and the arrival of the input.
 //
-// QB (iteración 6, 2026-08-14 — revisión exhaustiva): 128 -> 64. El backlog
-// estacionario de la cola es QB/4 palabras (la entrada fluye a 4 B/c y el
-// drenaje puntual del CAP promedia ~2,7 B/c => la cola se fija en QB y cada
-// mensaje espera ~QB/16 mensajes de turno): QB=64 recorta la latencia
-// wire->BBO de ~69 a ~42 ciclos de media (p99 77 -> 47; ~215 -> ~132 ns a
-// 322,265625 MHz) y reduce el barrel shifter de 1024 a 512 bits para la
-// síntesis (criterio 10). El tramo probado de mensajes back-to-back
-// (LIN-01/P32-02) pasa de 0 stalls a stalls ACOTADOS (~15 en 4 mensajes A/U;
-// "sin backpressure sostenida" del régimen de fase 1 — la limitación del feed
-// infinito ya está documentada en LIN-01 alcance); la corrección bit a bit y
-// el promedio de aceptación se mantienen. El peor caso de cola (P=44 B =>
-// 46 B con prefijo) cabe con holgura (64 >= 46). No tocar QB sin re-medir la
-// evidencia de latencia (SEC-LAT-01). ATENCIÓN: en la cadena (itch_chain.sv)
-// el parámetro QB se sobrescribe desde el top — cambiar el default aquí no
-// afecta a fase 3 (ver docs/writeup/lecciones-aprendidas.md, §1).
+// QB (iteration 6, 2026-08-14 — exhaustive review): 128 -> 64. The queue's
+// stationary backlog is QB/4 words (the input flows at 4 B/c and the CAP's
+// punctual drain averages ~2,7 B/c => the queue settles at QB and each
+// message waits ~QB/16 messages of turn): QB=64 cuts the wire->BBO latency
+// from ~69 to ~42 cycles on average (p99 77 -> 47; ~215 -> ~132 ns at
+// 322,265625 MHz) and shrinks the barrel shifter from 1024 to 512 bits for
+// synthesis (criterion 10). The tested stretch of back-to-back messages
+// (LIN-01/P32-02) goes from 0 stalls to BOUNDED stalls (~15 across 4 A/U
+// messages; "no sustained backpressure" of the phase-1 regime — the infinite
+// feed limitation is already documented in LIN-01 scope); the bit-exact
+// correctness and the acceptance average are kept. The queue worst case (P=44
+// B => 46 B with prefix) fits with margin (64 >= 46). Do not touch QB without
+// re-measuring the latency evidence (SEC-LAT-01). ATTENTION: in the chain
+// (itch_chain.sv) the QB parameter is overridden from the top — changing the
+// default here does not affect phase 3 (see docs/writeup/lessons-learned.md §1).
 module itch_parser #(
     parameter DW = 64,
     parameter QB = 64
@@ -53,35 +53,35 @@ module itch_parser #(
     output reg               error
 );
 
-    // bytes por palabra y su log2: 64 bits -> 8 B (>>3), 32 bits -> 4 B (>>2)
+    // bytes per word and its log2: 64 bits -> 8 B (>>3), 32 bits -> 4 B (>>2)
     localparam BYTES = DW / 8;
     localparam L2B   = $clog2(DW / 8);
 
-    // Cola byte-alineada con margen de un beat (QBUFW): un mensaje de
-    // exactamente 2+len == QB bytes (p. ej. P de 44 B, 2+44=46=QB a DW=32)
-    // solo completaba si la residua previa quedaba ≡ 2 mod 4 con beats
-    // enteros; con un margen de (BYTES-1) el último beat desborda a la cola y
-    // el mensaje siempre completa (hallazgo iter 13: chain01 rojo, ST_LEN
-    // congelado en qn=45 con un P de 2+len=46).
+    // Byte-aligned queue with a one-beat margin (QBUFW): a message of exactly
+    // 2+len == QB bytes (e.g. a P of 44 B, 2+44=46=QB at DW=32) only
+    // completed if the previous residue ended up ≡ 2 mod 4 with whole beats;
+    // with a margin of (BYTES-1) the last beat overflows into the queue and
+    // the message always completes (finding iter 13: chain01 red, ST_LEN
+    // frozen at qn=45 with a P of 2+len=46).
     localparam QBUFW = QB + BYTES - 1;
     localparam QQ = QBUFW * 8;
 
     localparam ST_HDR  = 3'd0;
     localparam ST_LEN  = 3'd1;
-    localparam ST_CAP  = 3'd2;   // capturar mensaje a msg_reg + drena 2+len
+    localparam ST_CAP  = 3'd2;   // capture message into msg_reg + drains 2+len
     localparam ST_W0   = 3'd3;
     localparam ST_TS   = 3'd4;
     localparam ST_BODY = 3'd5;
     localparam ST_NEXT = 3'd6;
-    localparam ST_DRAIN = 3'd7;  // mensaje oversize (2+len > QB): se drena por
-                                 // el stream sin buffer ni registro (addendum
-                                 // iter 12: ST_LEN deadlockeaba con tready=0
-                                 // porque el mensaje nunca cabe en la cola)
+    localparam ST_DRAIN = 3'd7;  // oversize message (2+len > QB): drained over
+                                 // the stream without buffer nor register
+                                 // (addendum iter 12: ST_LEN deadlocked with
+                                 // tready=0, message never fits the queue)
     reg [2:0] st;
 
     reg  [QQ-1:0] q;
-    reg  [7:0]    qn;      // 8 bits cubren el QB máximo soportado de 128 bytes
-    reg  [8:0]    drop_left;  // bytes restantes del mensaje oversize (2+len <= 257)
+    reg  [7:0]    qn;      // 8 bits cover the maximum supported QB of 128 bytes
+    reg  [8:0]    drop_left;  // remaining bytes of the oversize message (2+len <= 257)
 
     reg  [31:0]   msg_idx;
     reg  [63:0]   exp_seq;
@@ -95,7 +95,7 @@ module itch_parser #(
     reg  [15:0]   locate;
     reg  [47:0]   ts_ns;
     reg           len_ok;
-    reg           eop_seen;   // latch: terminado el datagrama (tlast visto)
+    reg           eop_seen;   // latch: datagram finished (tlast seen)
     reg           drop_packet;
     reg  [351:0]  msg_reg;
     reg  [6:0]    body_w;
@@ -106,22 +106,22 @@ module itch_parser #(
 
     wire [7:0] avail = qn;
 
-    // Emisión AXI-Stream: `m_axis_*` es la salida registrada física; la
-    // presentación interna la hace `out_valid/out_data/out_last` con retención
-    // estándar. Un beat se completa SOLO cuando tvalid y tready coaltos
-    // (handshake AXI, OUT-03); el dato se mantiene mientras tvalid alta y
-    // tready baja (OUT-03 "no cambia"); y el FSM solo avanza en beats.
+    // AXI-Stream emission: `m_axis_*` is the physical registered output; the
+    // internal presentation is done by `out_valid/out_data/out_last` with
+    // standard retention. A beat completes ONLY when tvalid and tready are
+    // co-high (AXI handshake, OUT-03); the data is held while tvalid is high
+    // and tready is low (OUT-03 "does not change"); the FSM only advances on beats.
     assign m_axis_tvalid = out_valid_reg;
     assign m_axis_tdata  = out_data_reg;
     assign m_axis_tlast  = out_last_reg;
 
-    // El dato interno se captura en el flanco si hay sitio: sitio = sin dato
-    // pendiente O el actual fue aceptado (tready) en este beat.
+    // The internal datum is captured on the edge if there is room: room = no
+    // pending datum OR the current one was accepted (tready) this beat.
     wire out_take   = m_axis_tvalid && m_axis_tready;
     wire out_free   = !out_valid_reg || out_take;
 
     function automatic logic [7:0] pbyte(input [QQ-1:0] w, input [6:0] i);
-        pbyte = w[(QBUFW-1-i)*8 +: 8];
+        pbyte = w[(32'(QBUFW) - 32'(i) - 1)*8 +: 8];
     endfunction
 
     function automatic [7:0] keep_nbytes(input logic [BYTES-1:0] keep);
@@ -148,8 +148,8 @@ module itch_parser #(
                    (t == 8'h55) || (t == 8'h50);   // S R A F E C X D U P
     endfunction
 
-    // Longitud total esperada de los 22 tipos canónicos (fuente: messages.py).
-    // 0 => tipo desconocido; se consume sin decodificar ni validar por tabla.
+    // Expected total length of the 22 canonical types (source: messages.py).
+    // 0 => unknown type; consumed without decoding nor table validation.
     function automatic logic [7:0] explen(input [7:0] t);
         case (t)
             8'h53: explen = 8'd12;   // S
@@ -182,7 +182,7 @@ module itch_parser #(
         mbyte = m[351 - 8*i -: 8];
     endfunction
 
-    // palabra de cuerpo desde msg_reg (base = 11+8*bi); relleno 0 fuera
+    // body word from msg_reg (base = 11+8*bi); zero-padded outside
     function automatic logic [DW-1:0] cbody(input [351:0] m, input [7:0] ml,
                                             input [6:0] base);
         logic [DW-1:0] r;
@@ -197,14 +197,14 @@ module itch_parser #(
     endfunction
 
     // ------------------------------------------------------------------
-    // drenaje de ESTE ciclo (combinacional), en bytes.
-    //   HDR   : 20    (de una vez)
-    //   LEN   : 0     (solo espera y captura)
-    //   CAP   : 2+len (drena el mensaje entero de una vez)
-    //   DRAIN : min(drop_left, avail) — el oversize se drena incremental por
-    //           la cola (la aceptación en paralelo can_da conserva el
-    //           alineamiento del mensaje siguiente)
-    //   W0/TS/BODY/NEXT : 0 (solo emiten desde msg_reg)
+    // drain of THIS cycle (combinational), in bytes.
+    //   HDR   : 20    (at once)
+    //   LEN   : 0     (only waits and captures)
+    //   CAP   : 2+len (drains the whole message at once)
+    //   DRAIN : min(drop_left, avail) — the oversize is drained
+    //           incrementally through the queue (the parallel acceptance
+    //           can_da preserves the alignment of the next message)
+    //   W0/TS/BODY/NEXT : 0 (only emit from msg_reg)
     // ------------------------------------------------------------------
     wire [7:0] drain_need =
         (st == ST_HDR) ? 8'd20 :
@@ -221,38 +221,38 @@ module itch_parser #(
     wire [DW-1:0] in_compact = in_keep_ok ?
         (s_axis_tdata >> (8 * (32'(BYTES) - 32'(in_nbytes)))) : '0;
 
-    // tready combinacional: hay sitio después del posible drenaje de este
-    // ciclo. Durante un descarte se acepta todo hasta el tlast físico.
+    // combinational tready: there is room after the possible drain of this
+    // cycle. During a discard everything is accepted up to the physical tlast.
     wire drain_active = (drain_int > 0) && (qn >= drain_int);
     wire [7:0] base_n = drain_active ? qn - drain_int : qn;
-    // Oversize (ST_DRAIN, addendum iter 14): los beats se saltan por el
-    // stream con la frontera del mensaje. Un beat entero dentro de drop_left
-    // se descarta (drain_drop); el beat que cruza el final del mensaje
-    // conserva solo su cola (drain_strad), bytes del mensaje siguiente. El
-    // conteo drop_left pasa a ser por stream (no se re-sumatiza dentro de la
-    // cola): el diseño previo (iter 13) rellenaba la cola con can_da y el
-    // residuo del último beat quedaba desalineado (chain01 consumía 3 bytes
-    // del mensaje siguiente: loc 14 -> 13).
+    // Oversize (ST_DRAIN, addendum iter 14): the beats are skipped over the
+    // stream with the message boundary. A whole beat within drop_left is
+    // discarded (drain_drop); the beat that crosses the end of the message
+    // keeps only its tail (drain_strad), bytes of the next message. The
+    // drop_left count becomes per-stream (it is not re-summed inside the
+    // queue): the previous design (iter 13) refilled the queue with can_da
+    // and the last beat's residue ended up misaligned (chain01 consumed 3
+    // bytes of the next message: loc 14 -> 13).
     wire in_drain = (st == ST_DRAIN);
     wire drain_live = in_drain && (drop_left > 0);
     wire drain_drop  = drain_live && (9'(in_nbytes) <= drop_left);
     wire drain_strad = drain_live && (9'(in_nbytes) > drop_left);
     wire [7:0] retain_n = in_nbytes - 8'(drop_left);
-    // Tail retenido en el cruce: los (in_nbytes - drop_left) bytes BAJOS del
-    // beat (en in_compact el byte0 = el primero-recibido = MSB; la cola del
-    // mensaje siguiente son los bytes bajos). El shift anterior
-    // `>> 8*drop_left` retenía los bytes ALTO (los del mensaje a descartar)
-    // -> desalineaba el siguiente mensaje (iter 15: I2 sin size/type).
+    // Tail kept at the crossing: the (in_nbytes - drop_left) LOW bytes of the
+    // beat (in in_compact byte0 = the first-received = MSB; the tail of the
+    // next message are the low bytes). The previous shift `>> 8*drop_left`
+    // kept the HIGH bytes (those of the message to discard) -> it misaligned
+    // the next message (iter 15: I2 without size/type).
     wire [QQ-1:0] tailmask = (QQ'(1) << (8 * (32'(retain_n)))) - 1;
     wire [QQ-1:0] tailblock = QQ'(in_compact) & tailmask;
     wire [QQ-1:0] retain_bits = tailblock << (8 * (32'(QBUFW) - 32'(retain_n)));
-    // Tras aceptar tlast no se prefetchea el datagrama siguiente hasta cerrar
-    // o descartar el actual: la cola no guarda marcadores de frontera internos.
+    // After accepting tlast the next datagram is not prefetched until the current
+    // one is closed or discarded: the queue keeps no internal boundary markers.
     wire can_aug = s_axis_tvalid && !eop_seen && !drain_live &&
                    !drain_active &&
-                   (qn + in_nbytes <= QBUFW);
+                   (32'(qn) + 32'(in_nbytes) <= 32'(QBUFW));
     wire can_da  = s_axis_tvalid && !eop_seen && drain_active &&
-                   (base_n + in_nbytes <= QBUFW);
+                   (32'(base_n) + 32'(in_nbytes) <= 32'(QBUFW));
     wire invalid_offer = s_axis_tvalid && !eop_seen && !in_keep_ok;
     assign s_axis_tready = drop_packet || invalid_offer || can_aug || can_da ||
                            drain_drop || drain_strad;
@@ -303,13 +303,13 @@ module itch_parser #(
                     st <= ST_HDR;
                 end
             end else begin
-                // latch de fin de datagrama: se fija cuando el stream marca tlast
-                // (SEC-FRM-01/02) y se limpia al cerrar o descartar el datagrama.
+                // end-of-datagram latch: set when the stream marks tlast (SEC-FRM-01/02)
+                // and cleared on closing or discarding the datagram.
                 if (in_take && s_axis_tlast) eop_seen <= 1'b1;
 
                 // ------------------------------------------------------------
-                // cola: drena drain_int y acepta entrada válida en paralelo
-                // (durante ST_DRAIN solo se retiene el cruce de frontera)
+                // queue: drains drain_int and accepts valid input in parallel
+                // (during ST_DRAIN only the boundary crossing is retained)
                 // ------------------------------------------------------------
                 if (drain_strad) begin
                     q <= retain_bits;
@@ -336,8 +336,8 @@ module itch_parser #(
                                      pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)};
                         pack_left <= {pbyte(q,18), pbyte(q,19)};
                         pack_count <= {pbyte(q,18), pbyte(q,19)};
-                        // cambio de sesión: resetea el seq esperado (SEC-FRM-03),
-                        // nunca cuenta como gap
+                        // session change: resets the expected seq (SEC-FRM-03),
+                        // never counts as a gap
                         if ({pbyte(q,0),pbyte(q,1),pbyte(q,2),pbyte(q,3),
                              pbyte(q,4),pbyte(q,5),pbyte(q,6),pbyte(q,7),
                              pbyte(q,8),pbyte(q,9)} != session_id) begin
@@ -349,11 +349,11 @@ module itch_parser #(
                         end else if ({pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
                              pbyte(q,14), pbyte(q,15), pbyte(q,16), pbyte(q,17)}
                             != exp_seq) gap_detected <= 1'b1;
-                        // count=0 (SEC-FRM-04): paquete sin mensajes, avanza y
-                        // sigue esperando el siguiente header sin emitir nada.
-                        // exp_seq avanza por 0 => queda = seq del header actual.
-                        // Se usa el header, no el valor previo de exp_seq: en una
-                        // sesión nueva ambas asignaciones ocurren en este flanco.
+                        // count=0 (SEC-FRM-04): packet without messages, it
+                        // advances and keeps waiting for the next header emitting
+                        // nothing. exp_seq advances by 0 => stays = seq of the
+                        // current header. The header is used, not the previous
+                        // exp_seq value: on a new session both assignments happen on this edge.
                         if ({pbyte(q,18), pbyte(q,19)} == 16'h0) begin
                             if (eop_eff && qn_post == 0) begin
                                 exp_seq <= {pbyte(q,10), pbyte(q,11), pbyte(q,12), pbyte(q,13),
@@ -372,7 +372,7 @@ module itch_parser #(
                             st <= ST_LEN;
                         end
                     end else if (eop_seen) begin
-                        // tlast antes de completar los 20 bytes de cabecera.
+                        // tlast before completing the 20 header bytes.
                         error <= 1'b1;
                         q <= '0;
                         qn <= '0;
@@ -382,7 +382,7 @@ module itch_parser #(
                 end
 
                 // ------------------------------------------------
-                // LEN: esperar el mensaje completo (2+len) para capturar a msg_reg
+                // LEN: wait for the complete message (2+len) to capture to msg_reg
 ST_LEN: begin
                     if (avail >= 2) begin
                         if (8'(avail) >= 2 + 8'({pbyte(q,0), pbyte(q,1)})) begin
@@ -397,8 +397,8 @@ ST_LEN: begin
                                     8'(BYTES-1)) >> L2B) : 7'd0;
                             bi <= 0;
                             msg_reg <= q[(QBUFW-2)*8 - 1 -: 352];
-                            // Todo tipo canónico se valida, aunque no emita registro.
-                            // Un tipo desconocido (explen=0) sigue como passthrough.
+                            // Every canonical type is validated, even if it emits no register.
+                            // An unknown type (explen=0) continues as passthrough.
                             len_ok <= (explen(pbyte(q,2)) == 0) ||
                                       (explen(pbyte(q,2)) ==
                                        8'({pbyte(q,0), pbyte(q,1)}));
@@ -409,21 +409,21 @@ ST_LEN: begin
                                 error <= 1'b1;
                             st <= ST_CAP;
 end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
-                            // mensaje más grande que la cola (2+len > QB,
-                            // p. ej. I=50 B con QB=46): nunca cabe en el
-                            // buffer — se drena por el stream sin registro
-                            // (addendum iter 12; el ST_LEN previo esperaba
-                            // avance -> tready=0 indefinido, deadlock).
-                            // El contenido de la cola es el prefijo del
-                            // mensaje oversize: se descarta entero y se
-                            // cuentan solo los bytes que faltan. La
-                            // validación de longitud (explen) se conserva.
-                            // iter 14: drop_left descuenta qn_post (avail + el
-                            // beat aceptado en ESTE ciclo por can_aug); el
-                            // diseño previo solo restaba avail y el beat del
-                            // ciclo quedaba sin contabilizar -> el drenado
-                            // consumía un beat de más del mensaje siguiente
-                            // (chain01: loc 14 -> 13, 3 bytes comidos).
+                            // message larger than the queue (2+len > QB, e.g.
+                            // I=50 B with QB=46): never fits in the buffer —
+                            // it is drained over the stream without register
+                            // (addendum iter 12; the previous ST_LEN waited
+                            // for progress -> tready=0 indefinitely,
+                            // deadlock). The queue content is the prefix of
+                            // the oversize message: it is discarded whole and
+                            // only the missing bytes are counted. The length
+                            // validation (explen) is kept. iter 14: drop_left
+                            // subtracts qn_post (avail + the beat accepted in
+                            // THIS cycle by can_aug); the previous design only
+                            // subtracted avail and the cycle's beat went
+                            // uncounted -> the drain consumed one extra beat
+                            // of the next message (chain01: loc 14 -> 13, 3
+                            // bytes eaten).
                             if ((explen(pbyte(q,2)) != 8'd0) &&
                                 (explen(pbyte(q,2)) !=
                                  8'({pbyte(q,0), pbyte(q,1)})))
@@ -434,8 +434,8 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                             qn <= '0;
                             st <= ST_DRAIN;
                         end else if (eop_seen) begin
-                            // frame truncado (SEC-FRM-01): el datagrama ya terminó
-                            // (tlast) y el mensaje declarado no está completo.
+                            // truncated frame (SEC-FRM-01): the datagram already ended
+                            // (tlast) and the declared message is not complete.
                             error <= 1'b1;
                             q <= 0;
                             qn <= 0;
@@ -444,7 +444,7 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                             st <= ST_HDR;
                         end
                     end else if (eop_seen) begin
-                        // ni siquiera el campo len completo (SEC-FRM-02)
+                        // not even the len field complete (SEC-FRM-02)
                         error <= 1'b1;
                         q <= 0;
                         qn <= 0;
@@ -458,7 +458,7 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                 ST_CAP: begin
                     if (out_free) begin
                         out_valid_reg <= 1'b0;
-                        // len_ok = 0: longitud incoherente o truncado -> sin registro
+                        // len_ok = 0: incoherent or truncated length -> no register
                         st <= ((in_subset && msg_len >= 11 && len_ok) ? ST_W0 : ST_NEXT);
                     end
                 end
@@ -466,10 +466,10 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                 ST_W0: begin
                     if (out_free) begin
                         if (in_subset && msg_len >= 11) begin
-                            // w0: {type, locate, len, idx} a 64 bits; a 32 bits
-                            // el idx se emite en su propia word (w1, recorte del
-                            // Anexo A: las words de ts se eliminaron — el book
-                            // no las consume; specs/fase3-uram criterio 1)
+                            // w0: {type, locate, len, idx} at 64 bits; at 32 bits
+                            // the idx is emitted in its own word (w1, Annex-A
+                            // trim: the ts words were removed — the book does
+                            // not consume them; specs/fase3-uram criterion 1)
                             if (DW == 32)
                                 out_data_reg <= DW'({msg_type, locate, msg_len});
                             else
@@ -484,8 +484,8 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                 ST_TS: begin
                     if (out_free) begin
                         if (DW == 32) begin
-                            // cabecera de 32 bits recortada: una sola word
-                            // w1=msg_idx; el cuerpo arranca en w2
+                            // trimmed 32-bit header: a single word w1=msg_idx;
+                            // the body starts at w2
                             out_data_reg <= DW'(msg_idx);
                             out_valid_reg <= 1'b1;
                             out_last_reg  <= 1'b0;
@@ -514,17 +514,17 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                 end
 
                 ST_NEXT: begin
-                    // tlast cierra el datagrama UDP de entrada (consumido;
-                    // el count del framing gobierna el flujo real).
+                    // tlast closes the input UDP datagram (consumed; the
+                    // framing count governs the real flow).
                     if (s_axis_tlast) begin
-                        // marcador de cierre de paquete (no altera el flujo)
+                        // packet-close marker (does not alter the flow)
                     end
                     if (out_free) begin
                         msg_idx <= msg_idx + 1;
                         out_valid_reg <= 1'b0;
-                        // off-by-one corregido: si quedan mensajes del MISMO
-                        // paquete (pack_left aun por encima de 1 tras decremento),
-                        // sigue ST_LEN; este era el ultimo (pack_left==1) -> ST_HDR
+                        // fixed off-by-one: if messages of the SAME packet remain
+                        // (pack_left still above 1 after the decrement), continue
+                        // ST_LEN; this was the last (pack_left==1) -> ST_HDR
                         if (pack_left > 1) begin
                             pack_left <= pack_left - 1;
                             st <= ST_LEN;
@@ -546,15 +546,15 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
 
                     // ------------------------------------------------
                 ST_DRAIN: begin
-                    // drenaje incremental del mensaje oversize: los beats del
-                    // stream se saltan con la frontera del mensaje (drain_drop
-                    // / drain_strad, addendum iter 14) — nada se acumula salvo
-                    // la cola del cruce (bytes del mensaje siguiente). Al
-                    // completarse, ST_LEN retoma con la cola alineada.
-                    // El mensaje drenado descuenta pack_left como un mensaje
-                    // más del datagrama (iter 13: sin el descuento, el
-                    // pack_left de la cabecera quedaba desalineado al cierre
-                    // del paquete y ST_NEXT pulsaba error).
+                    // incremental drain of the oversize message: the stream's
+                    // beats are skipped with the message boundary (drain_drop
+                    // / drain_strad, addendum iter 14) — nothing accumulates
+                    // except the crossing's tail (bytes of the next message).
+                    // On completion, ST_LEN resumes with the queue aligned.
+                    // The drained message decrements pack_left like one more
+                    // message of the datagram (iter 13: without the decrement,
+                    // the header's pack_left ended up misaligned at packet
+                    // close and ST_NEXT pulsed error).
                     if (drop_left == 0) begin
                         if (pack_left > 1) begin
                             pack_left <= pack_left - 1;
@@ -572,9 +572,9 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                             st <= ST_HDR;
                         end
                     end else if (eop_seen) begin
-                        // datagrama truncado dentro del mensaje de oversize
-                        // (SEC-FRM-01): el stream terminó y el mensaje
-                        // declarado no se completó
+                        // datagram truncated inside the oversize message
+                        // (SEC-FRM-01): the stream ended and the declared
+                        // message did not complete
                         error <= 1'b1;
                         q <= '0;
                         qn <= '0;

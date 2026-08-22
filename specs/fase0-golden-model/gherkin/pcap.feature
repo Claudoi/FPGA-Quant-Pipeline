@@ -1,33 +1,33 @@
-# language: es
-Característica: Envoltura BinaryFILE a pcap MoldUDP64
-  binaryfile_to_pcap.py convierte los ficheros de muestra de Nasdaq en pcaps
-  reales (Ethernet/IP/UDP/MoldUDP64) para alimentar los testbenches RTL.
-  Su correccion se demuestra por round-trip byte a byte.
+# language: en
+Feature: BinaryFILE to MoldUDP64 pcap wrapper
+  binaryfile_to_pcap.py converts the Nasdaq sample files into real pcaps
+  (Ethernet/IP/UDP/MoldUDP64) to feed the RTL testbenches. Its correctness is
+  demonstrated by byte-exact round-trip.
 
-  Escenario: PCA-01 el pcap se abre con tcpdump sin errores
-    Dado un BinaryFILE de entrada valido
-    Cuando se genera el pcap y se ejecuta tcpdump -r sobre el
-    Entonces tcpdump lo lee sin errores
-    Y todos los datagramas son UDP hacia la IP y puerto configurados
+  Scenario: PCA-01 the pcap opens with tcpdump without errors
+    Given a valid input BinaryFILE
+    When the pcap is generated and tcpdump -r runs over it
+    Then tcpdump reads it without errors
+    And all datagrams are UDP toward the configured IP and port
 
-  Escenario: PCA-02 empaquetado respeta el maximo de payload configurable
-    Dado un BinaryFILE con mensajes de longitudes variadas
-    Cuando se genera el pcap con el limite por defecto
-    Entonces ningun datagrama supera 1400 bytes de payload UDP
-    Y el campo message count de MoldUDP64 coincide con los mensajes del datagrama
+  Scenario: PCA-02 packing respects the configurable payload maximum
+    Given a BinaryFILE with messages of varied lengths
+    When the pcap is generated with the default limit
+    Then no datagram exceeds 1400 bytes of UDP payload
+    And the MoldUDP64 message-count field matches the datagram's messages
 
-  Escenario: PCA-03 sequence numbers monotonicos desde 1
-    Dado un pcap generado
-    Cuando se recorren los paquetes MoldUDP64 en orden
-    Entonces el primer sequence number es 1
-    Y cada paquete avanza la secuencia en su message count
+  Scenario: PCA-03 monotonic sequence numbers from 1
+    Given a generated pcap
+    When the MoldUDP64 packets are walked in order
+    Then the first sequence number is 1
+    And each packet advances the sequence by its message count
 
-  Escenario: PCA-04 round trip pcap a stream BinaryFILE identico
-    Dado un BinaryFILE de entrada y el pcap generado a partir de el
-    Cuando se extraen los payloads de mensajes de todos los paquetes en orden de secuencia
-    Entonces el stream reconstruido es identico byte a byte al payload del BinaryFILE original
+  Scenario: PCA-04 pcap round trip to an identical BinaryFILE stream
+    Given an input BinaryFILE and the pcap generated from it
+    When the message payloads of all packets are extracted in sequence order
+    Then the reconstructed stream is byte-exact to the payload of the original BinaryFILE
 
-  Escenario: SEC-06 mensaje mayor que el payload maximo produce error claro
-    Dado un BinaryFILE con un mensaje cuya longitud excede el payload UDP maximo
-    Cuando se ejecuta la conversion
-    Entonces aborta con un error que indica el indice del mensaje y su longitud
+  Scenario: SEC-06 a message larger than the max payload produces a clear error
+    Given a BinaryFILE with a message whose length exceeds the max UDP payload
+    When the conversion runs
+    Then it aborts with an error indicating the message index and its length

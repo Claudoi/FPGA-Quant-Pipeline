@@ -1,0 +1,31 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
+| Date         : Thu Aug 20 20:54:52 2026
+| Host         : atini running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file <local-build-path>/synth/reports/322mhz_retime/util_synth.txt
+| Design       : itch_chain_synth
+| Device       : xcku3p-ffva676-2L-e
+| Speed File   : -2L
+| Design State : Synthesized
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
+|       Instance       |    Module   | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs  | RAMB36 | RAMB18 | URAM | DSP Blocks |
++----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
+| itch_chain_synth     |       (top) |     157962 |     157936 |      26 |    0 | 95081 |      0 |      0 |   32 |          0 |
+|   (itch_chain_synth) |       (top) |         32 |          6 |      26 |    0 |   190 |      0 |      0 |    0 |          0 |
+|   u_book             |   orderbook |     154779 |     154779 |       0 |    0 | 94028 |      0 |      0 |   32 |          0 |
+|   u_parser           | itch_parser |       3151 |       3151 |       0 |    0 |   863 |      0 |      0 |    0 |          0 |
++----------------------+-------------+------------+------------+---------+------+-------+--------+--------+------+------------+
+
+

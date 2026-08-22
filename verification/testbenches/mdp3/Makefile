@@ -1,8 +1,8 @@
-# Makefile — testbench cocotb del parser MDP 3.0 (fase 4)
-#   SIM=verilator, cocotb 2.x. Uso:
-#       make sim            # suite DW=32
-#       make sim-dw64       # misma suite con entrada DW=64
-#       make sim TESTCASE=test_m3frm01   # un solo test DW=32
+# Makefile — cocotb testbench for the MDP 3.0 parser (phase 4)
+#   SIM=verilator, cocotb 2.x. Usage:
+#       make sim            # DW=32 suite
+#       make sim-dw64       # same suite with DW=64 input
+#       make sim TESTCASE=test_m3frm01   # a single DW=32 test
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 TOPLEVEL = mdp3_parser
@@ -11,7 +11,7 @@ DW ?= 32
 EXTRA_ARGS += -GDW=$(DW)
 SIM_BUILD = sim_build_dw$(DW)
 
-# Fuente RTL del parser.
+# Parser RTL source.
 RTL_PARSER = $(CURDIR)/../../../rtl/parser
 
 VERILOG_SOURCES = \
@@ -28,9 +28,9 @@ clean-all:
 COCOTB_RESULTS_FILE = $(CURDIR)/results.xml
 
 REPO_ROOT := $(CURDIR)/../../..
-# cocotb/Verilator exportan el PYTHONPATH que se pasa al intérprete Python
-# embebido: por defecto usa SOLO el del entorno cocotb, así que propagamos el
-# conjunto (raíz repo + golden_model + el área) aquí.
+# cocotb/Verilator export the PYTHONPATH passed to the embedded Python
+# interpreter: by default it uses ONLY the cocotb environment one, so we
+# propagate the set (repo root + golden_model + the area) here.
 export PYTHONPATH := $(REPO_ROOT):$(REPO_ROOT)/golden_model:$(CURDIR):$(PYTHONPATH)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

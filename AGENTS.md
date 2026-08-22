@@ -1,136 +1,137 @@
-# Agent Notes — FPGA Quant Pipeline
+# Project Guide — FPGA Quant Pipeline
 
-> Proyecto de portfolio para infraestructura FPGA de baja latencia. El alcance
-> implementado empieza en el payload MoldUDP64 ya decapsulado; **MAC 10G y
-> Ethernet/IP/UDP no están implementados en este repositorio**.
+Portfolio/reference project for low-latency FPGA market-data infrastructure.
+The implemented scope starts at the already-decapsulated MoldUDP64 payload;
+the 10G MAC and Ethernet/IP/UDP layers are **not** part of this repository.
 
-## Arquitectura y límites honestos
+## Architecture and honest limits
 
-`MoldUDP64 → parser ITCH → order book → BBO/top-N`
+```
+MoldUDP64 -> ITCH parser -> order book -> BBO/top-N
+```
 
-- El objetivo de la variante de fase 3 es DW=32 a 322,265625 MHz sobre
-  UltraScale+. El framing `tkeep` y la salida BBO/top-N están verificados en
-  simulación. Sigue pendiente medir de forma reproducible el umbral de stalls
-  sobre un tramo A/U real; el cierre de timing exige además un informe Vivado
-  con WNS/TNS y utilización.
-- El book está dimensionado para el subset configurado de 20 símbolos, no para
-  un libro completo de todo Nasdaq.
-- Los replays con datos reales requieren artefactos locales no versionados. Un
-  test que no encuentre su pcap informa la omisión; no sustituye esa evidencia
-  por una pasada sintética.
+- The phase-3 target variant is DW=32 at 322.265625 MHz on UltraScale+. The
+  `tkeep` framing and the BBO/top-N output are verified in simulation. A
+  reproducible stall-threshold measurement over a real A/U path remains the
+  open item; timing closure also requires a Vivado report with WNS/TNS and
+  utilization.
+- The book is sized for the configured 20-symbol subset, not a full Nasdaq
+  book.
+- Replays against real data require local, non-versioned artifacts. A test that
+  cannot find its pcap reports the omission; it never substitutes synthetic
+  evidence for the pcap.
 
-El documento maestro, el alcance por fase y los riesgos viven en
-`Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`.
+The master write-up (architecture, hazards, latency, timing, limits):
+`docs/writeup/pipeline-itch-uram.md`.
 
-## Estado actual — 2026-08-18
+## Status — 2026-08-22
 
-| Fase | Estado verificable |
+| Phase | Verifiable status |
 |---|---|
-| 0 — golden ITCH | Cerrada. Golden Python, 22 tipos validados y evidencia de día real. |
-| 1 — parser RTL | **Cerrada (2026-08-20)**: framing `s_axis_tkeep`, gaps, backpressure, 91/91 `tlast`, replay real bit a bit y **REP-02 line-rate CERRADO** (tramo A/U real msgs 241733..241736, **9 stalls ≤ 24** con downstream siempre listo, salida bit a bit contra el oráculo; pcap `/tmp/real_subset.pcap` presente). Suite fase 1 32/32 en WSL. |
-| 2 — order book RTL | Cerrada funcionalmente: BBO bit a bit, replace atómico y replay real del subset. |
-| 3 — DW=32/URAM | **Feed real CERRADO end-to-end (2026-08-20)**: con el push-out (iter 13) + drenado oversize corregido (iter 15), chain01 procesa el subset real (20 símbolos, 2.289 NOII) **bit a bit en BBO (17.484)**, conteo exacto, cross=0, anomaly=0, gaps=0 — a **DW=32/QB=46** (la latencia ~45 exige QB=46). Regresión completa VERDE en WSL: phase3 10/10 (sim 5/5, hash 8/8, depth 3/3, hard 2/2, parser 5/5, chain 5/5, chain-nd3 5/5, lat 2/2, rtm 4/4, rtm64 1/1), parser fase1 32/32, orderbook 17/17, uram 4/4+3/3. **Enmiendas de contrato documentadas (iter 13/15)**: (a) el desborde de niveles P=32 hace **push-out** (el add mejor que el peor entra; SEC-OV solo en el descarte/reduce-ausente), (b) el **depth** top-N es bit a bit hasta la 1ª re-entrada de un nivel descartado en el pico >P (ev. 14461, loc13 pico 420) y subconjunto de precios después (nunca fantasma); BBO siempre bit a bit, (c) **latencia RTM-LAT-01 re-derivada a media ≤ 70 ciclos** (medida 65,5 = 203,3 ns en el feed real; el ≤48 de iter 7 era de un tramo afortunado no representativo), determinista, histograma persistido en `verification/vectors/latency/latency_dw32.json`. **Síntesis re-ejecutada con el RTL actual (iter 16)**: la variante **156,25 MHz CERRADA** (WNS +0,057 ns, TNS 0, WHS +0,021 ns, URAM 32/48, IOB 194/256) sustituye a la evidencia de iter 11; **322 MHz sigue ABIERTA** (WNS −3,458 ns, ruta estructural `m_loc_idx1→sm_asel` del book). Detalles en `specs/fase3-optimizacion/verify-report.md`. |
-| 4 – CME MDP3 | **Cerrada funcionalmente (2026-08-19)**: suite MDP3 DW=32/DW64 **14/14 PASS** en WSL (cocotb 2.0.1 + Verilator 5.046), gate B limpio, gate E **14/14** mutantes, gate C verible **0 hallazgos**. Criterio 5: puerta `DS_HDR` (schema_id==1 && version==12, resto passthrough) + MAX_MSG 256/257 (`M3-PASS-02`, `M3-SIZE-01/02`). Criterio 10: backpressure de salida estable (`M3-BP-01`). **Criterio 7 CERRADO**: validación tkeep MSB-contigua + descarte del paquete inválido (sin apend de beats inválidos, estado `CS_DISCARD` que drena hasta tlast y resetea colas; `M3-INV-04a/04a2/04b` activos; sub-caso 04a2 con huecos en el último beat y aporte intacto, nv=3). **Queda ABIERTO solo el timing** (sin proyecto Vivado MDP3: WNS/TNS/utilización NO EJECUTADOS) y el checker XML↔RTL pendiente. Hallazgo documentado: `literal_subset` del test (vector m53 de 87 B) es incoherente con el layout del template 53 y nunca se usó en la suite. |
+| 0 – golden ITCH | Closed. Python golden model, 22 validated types, real-day evidence. |
+| 1 – parser RTL | Closed (2026-08-20). `s_axis_tkeep` framing, gaps, backpressure, 91/91 `tlast`, bit-exact real replay; REP-02 line-rate closed (real A/U burst msgs 241733..241736, 9 stalls <= 24). Suite 32/32. |
+| 2 – order book RTL | Closed functionally. Bit-exact BBO, atomic replace, real subset replay. |
+| 3 – DW=32/URAM | Functional closed end-to-end (17.484 BBO events bit-exact, cross=0, anomaly=0, gaps=0, DW=32/QB=46, latency mean 65.521 cycles = 203.3 ns). **156.25 MHz closed** (WNS +0.057 ns, URAM 32/48). **322 MHz open**: the internal `m_loc_idx -> sm_asel` path was split (CLO-322-02) and the book now fits (146.8k LUT), but the residual WNS is output-I/O-bound (SCD 2.695 ns + OBUF 2.334 ns at -2L). |
+| 4 – CME MDP3 | Functional closed (14/14 DW=32 and DW=64, gate E 14/14). Criteria 5/7/10 closed. **Timing open**: the parser does not fit the XCKU3P (LUT over-utilization); repartition requires a spec addendum. |
 
-No presentar la fase 3 como cerrada en el criterio 10 a 322 MHz (sigue
-abierto por la limitación estructural del I/O del wrapper; la variante
-156,25 MHz sí está cerrada con evidencia vigente). Las fases 1, 2 y 4
-tienen sus criterios cerrados con evidencia vigente en el
-`verify-report.md` correspondiente; cualquier criterio reabierto vuelve a
-exigir rojo→verde y evidencia fresca antes de volver a presentarse como
-cerrado.
+Phase 3 is not presented as 322 MHz closed (the output-I/O limit keeps the
+criterion open); the 156.25 MHz variant is the closed, evidence-backed claim.
+Phases 1, 2 and 4 have their criteria closed with current evidence in their
+respective `verify-report.md`; any reopened criterion requires red -> green and
+fresh evidence before it is presented as closed again.
 
-## Fuentes de verdad
+## Sources of truth
 
-| Necesidad | Ubicación autoritativa |
+| Need | Authoritative location |
 |---|---|
-| Reglas globales, proceso y estado | Este archivo |
-| Contrato y criterios de una campaña | `specs/<campaña>/spec.md` y `gherkin/` |
-| Evidencia de una campaña | `specs/<campaña>/verify-report.md` |
-| Checks reproducibles | `verification/`, `scripts/verify/`, Makefiles y `synth/` |
-| Instalación y problemas del entorno | `docs/DESARROLLO.md` |
-| Plan de cierre ejecutable (qué falta y en qué orden) | `docs/writeup/plan-cierre.md` |
-| Marcas verificables (números de timing/latencia/sim) | `docs/writeup/marcas.md` |
-| Documento de presentación (arquitectura, hazards, latencia, timing, límites) | `docs/writeup/pipeline-itch-uram.md` |
+| Global rules, process, status | This file |
+| Contract and criteria of a campaign | `specs/<campaign>/spec.md` and `gherkin/` |
+| Evidence of a campaign | `specs/<campaign>/verify-report.md` |
+| Reproducible checks | `verification/`, `scripts/verify/`, Makefiles and `synth/` |
+| Setup and environment | `docs/DEVELOPMENT.md` |
+| Executable close plan (index) | `docs/writeup/close-plan.md` |
+| Close campaign contract (CLO-*) | `specs/cierre/spec.md` and `gherkin/` |
+| Close campaign evidence | `specs/cierre/verify-report.md` |
+| Verifiable numbers | `docs/writeup/marks.md` |
+| Presentation document | `docs/writeup/pipeline-itch-uram.md` |
 
-Los informes históricos pueden mencionar el antiguo nombre de una etapa del
-proceso; son evidencia fechada, no instrucciones operativas.
+Historical reports may use an old stage name; they are dated evidence, not
+operating instructions.
 
-## Proceso obligatorio por campaña
+## Mandatory per-campaign process
 
-1. **Especificar.** Crear o actualizar `specs/<campaña>/spec.md` y sus
-   escenarios Gherkin antes de cambiar RTL o Python. Toda decisión que altere
-   un contrato se documenta allí.
-2. **Construir con rojo→verde.** Añadir primero el test que falla por el
-   comportamiento buscado; ejecutar el rojo; implementar el cambio mínimo;
-   ejecutar el verde. No modificar la spec para ocultar un fallo.
-3. **Verificar.** Ejecutar los gates aplicables A–G, pegar outputs reales en
-   `verify-report.md` y declarar de forma explícita cualquier gate no
-   ejecutado. Un gate sin output no está pasado.
-4. **Juzgar adversarialmente.** Reejecutar evidencia desde un ángulo que pueda
-   refutarla: vector límite, mutante, consumidor del puerto o informe de
-   timing. Un criterio solo cierra si todos sus gates aplicables pasan.
+1. **Specify.** Create or update `specs/<campaign>/spec.md` and its Gherkin
+   scenarios before changing RTL or Python. Any decision that alters a contract
+   is documented there.
+2. **Build red -> green.** Add the failing test first; run the red; implement
+   the minimal change; run the green. Never edit the spec to hide a failure.
+3. **Verify.** Run the applicable gates A-G, paste the real output into
+   `verify-report.md`, and explicitly state any gate not run. A gate without
+   output is not passed.
+4. **Review adversarially.** Re-run evidence from an angle that could refute it:
+   a boundary vector, a mutant, a port consumer, or a timing report. A criterion
+   closes only when all its applicable gates pass.
 
-No hay comandos mágicos ni flujos ocultos: este archivo define el proceso.
+There are no magic commands or hidden flows; this file defines the process.
 
-## Gates A–G
+## Gates A-G
 
-| Gate | Exigencia |
+| Gate | Requirement |
 |---|---|
-| A — simulación | Cocotb/Verilator o unittest del área; cualquier fallo bloquea. |
-| B — compilación | `verilator --lint-only --Wall` sobre RTL tocado; Python compilable. |
-| C — estilo | `verible-verilog-lint --rules_config_search` sobre el RTL tocado (config del repo en `./.rules.verible_lint`, que alinea la nomenclatura del proyecto). Si no está instalado, declararlo NO EJECUTADO. |
-| D — cobertura | Mapa literal spec↔test y, si existe herramienta, cobertura funcional. |
-| E — mutación | Cada mutante compila y al menos un test lo mata; un mutante roto no cuenta. |
-| F — completitud | `specs/gherkin-espejos.json` y títulos de tests coherentes con Gherkin. |
-| G — rigor/timing | Sin datos crudos en Git, golden independiente, y Vivado WNS/TNS/recursos cuando aplique. |
+| A – simulation | cocotb/Verilator or the area's unittest; any failure blocks. |
+| B – compilation | `verilator --lint-only --Wall` on the touched RTL; Python compilable. |
+| C – style | `verible-verilog-lint --rules_config_search` on the touched RTL (repo config `./.rules.verible_lint`). If not installed, declare NOT EXECUTED. |
+| D – coverage | Literal spec<->test map and, if a tool exists, functional coverage. |
+| E – mutation | Every mutant compiles and at least one test kills it; a broken mutant does not count. |
+| F – completeness | `specs/gherkin-espejos.json` and test titles consistent with Gherkin. |
+| G – rigor/timing | No raw data in Git, independent golden model, and Vivado WNS/TNS/resources when applicable. |
 
-### Comandos de referencia
+Reference commands:
 
 ```bash
-# Golden Python
+# Golden model
 python3 -m unittest discover -s golden_model/tests -t .
 
-# Áreas RTL
+# RTL areas
 make -C verification/testbenches/parser sim
 make -C verification/testbenches/orderbook sim
 make -C verification/testbenches/phase3 sim
 make -C verification/testbenches/uram sim-uram
 make -C verification/testbenches/mdp3 sim
 
-# Lint y síntesis estática de fase 3
+# Phase-3 lint and static synthesis
 verilator --lint-only --Wall --top-module itch_chain \
   rtl/itch_chain.sv rtl/parser/itch_parser.sv rtl/orderbook/orderbook.sv
 python3 scripts/verify/synth_check.py
 ```
 
-Cada campaña fija sus comandos completos, umbrales y top en su spec o Makefile.
-No rebajar `--Wall`, omitir un mutante, ni convertir una omisión de datos en
-PASS para cerrar una campaña.
+Each campaign fixes its full commands, thresholds and top in its spec or
+Makefile. Do not relax `--Wall`, omit a mutant, or turn a data omission into a
+PASS to close a campaign.
 
-## Reglas globales
+## Global rules
 
-- Español en documentación y commits; Conventional Commits.
-- Datos de mercado reales jamás se versionan. Solo muestras sintéticas y
-  vectores pequeños en `verification/vectors/`.
-- El golden model es independiente del RTL: los tests comparan bit a bit contra
-  él; nunca generar un oráculo desde el RTL probado.
-- Antes de cambiar un puerto, señal, parámetro o layout, buscar todos sus
-  consumidores. El `QB` efectivo de fase 3 se fija en `itch_chain.sv` y en el
-  Makefile, no solo en defaults de submódulos.
-- No introducir FIFO, dependencia o abstracción para esconder falta de
-  throughput. Documentar el régimen real de backpressure y latencia.
-- El owner necesita poder entender el estado leyendo la spec, el verify-report
-  y este archivo, sin inspeccionar HDL.
+- Documentation and commits are written in English; Conventional Commits.
+- Real market data is never versioned. Only synthetic samples and small vectors
+  under `verification/vectors/`.
+- The golden model is independent of the RTL: tests compare bit-exactly against
+  it; never generate an oracle from the RTL under test.
+- Before changing a port, signal, parameter or layout, find all its consumers.
+  The effective `QB` of phase 3 is fixed in `itch_chain.sv` and in the Makefile,
+  not only in submodule defaults.
+- Do not introduce a FIFO, dependency or abstraction to hide missing throughput.
+  Document the real backpressure and latency regime.
+- The owner must be able to understand the state by reading the spec, the
+  verify-report and this file, without reading HDL.
 
 ## Layout
 
-| Directorio | Contenido |
+| Directory | Contents |
 |---|---|
-| `golden_model/` | Parser/modelo de referencia ITCH y CME, vectores y tests Python. |
-| `rtl/` | Parseres y order book SystemVerilog. |
-| `verification/` | Testbenches cocotb, vectores y Makefiles. |
-| `scripts/verify/` | Mutación y validaciones reproducibles. |
-| `specs/` | Contratos Gherkin e informes de evidencia por campaña. |
-| `synth/` | Tcl/XDC e informes Vivado. |
-| `docs/` | Setup, decisiones y write-ups; no define proceso operativo. |
+| `golden_model/` | Reference ITCH and CME parser/model, vectors and Python tests. |
+| `rtl/` | ITCH and MDP3 parsers, order book. |
+| `verification/` | cocotb testbenches, vectors and Makefiles. |
+| `scripts/verify/` | Mutation and reproducible validations. |
+| `specs/` | Gherkin contracts and evidence reports per campaign. |
+| `synth/` | Vivado Tcl/XDC and reports. |
+| `docs/` | Setup, decisions and write-ups; does not define the operating process. |

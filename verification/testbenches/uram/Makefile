@@ -1,7 +1,7 @@
-# Makefile — testbench cocotb de la campaña fase3-uram (Anexo A recortado,
-# URAM + sonda serializada + pipeline de niveles).
-#   SIM=verilator, cocotb 2.x. Top itch_parser/orderbook a DW=32 vía -G.
-#   Uso:
+# Makefile — cocotb testbench for the fase3-uram campaign (trimmed Anexo A,
+# URAM + serialized probe + level pipeline).
+#   SIM=verilator, cocotb 2.x. Top itch_parser/orderbook at DW=32 via -G.
+#   Usage:
 #     make sim-anx                        -> itch_parser DW=32 (ANX-01/02)
 #     make sim-uram                       -> orderbook DW=32 K=20 (SEC-URAM-01/02)
 SIM ?= verilator
@@ -25,8 +25,8 @@ EXTRA_ARGS ?= -GDW=32
 sim-anx:
 	$(MAKE) sim TOPLEVEL=itch_parser MODULE=test_anx32 EXTRA_ARGS="-GDW=32" SIM_BUILD=sim_build_anx
 
-# criterios 2-3: sonda serializada + prefetch. K=20 para hacer real el probe
-# agotado (9ª ref del mismo hash) — igual régimen que sim-hash de phase3.
+# criteria 2-3: serialized probe + prefetch. K=20 to make the exhausted probe
+# real (9th ref of the same hash) — same regime as phase3's sim-hash.
 sim-uram:
 	$(MAKE) sim TOPLEVEL=orderbook MODULE=test_uram32 EXTRA_ARGS="-GDW=32 -GK=20" SIM_BUILD=sim_build_uram
 

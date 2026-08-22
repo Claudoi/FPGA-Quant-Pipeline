@@ -1,10 +1,11 @@
-"""Testbench cocotb de la cadena parser->book a DW=32 (fase 3, criterio 3) —
-área phase3.
+"""Cocotb testbench for the parser->book chain at DW=32 (phase 3, criterion 3) —
+area phase3.
 
-Espejo CHAIN-01: el feed real decapado entra por el parser (framing MoldUDP64
-a 32 bits) y el BBO del book a 32 bits es idéntico al golden book.py, sin
-re-parseo intermedio. Adversarial INV-CHAIN: secuencia sintética multi-tipo
-sin gaps -> BBO bit a bit y gap_detected en 0 (la cadena no rompe framing).
+Mirror CHAIN-01: the decapsulated real feed enters through the parser (MoldUDP64
+framing at 32 bits) and the 32-bit book BBO is identical to golden book.py,
+without intermediate re-parsing. Adversarial INV-CHAIN: multi-type synthetic
+sequence without gaps -> bit-exact BBO and gap_detected at 0 (the chain does
+not break framing).
 """
 import cocotb
 import os
@@ -35,9 +36,9 @@ async def _reset(dut):
 
 async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
                       require_input_stall=False, expected_errors=None):
-    """Conduce datagramas MoldUDP64 independientes y recolecta BBO.
+    """Drives independent MoldUDP64 datagrams and collects the BBO.
 
-    Devuelve (bbo_events, depth_words, cross, anomaly, gaps)."""
+    Returns (bbo_events, depth_words, cross, anomaly, gaps)."""
     await _reset(dut)
     beats = packet_beats(payloads, 4)
     n = len(beats)
@@ -62,7 +63,7 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
         errors += int(dut.error.value)
         if int(dut.bbo_tvalid.value) == 1 and int(dut.bbo_tready.value) == 1:
             assert int(dut.depth_tvalid.value) == 1, (
-                "CHAIN: depth_tvalid debe acompañar al BBO")
+                "CHAIN: depth_tvalid must accompany the BBO")
             loc = int(dut.bbo_locate.value)
             td = int(dut.bbo_tdata.value)
             ch = int(dut.bbo_changed.value)
@@ -87,40 +88,41 @@ async def drive_chain(dut, payloads, max_cycles=3_000_000, window=8000,
         if quiet > window:
             break
     assert accepted_tlast == len(payloads), (
-        f"CHAIN: tlast aceptados={accepted_tlast}, esperados={len(payloads)}")
+        f"CHAIN: accepted tlast={accepted_tlast}, expected={len(payloads)}")
     if require_input_stall:
-        assert input_stalls > 0, "CHAIN: el adversarial no forzó backpressure"
+        assert input_stalls > 0, "CHAIN: the adversarial did not force backpressure"
     if expected_errors is not None:
         assert errors == expected_errors, (
-            f"CHAIN: pulsos error={errors}, esperados={expected_errors}")
+            f"CHAIN: error pulses={errors}, expected={expected_errors}")
     return out, depth, cross, anomaly, gaps
 
 
 @cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_chain01_feed_real_bit_a_bit(dut):
-    """Espejo §CHAIN-01: feed real decapado -> parser 32 -> book 32 -> BBO
-    idéntico al golden bit a bit (pcap local no commiteado; se omite si no existe).
+    """Mirror §CHAIN-01: decapsulated real feed -> parser 32 -> book 32 -> BBO
+    identical to the golden model bit-exact (local pcap not committed; skipped
+    if absent).
 
-    El feed completo mezcla 150K registros de todos los símbolos; el book de la
-    iteración 1 registra NSYM=20 (el overflow de símbolos es el hallazgo F1 del
-    grade, hardening de la iteración 4). El contrato de CHAIN-01 es el subset:
-    el stream MoldUDP64 se reconstruye SOLO con los mensajes del subset (misma
-    regla que REPLAY-01), y la cadena completa lo procesa de principio a fin."""
-    assert os.path.exists(REAL_PCAP), "CHAIN-01 OMITIDO: pcap local ausente"
+    The full feed mixes 150K records of all symbols; the iteration 1 book
+    registers NSYM=20 (the symbol overflow is finding F1 of the grade,
+    iteration 4 hardening). The CHAIN-01 contract is the subset: the MoldUDP64
+    stream is rebuilt ONLY with the subset messages (same rule as REPLAY-01),
+    and the whole chain processes it end to end."""
+    assert os.path.exists(REAL_PCAP), "CHAIN-01 SKIPPED: local pcap absent"
     msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
-    assert msgs, "CHAIN-01: pcap presente sin mensajes del subset"
-    assert keep, "CHAIN-01: pcap presente sin símbolos del subset"
+    assert msgs, "CHAIN-01: pcap present without subset messages"
+    assert keep, "CHAIN-01: pcap present without subset symbols"
     nd = len(dut.depth_tdata) // 128
     expected, expected_depth, golden = run_book_depth(msgs, nd=nd)
     expected_depth_words = [pack_depth(*event[1:]) for event in expected_depth]
-    assert expected, "CHAIN-01: subset real sin eventos BBO observables"
-    assert expected_depth_words, "CHAIN-01: subset real sin eventos depth observables"
+    assert expected, "CHAIN-01: real subset without observable BBO events"
+    assert expected_depth_words, "CHAIN-01: real subset without observable depth events"
     assert len(expected) == len(expected_depth_words), (
         f"CHAIN-01 ND={nd}: golden BBO={len(expected)}, "
         f"depth={len(expected_depth_words)}")
     cocotb.log.info(
-        f"CHAIN-01: {len(msgs)} msgs / {len(keep)} símbolos contra golden "
-        f"(parser 32 -> book 32, stream reconstruido del subset)")
+        f"CHAIN-01: {len(msgs)} msgs / {len(keep)} symbols against golden model "
+        f"(parser 32 -> book 32, stream rebuilt from the subset)")
     got, depth, cross, anomaly, gaps = await drive_chain(
         dut, [_packet_seq(msgs, 1)])
     assert len(got) == len(depth), (
@@ -133,17 +135,17 @@ async def test_chain01_feed_real_bit_a_bit(dut):
     if got != expected:
         first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
         raise AssertionError(
-            f"CHAIN-01: got({len(got)}) exp({len(expected)}); primer desajuste "
-            f"en evento {first}:\n got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
-    # El BBO es bit a bit (verificado completo arriba). La depth sigue el
-    # contrato enmendado del push-out (spec fase3-optimizacion, addendum
-    # iter 15, escenario OVR-PUSH-01): bit a bit hasta la primera re-entrada
-    # de un nivel descartado por la cola P=32 (loc13 vuelve a >32 niveles en
-    # el pico del día; el nivel 2890300/2 se descarta y reaparece en el top-5
-    # en el evento 14461). Desde ahí la depth conserva la propiedad de
-    # SUBconjunto: todo nivel RTL (px,qty) pertenece al libro del golden con
-    # su qty exacta — nunca un fantasma; los niveles ausentes son los
-    # descartados por el pico (>P) que el golden retiene.
+            f"CHAIN-01: got({len(got)}) exp({len(expected)}); first mismatch "
+            f"at event {first}:\n got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
+    # The BBO is bit-exact (fully verified above). The depth follows the
+    # amended push-out contract (spec fase3-optimizacion, addendum iter 15,
+    # scenario OVR-PUSH-01): bit-exact up to the first re-entry of a level
+    # discarded by the P=32 queue (loc13 goes back above 32 levels at the peak
+    # of the day; the level 2890300/2 is discarded and reappears in the top-5
+    # at event 14461). From there the depth keeps the SUBSET property: every
+    # RTL level (px,qty) belongs to the golden model's book with its exact qty
+    # — never a phantom; the absent levels are those discarded by the (>P)
+    # peak that the golden model retains.
     from golden_model.src import book as book_golden
     _bp = book_golden.Book()
     _gold_levs = []
@@ -157,16 +159,16 @@ async def test_chain01_feed_real_bit_a_bit(dut):
                 _loc,
                 dict(sorted(_bp._levels.get((_loc, book_golden.BID), {}).items())),
                 dict(sorted(_bp._levels.get((_loc, book_golden.ASK), {}).items()))))
-    DEPTH_FIRST_REENTRY = 14461   # primera re-entrada documentada (loc13, msg 17585)
+    DEPTH_FIRST_REENTRY = 14461   # first documented re-entry (loc13, msg 17585)
     assert len(_gold_levs) == len(depth) == len(expected_depth_words), (
-        f"CHAIN-01 ND={nd}: alineación de eventos del oracle {len(_gold_levs)}")
+        f"CHAIN-01 ND={nd}: oracle event alignment {len(_gold_levs)}")
     if depth[:DEPTH_FIRST_REENTRY] != expected_depth_words[:DEPTH_FIRST_REENTRY]:
         first = next(i for i, (g, e) in enumerate(
             zip(depth[:DEPTH_FIRST_REENTRY], expected_depth_words[:DEPTH_FIRST_REENTRY]))
             if g != e)
         raise AssertionError(
-            f"CHAIN-01 ND={nd}: depth bit a bit falla antes de la primera "
-            f"re-entrada ({DEPTH_FIRST_REENTRY}): evento {first}: "
+            f"CHAIN-01 ND={nd}: depth bit-exact fails before the first "
+            f"re-entry ({DEPTH_FIRST_REENTRY}): event {first}: "
             f"got=0x{depth[first]:x} exp=0x{expected_depth_words[first]:x}")
     for i in range(DEPTH_FIRST_REENTRY, len(depth)):
         _loc, _gb_bid, _gb_ask = _gold_levs[i]
@@ -178,28 +180,28 @@ async def test_chain01_feed_real_bit_a_bit(dut):
                 continue
             _side = book_golden.BID if _k < nd else book_golden.ASK
             _lev = _gb_bid if _side == book_golden.BID else _gb_ask
-            # post re-entrada: la qty puede ser parcial (el nivel se descartó
-            # en el pico >P y se re-agregó); el precio jamás es un fantasma.
+            # post re-entry: the qty may be partial (the level was discarded at the
+            # >P peak and re-added); the price is never a phantom.
             if _px not in _lev:
                 raise AssertionError(
-                    f"CHAIN-01 ND={nd}: depth con fantasma en la re-entrada "
-                    f"(evento {i}): precio {_px} ({_side}) fuera del golden "
+                    f"CHAIN-01 ND={nd}: depth with phantom in the re-entry "
+                    f"(event {i}): price {_px} ({_side}) outside the golden "
                     f"{sorted(_lev)[:6]}")
     assert cross == golden.cross_events, (
         f"CHAIN-01 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"CHAIN-01 anomaly: got={anomaly} exp={golden.anomalies}")
-    assert gaps == 0, f"CHAIN-01: {gaps} gaps en el stream del subset"
+    assert gaps == 0, f"CHAIN-01: {gaps} gaps in the subset stream"
     cocotb.log.info(
-        f"CHAIN-01 OK ND={nd}: {len(got)} BBO bit a bit y {len(depth)} depth "
-        f"(bit a bit hasta la 1ª re-entrada {DEPTH_FIRST_REENTRY}; subconjunto "
-        f"después) por la cadena de 32 bits, cross={cross}, anomaly={anomaly}, "
+        f"CHAIN-01 OK ND={nd}: {len(got)} BBO bit-exact and {len(depth)} depth "
+        f"(bit-exact up to the 1st re-entry {DEPTH_FIRST_REENTRY}; subset "
+        f"afterwards) through the 32-bit chain, cross={cross}, anomaly={anomaly}, "
         f"gaps={gaps}")
 
 
 @cocotb.test()
 async def test_chain02_sintetico_bit_a_bit(dut):
-    """INV/CHAIN-01 (sintético): secuencia multi-tipo sin gaps -> BBO bit a bit."""
+    """INV/CHAIN-01 (synthetic): multi-type sequence without gaps -> bit-exact BBO."""
     AMZN = 393
     msgs = [
         S(AMZN, 1_000_000_000, ord("Q")),
@@ -218,12 +220,12 @@ async def test_chain02_sintetico_bit_a_bit(dut):
         f"INV-CHAIN-01 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"INV-CHAIN-01 anomaly: got={anomaly} exp={golden.anomalies}")
-    assert gaps == 0, f"INV-CHAIN-01: {gaps} gaps (secuencia consecutiva)"
+    assert gaps == 0, f"INV-CHAIN-01: {gaps} gaps (consecutive sequence)"
 
 
 @cocotb.test()
 async def test_dp01_nd_parametrizado_llega_al_book(dut):
-    """Espejo §DP-01: el ND del top llega al book (ND=5 y shard ND=3)."""
+    """Mirror §DP-01: the ND of the top reaches the book (ND=5 and shard ND=3)."""
     nd = len(dut.depth_tdata) // 128
     assert len(dut.depth_tdata) == 2 * nd * 64
     AMZN = 393
@@ -237,19 +239,19 @@ async def test_dp01_nd_parametrizado_llega_al_book(dut):
     got, depth, _, _, gaps = await drive_chain(dut, [_packet_seq(msgs, 1)])
     assert got == expected, f"DP-01 ND={nd}: BBO got={got} exp={expected}"
     assert depth == [pack_depth(*event[1:]) for event in exp_depth], (
-        f"DP-01 ND={nd}: depth no coincide con el golden")
+        f"DP-01 ND={nd}: depth does not match the golden model")
     assert gaps == 0, f"DP-01 ND={nd}: {gaps} gaps"
 
 
 @cocotb.test()
 async def test_ovr01_mensaje_oversize_no_deadlock(dut):
-    """Espejo §OVR-01: un mensaje I (50 B, 2+len=52 > QB=46 de la cadena) no
-    deadlockea el parser: el tlast del datagrama se acepta, los mensajes
-    siguientes se procesan y no hay pulsos de error (el oversize se drena sin
-    registro; I no está en el subset del parser).
+    """Mirror §OVR-01: an I message (50 B, 2+len=52 > QB=46 of the chain) does
+    not deadlock the parser: the datagram's tlast is accepted, the following
+    messages are processed and there are no error pulses (the oversize is
+    drained without a record; I is not in the parser subset).
 
-    ROJO con el ST_LEN previo (2+len > QB nunca cabe en la cola -> tready=0
-    indefinido); VERDE con el drenado oversize (addendum iter 12)."""
+    RED with the prior ST_LEN (2+len > QB never fits in the queue -> tready=0
+    indefinitely); GREEN with the oversize drain (addendum iter 12)."""
     AMZN = 393
     msgs = [
         S(AMZN, 1_000_000_000, ord("Q")),
@@ -271,7 +273,7 @@ async def test_ovr01_mensaje_oversize_no_deadlock(dut):
 
 @cocotb.test()
 async def test_chain_tkeep_datagramas_no_alineados_y_estabilidad(dut):
-    """AXI-KEEP-05/11: dos datagramas parciales conservan límites y beats."""
+    """AXI-KEEP-05/11: two partial datagrams preserve boundaries and beats."""
     AMZN = 393
     first = [
         S(AMZN, 1_000_000_000, ord("Q")),
@@ -286,7 +288,7 @@ async def test_chain_tkeep_datagramas_no_alineados_y_estabilidad(dut):
     expected, golden = run_book(first + second)
     got, _, cross, anomaly, gaps = await drive_chain(
         dut, payloads, require_input_stall=True, expected_errors=0)
-    assert got == expected, f"AXI-KEEP cadena: got={got} exp={expected}"
+    assert got == expected, f"AXI-KEEP chain: got={got} exp={expected}"
     assert cross == golden.cross_events
     assert anomaly == golden.anomalies
     assert gaps == 0

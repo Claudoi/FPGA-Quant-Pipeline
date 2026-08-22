@@ -1,4 +1,4 @@
-"""Tests espejo de specs/fase0-golden-model/gherkin/datos.feature."""
+"""Mirror tests of specs/fase0-golden-model/gherkin/datos.feature."""
 from __future__ import annotations
 
 import hashlib
@@ -40,7 +40,7 @@ class TestDatos(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_dat01_descarga_verificada_con_md5_correcto(self):
-        contenido = b"\x00\x0cS" + b"\x00" * 11  # mini BinaryFILE de mentira
+        contenido = b"\x00\x0cS" + b"\x00" * 11  # fake mini BinaryFILE
         md5 = hashlib.md5(contenido).hexdigest()
         mapa = {
             "https://emi.test/X.gz": contenido,
@@ -51,12 +51,12 @@ class TestDatos(unittest.TestCase):
 
     def test_dat03_md5sum_no_servido_aborta_fail_closed_con_error_claro(self):
         contenido = b"datos"
-        mapa = {"https://emi.test/X.gz": contenido}  # sin .md5sum -> 404
-        # fail closed: excepcion clara, nada usable en destino
+        mapa = {"https://emi.test/X.gz": contenido}  # no .md5sum -> 404
+        # fail closed: clear exception, nothing usable in destination
         with self.assertRaises(Md5NotAvailableError):
             fetch("X.gz", self.dir, base_url="https://emi.test/", opener=fake_opener(mapa))
         self.assertEqual(list(self.dir.iterdir()), [])
-        # con la flag de omision: descarga y lo avisa
+        # with the omit flag: downloads and warns
         with self.assertWarnsRegex(UserWarning, "md5"):
             destino = fetch(
                 "X.gz", self.dir, base_url="https://emi.test/",
@@ -72,7 +72,7 @@ class TestDatos(unittest.TestCase):
         }
         with self.assertRaises(Md5MismatchError):
             fetch("X.gz", self.dir, base_url="https://emi.test/", opener=fake_opener(mapa))
-        self.assertEqual(list(self.dir.iterdir()), [])  # no queda nada usable
+        self.assertEqual(list(self.dir.iterdir()), [])  # nothing usable remains
 
     def test_dat02_estadisticas_de_dimensionado_por_simbolo(self):
         bf = self.dir / "in.ITCH50"
@@ -88,10 +88,10 @@ class TestDatos(unittest.TestCase):
             ).getvalue()
         )
         summary = run(bf, None, self.dir)
-        # conteo global por tipo
+        # global count by type
         self.assertEqual(summary["messages"], 7)
         self.assertEqual(summary["by_type"]["A"], 3)
-        # stats por simbolo en CSV
+        # per-symbol stats in CSV
         csv_path = self.dir / "stats.csv"
         filas = {
             ln.split(",")[0]: ln.split(",")
@@ -100,10 +100,10 @@ class TestDatos(unittest.TestCase):
         }
         self.assertEqual(filas["1"][1], "AAPL")
         self.assertEqual(int(filas["1"][2]), 4)   # R + A + A + X
-        self.assertEqual(int(filas["1"][3]), 2)   # pico de ordenes vivas
-        self.assertEqual(int(filas["1"][4]), 1)   # pico de niveles (un precio)
+        self.assertEqual(int(filas["1"][3]), 2)   # peak live orders
+        self.assertEqual(int(filas["1"][4]), 1)   # peak levels (one price)
         self.assertEqual(int(filas["2"][3]), 1)
-        # select_subset elige el top por pico de ordenes vivas
+        # select_subset picks the top by peak live orders
         out_json = self.dir / "subset.json"
         select(csv_path, out_json, n=1, day="2019-12-30")
         data = json.loads(out_json.read_text())

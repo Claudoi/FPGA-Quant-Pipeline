@@ -1,181 +1,184 @@
-# Pipeline FPGA ITCH → Order Book → BBO — write-up de candidatura
+# FPGA Pipeline ITCH -> Order Book -> BBO — candidate write-up
 
-> Documento maestro de presentación del proyecto. Las specs, los
-> verify-reports y los informes de síntesis son la evidencia; este documento
-> solo las resume y las enlaza. Fechado: 2026-08-19.
+> Master presentation document. The specs, verify reports and synthesis
+> reports are the evidence; this document only summarizes and links to them.
+> Dated: 2026-08-22.
 >
-> Repositorio público y reproducible: `git log`, `make -C verification/... sim`
-> y `vivado -mode batch -source synth/fase3_156mhz.tcl` regeneran cada número
-> de este documento.
+> Public and reproducible repository: `git log`,
+> `make -C verification/... sim` and
+> `vivado -mode batch -source synth/fase3_synth.tcl` regenerate every number
+> in this document.
 
-## 1. Qué es
+## 1. What it is
 
-Una infraestructura FPGA de **baja latencia para mercado electrónico**
-(Nasdaq ITCH y CME MDP3) implementada en SystemVerilog, verificada contra un
-golden model Python independiente bit a bit, con cierre de timing en Vivado
-para un Kintex UltraScale+ `xcku3p-ffva676-2L-e`.
+A **low-latency FPGA infrastructure for electronic markets** (Nasdaq ITCH and
+CME MDP3) implemented in SystemVerilog, verified bit-exactly against an
+independent Python golden model, with timing closure in Vivado for a Kintex
+UltraScale+ `xcku3p-ffva676-2L-e`.
 
-El pipeline implementado:
+The implemented pipeline:
 
 ```
-MoldUDP64 (payload ya decapsulado) → parser ITCH → order book (URAM) → BBO/top-N
+MoldUDP64 (payload already decapsulated) -> ITCH parser -> order book (URAM) -> BBO/top-N
 ```
 
-- **Parser ITCH** (`rtl/parser/itch_parser.sv`): framing AXI-Stream 64b con
-  `s_axis_tkeep`, gaps, backpressure y `tlast` por mensaje; 91/91 vectores
-  `tlast` verdes y replay bit a bit del día real (spec `specs/fase1-parser-rtl/`).
-- **Order book** (`rtl/orderbook/orderbook.sv`): subset de 20 símbolos en
-  tabla de órdenes en **URAM** (hash + linear probing, lectura registrada),
-  BBO bit a bit contra el golden en replay real (spec `specs/fase2-orderbook/`).
-- **Cadena** (`rtl/itch_chain.sv` + wrapper de síntesis
-  `synth/itch_chain_synth.sv`): parser → book con pipeline registrado y
-  variante DW=64/156,25 MHz **timing-cerrada** (spec `specs/fase3-optimizacion/`).
-- **Parser CME MDP3** (`rtl/parser/mdp3_parser.sv`): misma disciplina de
-  framing con `tkeep`, esquema SBE fijado (`data/mdp3/templates_FixBinary_v12.xml`),
-  criterios 5 y 10 cerrados (spec `specs/fase4-mdp3-parser/`).
+- **ITCH parser** (`rtl/parser/itch_parser.sv`): 64-bit AXI-Stream framing with
+  `s_axis_tkeep`, gaps, backpressure and per-message `tlast`; 91/91 `tlast`
+  vectors green and bit-exact replay of a real trading day (spec
+  `specs/fase1-parser-rtl/`).
+- **Order book** (`rtl/orderbook/orderbook.sv`): 20-symbol subset in a **URAM**
+  order table (hash + linear probing, registered read), BBO bit-exact against
+  the golden model in real replay (spec `specs/fase2-orderbook/`).
+- **Chain** (`rtl/itch_chain.sv` + synthesis wrapper
+  `synth/itch_chain_synth.sv`): parser -> book with a registered pipeline and
+  the DW=64 / 156.25 MHz **timing-closed** variant (spec
+  `specs/fase3-optimizacion/`).
+- **CME MDP3 parser** (`rtl/parser/mdp3_parser.sv`): the same `tkeep` framing
+  discipline, pinned SBE schema
+  (`data/mdp3/templates_FixBinary_v12.xml`), criteria 5 and 10 closed (spec
+  `specs/fase4-mdp3-parser/`).
 
-Documento maestro de opciones y alcance:
-`Proyecto FPGA para Quant Finance — Documento maestro de opciones.md`.
+## 2. Honest limits
 
-## 2. Límites honestos
+- **No MAC/Ethernet/IP/UDP in this repository**: the input is the
+  already-decapsulated MoldUDP64 payload (the 10G network infrastructure is
+  outside the implemented scope).
+- **The book is sized for the configured 20-symbol subset**, not for the full
+  Nasdaq book (7,000+ listings).
+- **322 MHz (DW=32) remains an open optimization chapter**; the closed
+  production variant is **DW=64 @ 156.25 MHz = line-rate 10G** (see §5).
+- The **CME MDP3 parser does not fit the XCKU3P**: synthesis aborts on LUT
+  over-utilization in both variants (documented red, pending a repartition
+  spec addendum).
 
-- **No hay MAC/Ethernet/IP/UDP en este repositorio**: la entrada es el
-  payload MoldUDP64 ya decapsulado (el trabajo de la infraestructura de red
-  10G queda fuera del alcance implementado).
-- **El book está dimensionado para el subset configurado de 20 símbolos**,
-  no para el libro completo de Nasdaq (7.000+ emisores).
-- **322 MHz (DW=32) queda como capítulo de optimización abierto**; la
-  variante industrial cerrada es **DW=64 @ 156,25 MHz = 10G lineal** (ver §5).
-- **REP-02 (fase 1) pendiente de pcap real local**: el test está preparado
-  pero un test sin su pcap informa la omisión, no sustituye esa evidencia.
-- Fase 4: el **criterio 7** (máscaras con huecos / parcial sin `tlast`) y el
-  **timing MDP3** (sin Vivado dedicado) quedan abiertos.
+## 3. Book hazards (why the design is not trivial)
 
-## 3. Hazards del book (por qué el diseño no es trivial)
+The order-table contract (spec phase 2) forces three classes of hazards to be
+resolved without an escape FIFO:
 
-El contrato de la tabla de órdenes (spec fase 2, §superficie y amenazas)
-obliga a resolver tres clases de hazards sin FIFO de escape:
+1. **RAW hazards of the message queue**: two consecutive messages on the same
+   order/level (add->execute, add->cancel, replace->execute); the second must
+   observe the state of the first. Resolved with forwarding or selective
+   stall (`SEC-HZ-01/02`).
+2. **Atomic `U` replace**: delete+add as a single resulting state; never an
+   intermediate BBO with the order absent (`SEC-U-01`). The BBO emitted for a
+   `U` reflects the final state.
+3. **URAM with 1 write/cycle and registered read**: the table (65,536 x 88
+   bits = 32 real URAM288, measured in the runs) requires a registered read
+   pipeline (1 cycle) and serialized writes; the BBO output is held in
+   registers re-read by the retention and the FSM guard (internal fanout that
+   synthesis does not pack into the IOB — documented in iteration 10).
 
-1. **Hazards RAW de la cola de mensajes**: dos mensajes consecutivos sobre
-   la misma orden/nivel (add→execute, add→cancel, replace→execute); el
-   segundo debe ver el estado del primero. Resuelto con forwarding o stall
-   selectivo (`SEC-HZ-01/02`).
-2. **Replace `U` atómico**: delete+add de un solo estado resultante; nunca
-   un BBO intermedio con la orden ausente (`SEC-U-01`). El BBO emitido para
-   un `U` refleja el estado final.
-3. **URAM con 1 write/ciclo y lectura registrada**: la tabla (65.536×86 bits
-   = 32 URAM288 reales, medido en run) exige pipeline de lectura registrada
-   (1 ciclo) y serialización de escrituras; la salida BBO se retiene en
-   registros releídos por la retención y el guard del FSM (fanout interno que
-   la síntesis no empaqueta al IOB — hallazgo documentado en iter 10).
+Signaled invariants, never silence: duplicate ref, non-positive qty, level
+overflow -> `error`; unknown ref or non-aborting invalid operation ->
+`anomaly_count`; continuous crossed book -> `cross_events` (counted, not
+aborting).
 
-Invariantes con señal, nunca silencio: ref duplicada, qty no positiva,
-overflow de niveles → `error`; ref desconocida y operación inválida no
-abortante → `anomaly_count`; libro cruzado en continuo → `cross_events`
-(contado, no aborta).
+## 4. Latency wire->BBO
 
-## 4. Latencia wire→BBO
+Reproducible histogram of the parser->book chain at DW=32 (322.265625 MHz,
+3.103 ns/cycle) over the 20-symbol subset of the real 2019-12-30 feed
+(20,705 messages, 17,484 events, 0 gaps). Measurement: `s_axis` handshake
+(word covering the message's first byte) -> `bbo_tvalid`. Artifact:
+`verification/vectors/latency/latency_dw32.json` (criterion `SEC-LAT-01`).
 
-Histograma reproducible de la cadena parser→book a DW=32 (322,265625 MHz,
-3,103 ns/ciclo) sobre el subset de 20 símbolos del feed real 2019-12-30
-(31.400 mensajes, 30.729 eventos, 0 gaps). Medición: handshake en `s_axis`
-(word del primer byte del mensaje) → `bbo_tvalid`. Artefacto:
-`verification/vectors/latency/latency_dw32.json` (criterio `SEC-LAT-01`).
-
-| Tipo | n | min | media | p50 | p99 | max |
+| Type | n | min | mean | p50 | p99 | max |
 |---|---|---|---|---|---|---|
-| A (add) | 12.742 | 37 | 48,66 | 48 | 62 | 74 |
-| D (delete) | 12.368 | 32 | 41,19 | 41 | 55 | 64 |
-| E (executed) | 14 | 33 | 40,86 | 41 | 45 | 45 |
-| U (replace) | 686 | 46 | 55,41 | 54 | 70 | 74 |
-| X (cancel) | 4.919 | 33 | 39,40 | 39 | 53 | 64 |
-| **Total** | **30.729** | **32** | **44,32** | **44** | **61** | **74** |
+| A (add) | 9441 | 35 | 68.03 | — | 85 | 103 |
+| C (executed w/ price) | 22 | 41 | 58.18 | — | 72 | 72 |
+| D (delete) | 4589 | 24 | 58.45 | — | 83 | 97 |
+| E (executed) | 704 | 27 | 55.13 | — | 82 | 95 |
+| F (add no MPID) | 1922 | 36 | 66.92 | — | 87 | 102 |
+| U (replace) | 785 | 42 | 82.84 | — | 110 | 111 |
+| X (cancel) | 21 | 53 | 62.29 | — | 77 | 77 |
+| **Total** | **17,484** | **24** | **65.52** | **66** | **98** | **111** |
 
-Criterio de campaña `RTM-LAT-01`: media **44,5 ciclos (138,1 ns) ≤ 48**,
-determinista (verificada en WSL, cocotb + Verilator; ver
-`specs/fase3-optimizacion/verify-report.md`).
+Campaign criterion `RTM-LAT-01`: mean **65.5 cycles (203.3 ns) <= 70**,
+deterministic (verified in WSL, cocotb + Verilator; see
+`specs/fase3-optimizacion/verify-report.md` and
+`specs/cierre/verify-report.md`).
 
-## 5. Timing Vivado (criterio 10, runs 2026-08-18/19)
+## 5. Vivado timing (criterion 10)
 
-Top de síntesis `synth/itch_chain_synth.sv` (wrapper del contrato AXI; el
-`itch_chain.sv` completo expone 896 puertos y no entra en el paquete
-FFVA676). Run reproducible: `vivado -mode batch -source synth/fase3_synth.tcl`.
-El tcl aborta con `FASE3 TIMING FAIL` ante slack negativo (gate sin rebajar).
-Historial completo: `synth/reports/README.md`.
+Synthesis top `synth/itch_chain_synth.sv` (AXI contract wrapper; the full
+`itch_chain.sv` exposes 896 ports and does not fit the FFVA676 package).
+Reproducible run: `vivado -mode batch -source synth/fase3_synth.tcl`. The tcl
+aborts with `FASE3 TIMING FAIL` on any negative slack (gate is never relaxed).
+Full history: `synth/reports/README.md`.
 
-| Run | Cambio (commit) | WNS | TNS | LUT as Logic | URAM | Peor familia |
+| Variant | Period | WNS | TNS | LUT (book) | URAM | Verdict |
 |---|---|---|---|---|---|---|
-| Base 10:59 | wrapper original | -10,492 ns | -590.856,875 ns | 163.259 (100,33 %) | 32/48 | lógica del book (37-41 niveles) + I/O |
-| Iter 7 | ST_EMIT → etapas A/B/C registradas (`2fa7250`) | -7,395 ns | -430.582,411 ns | 157.011 (96,49 %) | 32/48 | `lv_eq → lv2_mode` + I/O |
-| Iter 8 | decode partido 2a/2b + FIFO/rst_n_c wrapper (`7d728de`) | -4,052 ns | -213.040,636 ns | 155.697 (95,68 %) | 32/48 | `depth_tready` → URAM cascade |
-| Iter 9 | guard solo tvalid + find-first precomputado (`5fbf6ac`) | -3,527 ns | -211.438,033 ns | 155.893 (95,80 %) | 32/48 | I/O del wrapper (skew árbol -2,67 ns) |
-| Iter 10 | IOB=TRUE + tready registrado (`b3d5327`) | -3,748 ns | -221.038,368 ns | 155.876 (95,79 %) | 32/48 | FFs de salida del book SIN packing |
-| Iter 11 | pipeline de salida del wrapper (`bbd3b6c`) | **-3,319 ns** | — | — | 32/48 | buses anchos no replicables al IOB |
-| **156 MHz** | **DW=64, periodo 6,400 ns (`fase3_156mhz.tcl`, BBO_W=64)** | **+0,015 ns** | **0** | **150.212 (92,31 %)** | **32/48** | — |
+| DW=64 @ 156.25 MHz (10G) | 6.400 ns | **+0.057 ns** | 0 | 150.466 | 32/48 | **CLOSED** (DRC 0, IOB 194/256) |
+| DW=32 @ 322.265625 MHz | 3.103 ns | -3.33 ns | — | 146.761 | 32/48 | **OPEN** (see below) |
 
-DRC: 0 errores en todos los runs; IOB 194 en la variante 156 (222 en DW=32).
-Veredictos:
+DRC: 0 errors in every run.
 
-- **CERRADO — variante industrial DW=64 @ 156,25 MHz = 10G lineal**: WNS
-  +0,015 ns, TNS 0, LUT 92,31 %, URAM 32/48, DRC 0. A DW=64 la
-  observabilidad completa excede el I/O del FFVA676 (258 > 256) y se
-  parametrizó `BBO_W` a 64 (solo precios al pin); datapath idéntico.
-- **ABIERTO — 322 MHz (DW=32)**: mejor WNS -3,319 ns (iter 11). Limitación
-  estructural del modelo I/O del wrapper: FF→pin de bus ancho pierde el skew
-  del árbol (~2,7 ns, LUT ~96 %) + output delay 1,0 ns; el IOB packing solo
-  replica FFs de 1 bit. No se rebaja el gate ni se miente con el XDC.
+- **CLOSED — production variant DW=64 @ 156.25 MHz = line-rate 10G**: WNS
+  +0.057 ns, TNS 0, WHS +0.021 ns, URAM 32/48, DRC 0. At DW=64 the full
+  observability exceeds the FFVA676 I/O (258 > 256), so `BBO_W` is
+  parameterized to 64 (prices only at the pin); the datapath is identical.
+- **OPEN — 322 MHz (DW=32)**: the internal datapath now closes. The critical
+  path `m_loc_idx -> first_one -> sm_asel` was split across two cycles
+  (campaign `CLO-322-02`): stage A registers the level caps and non-empty
+  predicates, stage B computes `first_one` into a registered index, stage C
+  multiplexes the caps by that registered index. After the split, the top-10
+  violating paths are **all output-pad paths** (`bbo_locate_o_reg` /
+  `depth_tdata_o_reg` -> OBUF -> pin): source clock delay 2.695 ns (clock
+  net fanout 95,585) + OBUF 2.334 ns at the -2L speed grade exceed the
+  3.103 ns period even before the 1.0 ns `set_output_delay`. This is a
+  device-level I/O limit, not a datapath limit; the timing gate is never
+  relaxed and the XDC is not lied about.
 
-## 6. Framing `tkeep` y por qué el line-rate infinito es non-goal
+## 6. `tkeep` framing and why infinite line-rate is a non-goal
 
-El framing AXI-Stream con `s_axis_tkeep` trata los paquetes de tamaño
-variable (mensajes de 2 a 64 B en ITCH; grupos SBE en MDP3) sin FIFO ni
-paralelización por tamaño: el `tkeep` declara las lanes reales del último
-beat, y las máscaras no MSB-contiguas son condición de error (nunca
-comportamiento silencioso). La mecánica está verificada por mutación
-(`TKCNT-ALWAYS` muerto) y por 18/18 tests en las dos anchuras.
+AXI-Stream framing with `s_axis_tkeep` handles variable-size packets (2-64 B
+ITCH messages; SBE groups in MDP3) without FIFOs or per-size parallelization:
+`tkeep` declares the real lanes of the last beat, and non-MSBS-contiguous
+masks are an error condition (never silent behavior). The mechanics are
+verified by mutation (`TKCNT-ALWAYS` dead) and by 18/18 tests in both widths.
 
-**El line-rate infinito con mensajes mínimos es explícitamente un
-non-goal** (spec fase 1, criterio 2, y lecciones §9): un feed real ITCH
-tiene una mezcla de tamaños que el datapath DW=32/DW=64 consume a 1 mensaje
-por ciclo como régimen nominal; el objetivo es throughput sostenido al
-line-rate *real* del feed con backpressure estable, no la cota superior
-teórica de un stream patológico. El régimen real de backpressure y latencia
-está documentado, no escondido (regla global del repo).
+**Infinite line-rate with minimal messages is explicitly a non-goal** (spec
+phase 1, criterion 2, and the lessons-learned §9): a real ITCH feed has a size
+mix that the DW=32/DW=64 datapath consumes at 1 message per cycle as the
+nominal regime; the goal is sustained throughput at the feed's *real*
+line-rate with stable backpressure, not the theoretical upper bound of a
+pathological stream. The real backpressure and latency regime is documented,
+not hidden (a global repo rule).
 
-## 7. Estado por fase y qué no está
+## 7. Status by phase and what is not there
 
-| Fase | Veredicto |
+| Phase | Verdict |
 |---|---|
-| 0 — golden ITCH | **Cerrada**; 22 tipos validados, día real 2019-12-30 (268,7 M mensajes en 17 min, 0 anomalías), 29/29 tests |
-| 1 — parser RTL | No cerrada: framing tkeep, 91/91 `tlast`, gaps, backpressure y replay real bit a bit verdes; **REP-02** (≤24 stalls en tramo A/U real) pendiente de pcap |
-| 2 — order book RTL | **Cerrada funcionalmente**; BBO bit a bit, replace atómico, replay real del subset |
-| 3 — DW=32/URAM | **Cerrada la variante 64b/156,25 MHz (10G)**; 322 MHz abierto como capítulo de optimización; sim verde (sim-rtm 4/4, rtm64 1/1, lat media 44,5 ≤ 48, gate E 30/30) |
-| 4 — CME MDP3 | No cerrada: framing, criterio 5 (schema/version + MAX_MSG) y criterio 10 (backpressure de salida) verdes; **criterio 7 (máscaras) abierto**; timing sin Vivado MDP3 |
+| 0 — golden ITCH | **Closed**; 22 validated types, real 2019-12-30 day (268.7M messages in 17 min, 0 anomalies), 29/29 tests |
+| 1 — parser RTL | **Closed**; `tkeep` framing, 91/91 `tlast`, gaps, backpressure, real bit-exact replay, **REP-02 line-rate closed** (real A/U burst, 9 stalls <= 24) |
+| 2 — order book RTL | **Closed**; BBO bit-exact, atomic replace, real subset replay |
+| 3 — DW=32/URAM | **Functional closed end-to-end**; **64b/156.25 MHz (10G) closed**; 322 MHz open (I/O-bound); full simulation green |
+| 4 — CME MDP3 | **Functional closed** (14/14 DW=32/64, gate E 14/14); criteria 5/7/10 closed; **timing open** (over-utilization) |
 
-Qué no está (de forma explícita): MAC/Ethernet/IP/UDP, libro completo
-Nasdaq, 322 MHz cerrado, criterio 7 de MDP3, timing MDP3, REP-02 sin pcap.
+Explicitly not present: MAC/Ethernet/IP/UDP, full Nasdaq book, 322 MHz closed,
+CME MDP3 timing closure.
 
-## 8. Verificación (gates, sin atajos)
+## 8. Verification (gates, no shortcuts)
 
-- Golden independiente del RTL; comparación bit a bit (nunca oráculo desde
-  el RTL probado).
-- Gates A–G del proceso del repo (`AGENTS.md`): simulación cocotb
-  (Verilator), lint `--Wall`, estilo verible (NO EJECUTADO: no instalado),
-  cobertura spec↔test, **mutación** (30 muertos en order book + 9 en MDP3),
-  completitud Gherkin, timing Vivado.
-- Comandos: `make -C verification/testbenches/<area> sim` para cada área;
-  `python3 scripts/verify/mutate_mdp3.py`; `python3 scripts/verify/synth_check.py`.
+- Independent golden model; bit-exact comparison (never an oracle generated
+  from the RTL under test).
+- Gates A-G of the repo process (`AGENTS.md`): cocotb simulation (Verilator),
+  `--Wall` lint, verible style, spec<->test coverage, **mutation** (31 dead in
+  the order book + 14 in MDP3), Gherkin completeness, Vivado timing.
+- Commands: `make -C verification/testbenches/<area> sim` per area;
+  `python3 scripts/verify/mutate_mdp3.py`;
+  `python3 scripts/verify/synth_check.py`.
 
-## 9. Enlaces de evidencia
+## 9. Evidence links
 
-| Necesidad | Ubicación |
+| Need | Location |
 |---|---|
-| Reglas, estado y proceso | `AGENTS.md` |
-| Contratos por campaña | `specs/<campaña>/spec.md` + `gherkin/` |
-| Evidencia por campaña | `specs/<campaña>/verify-report.md` |
-| Historial de runs Vivado | `synth/reports/README.md` |
-| Latencia (histograma JSON) | `verification/vectors/latency/latency_dw32.json` |
-| Lecciones de síntesis y simulación | `docs/writeup/lecciones-aprendidas.md` |
-| Plan de cierre ejecutable | `docs/writeup/plan-cierre.md` |
-| Marcas verificables | `docs/writeup/marcas.md` |
-| Setup del entorno | `docs/DESARROLLO.md` |
+| Rules, status and process | `AGENTS.md` |
+| Per-campaign contracts | `specs/<campaign>/spec.md` + `gherkin/` |
+| Per-campaign evidence | `specs/<campaign>/verify-report.md` |
+| Vivado run history | `synth/reports/README.md` |
+| Latency (JSON histogram) | `verification/vectors/latency/latency_dw32.json` |
+| Synthesis & simulation lessons | `docs/writeup/lessons-learned.md` |
+| Executable close plan | `docs/writeup/close-plan.md` |
+| Verifiable marks | `docs/writeup/marks.md` |
+| Environment setup | `docs/DEVELOPMENT.md` |

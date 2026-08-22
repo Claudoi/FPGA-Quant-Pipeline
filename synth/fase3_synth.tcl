@@ -10,7 +10,9 @@ set part xcku3p-ffva676-2L-e
 # el FFVA676 solo tiene 256 (Place 30-415). El wrapper recorta a los puertos
 # del contrato AXI; el datapath medido es idéntico (QB=46 efectivo aquí).
 set top itch_chain_synth
-set outdir [file normalize ./reports]
+# CLO-RPT-01: informes por variante. Este tcl (322 MHz) escribe en
+# reports/322mhz/; el run 156 vigente vive archivado en reports/156mhz/.
+set outdir [file normalize ./reports/322mhz]
 
 file mkdir $outdir
 create_project -in_memory -part $part

@@ -1,41 +1,41 @@
-# datapath.feature — line rate, alineación y datapath de 64-bit
+# datapath.feature — line rate, alignment and 64-bit datapath
 
-Espejo de «Criterios de aceptación» 2 y 3 de `spec.md`.
+Mirror of "Acceptance criteria" 2 and 3 of `spec.md`.
 
-#language: es
-Funcionalidad: Datapath 64-bit a line rate con alineador de mensajes
-  Como pipeline de market data
-  Quiero que el datapath acepte una palabra por ciclo en el peor caso y alinee mensajes
-  Para cumplir el requisito duro de line rate del documento maestro
+# language: en
+Feature: 64-bit datapath at line rate with a message aligner
+  As a market-data pipeline
+  I want the datapath to accept one word per cycle in the worst case and align messages
+  So that the hard line-rate requirement of the master document is met
 
-Escenario: LIN-01 — el parser acota stalls en el tramo pactado con QB=64
-  Dado una entrada de cuatro mensajes A/U back-to-back y QB igual a 64
-  Cuando el downstream consume a tready alto
-  Entonces la salida es bit a bit idéntica al golden
-  Y el contador acumulado de ciclos de stall es menor o igual que 24
+Scenario: LIN-01 — the parser bounds stalls in the agreed stretch with QB=64
+  Given an input of four A/U messages back-to-back and QB equal to 64
+  When the downstream consumes with tready high
+  Then the output is bit-exact against the golden
+  And the accumulated stall-cycle counter is less than or equal to 24
 
-#language: es
-Esquema del escenario: ALN-01 — el alineador decodifica correctamente cualquier desplazamiento dentro de la palabra
-  Dado un mensaje de tipo <tipo> cuyo primer byte cae en el desplazamiento <offset> de la palabra de 64-bit
-  Y cuya longitud cruza <cruce> el límite de palabra
-  Cuando el RTL procesa el stream
-  Entonces decodifica el mensaje y produce el registro correcto byte a byte
-  Y no añade ciclos de stall frente a la alineación sin cruce
+# language: en
+Scenario Outline: ALN-01 — the aligner decodes correctly any offset within the word
+  Given a message of type <tipo> whose first byte falls at offset <offset> of the 64-bit word
+  And whose length crosses <cruce> the word boundary
+  When the RTL processes the stream
+  Then it decodes the message and produces the correct record byte-exact
+  And adds no stall cycles relative to the non-crossing alignment
 
-  Ejemplos:
+  Examples:
     | tipo | offset | cruce |
-    | A    | 0      | sí    |
-    | A    | 1      | sí    |
-    | A    | 2      | sí    |
-    | A    | 3      | sí    |
-    | A    | 4      | sí    |
-    | A    | 5      | sí    |
-    | A    | 6      | sí    |
-    | A    | 7      | sí    |
+    | A    | 0      | yes   |
+    | A    | 1      | yes   |
+    | A    | 2      | yes   |
+    | A    | 3      | yes   |
+    | A    | 4      | yes   |
+    | A    | 5      | yes   |
+    | A    | 6      | yes   |
+    | A    | 7      | yes   |
 
-#language: es
-Escenario: SEC-LIN-01 — los mensajes fuera de subset no rompen el line rate
-  Dado un mensaje H canónico fuera del subset entre dos mensajes A
-  Cuando el downstream consume a tready alto
-  Entonces la longitud de H se valida y el flujo continúa sin error
-  Y solo emite registros para los mensajes del subset
+# language: en
+Scenario: SEC-LIN-01 — out-of-subset messages do not break the line rate
+  Given a canonical H message outside the subset between two A messages
+  When the downstream consumes with tready high
+  Then the H length is validated and the flow continues without error
+  And records are only emitted for the subset messages

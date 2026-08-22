@@ -1,30 +1,30 @@
-# language: es
-Característica: Datos de la campaña: descarga y estadisticas
-  Los feeds reales jamas se commitean: se descargan con verificacion md5 a
-  data/itch_sample/ (gitignored) y de ellos salen las estadisticas que fijan
-  el subset de simbolos y el dimensionado de memoria del RTL.
+# language: en
+Feature: Campaign data: download and statistics
+  The real feeds are never committed: they are downloaded with md5 verification
+  to data/itch_sample/ (gitignored) and from them come the statistics that fix
+  the symbol subset and the RTL memory sizing.
 
-  Escenario: DAT-01 descarga verificada con md5 correcto
-    Dado el fichero del dia principal presente en el servidor
-    Cuando se ejecuta fetch_itch.py
-    Entonces el fichero queda en data/itch_sample/
-    Y su md5 coincide con el publicado por Nasdaq
+  Scenario: DAT-01 download verified with a correct md5
+    Given the main-day file present on the server
+    When fetch_itch.py runs
+    Then the file lands in data/itch_sample/
+    And its md5 matches the one published by Nasdaq
 
-  Escenario: DAT-03 md5sum no servido aborta fail closed con error claro
-    Dado un servidor que sirve el fichero pero cuyo endpoint md5sum responde 404
-    Cuando se ejecuta fetch_itch.py sin flag de omision
-    Entonces aborta con un error claro (sin traceback) y codigo de salida distinto de cero
-    Y no queda un fichero usable como entrada de runs
-    Y con --no-md5-verify descarga avisando en stderr que la integridad no quedo verificada por md5
+  Scenario: DAT-03 an unserved md5sum aborts fail closed with a clear error
+    Given a server that serves the file but whose md5sum endpoint answers 404
+    When fetch_itch.py runs without the skip flag
+    Then it aborts with a clear error (no traceback) and a nonzero exit code
+    And no usable file remains as a run input
+    And with --no-md5-verify it downloads warning on stderr that integrity was not verified by md5
 
-  Escenario: SEC-07 md5 incorrecto aborta sin dejar fichero aparentemente valido
-    Dado un fichero descargado corrompido a proposito
-    Cuando se ejecuta la verificacion
-    Entonces el script aborta con error de md5
-    Y no queda un fichero usable como entrada de runs
+  Scenario: SEC-07 an incorrect md5 aborts without leaving a seemingly valid file
+    Given a deliberately corrupted downloaded file
+    When the verification runs
+    Then the script aborts with an md5 error
+    And no usable file remains as a run input
 
-  Escenario: DAT-02 estadisticas de dimensionado por simbolo
-    Dado el BinaryFILE del dia principal
-    Cuando termina un run completo
-    Entonces se emite una tabla por simbolo con mensajes, pico de ordenes vivas y pico de niveles
-    Y a partir de ella select_subset.py escribe verification/vectors/subset_symbols.json con el top 20 por pico de ordenes vivas
+  Scenario: DAT-02 per-symbol sizing statistics
+    Given the main-day BinaryFILE
+    When a full run finishes
+    Then a per-symbol table is emitted with messages, peak live orders and peak levels
+    And from it select_subset.py writes verification/vectors/subset_symbols.json with the top 20 by peak live orders

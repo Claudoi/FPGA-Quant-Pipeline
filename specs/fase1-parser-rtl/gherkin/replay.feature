@@ -1,23 +1,23 @@
-# replay.feature — replay de pcaps reales y vectores congelados
+# replay.feature — real pcap replay and frozen vectors
 
-Espejo de «Criterios de aceptación» 8 de `spec.md`.
+Mirror of "Acceptance criteria" 8 of `spec.md`.
 
-#language: es
-Funcionalidad: Replay de pcaps y oráculo híbrido
-  Como pipeline de market data
-  Quiero verificar el parser contra datos reales (replay) y vectores congelados
-  Para cerciorar la corrección byte a byte frente al feed verdadero
+# language: en
+Feature: Pcap replay and hybrid oracle
+  As a market-data pipeline
+  I want to verify the parser against real data (replay) and frozen vectors
+  So that byte-exact correctness against the true feed is assured
 
-Escenario: REP-01 — el RTL reproduce los vectores congelados commiteados byte a byte
-  Dado un vector congelado de mensajes en verification/vectors/messages/
-  Cuando el parser procesa el pcap sintético que lo originó
-  Entonces su salida es byte a byte idéntica al vector congelado
+Scenario: REP-01 — the RTL reproduces the committed frozen vectors byte-exact
+  Given a frozen message vector in verification/vectors/messages/
+  When the parser processes the synthetic pcap that originated it
+  Then its output is byte-exact against the frozen vector
 
-#language: es
-Escenario: REP-02 — el RTL sobre un pcap del día real coincide byte a byte con el oráculo --emit-messages
-  Dado un pcap generado del día real con binaryfile_to_pcap.py (local, no commiteado)
-  Y el oráculo --emit-messages del golden model sobre ese mismo pcap
-  Cuando el RTL procesa el stream de entrada
-  Entonces la salida de los mensajes del subset es byte a byte idéntica al oráculo
-  Y observa exactamente un handshake de entrada con tlast por payload decapsulado
-  Y el line rate se mantiene en los tramos de back-to-back reales
+# language: en
+Scenario: REP-02 — the RTL over a real-day pcap is byte-exact against the --emit-messages oracle
+  Given a pcap generated from the real day with binaryfile_to_pcap.py (local, not committed)
+  And the golden model --emit-messages oracle over that same pcap
+  When the RTL processes the input stream
+  Then the subset messages' output is byte-exact against the oracle
+  And it observes exactly one input handshake with tlast per decapsulated payload
+  And the line rate holds over the real back-to-back stretches

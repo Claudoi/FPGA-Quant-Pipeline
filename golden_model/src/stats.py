@@ -1,8 +1,8 @@
-"""Estadísticas del día: conteo por tipo y dimensionado por símbolo.
+"""Day statistics: per-type counts and per-symbol sizing.
 
-La salida alimenta dos cosas (spec fase0, criterio 9): la selección del
-subset de símbolos para los vectores y la tabla de dimensionado de memoria
-del RTL (pico de órdenes vivas / niveles por símbolo → URAM).
+The output feeds two things (spec phase 0, criterion 9): the selection of the
+symbol subset for the vectors and the RTL memory sizing table
+(peak live orders / levels per symbol → URAM).
 """
 from __future__ import annotations
 
@@ -26,14 +26,14 @@ class SymbolStats:
 
 
 class StatsCollector:
-    """Acumula conteo por tipo y stats por símbolo mensaje a mensaje."""
+    """Accumulates per-type counts and per-symbol stats message by message."""
 
     def __init__(self) -> None:
         self.by_type: Counter[str] = Counter()
         self.symbols: dict[int, SymbolStats] = {}
 
     def observe(self, msg: tuple[int, str, int, int, int, tuple | None], book) -> None:
-        """Llamar DESPUÉS de book.apply(msg) para muestrear los picos."""
+        """Call AFTER book.apply(msg) to sample the peaks."""
         _idx, mtype, locate, _tracking, _ts, fields = msg
         self.by_type[mtype] += 1
         if locate == 0:

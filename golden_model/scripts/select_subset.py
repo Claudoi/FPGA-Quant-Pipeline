@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""select_subset.py — elige el subset de símbolos para los vectores.
+"""select_subset.py — picks the symbol subset for the vectors.
 
-Regla (spec fase0, Constraints): top N por pico de órdenes vivas del día
-principal, desempate por mensajes. La tabla de stats que lo justifica se
-pega en el verify-report (criterio 9).
+Rule (spec phase 0, Constraints): top N by peak live orders of the main day,
+tie-broken by messages. The stats table that justifies it is pasted into the
+verify-report (criterion 9).
 
-Uso:
+Usage:
     python3 -m golden_model.scripts.select_subset <stats.csv> \
         [--n 20] [--day 2019-12-30] [--out verification/vectors/subset_symbols.json]
 """
@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="verification/vectors/subset_symbols.json")
     args = ap.parse_args(argv)
     data = select(args.stats_csv, args.out, n=args.n, day=args.day)
-    print(f"subset de {data['n']} simbolos -> {args.out}")
+    print(f"subset of {data['n']} symbols -> {args.out}")
     return 0
 
 

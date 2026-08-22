@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate F reproducible para el subconjunto ITCH/tkeep de la Tarea 6."""
+"""Reproducible gate F for the ITCH/tkeep subset of Task 6."""
 
 import argparse
 import ast
@@ -26,9 +26,9 @@ CAMPAIGNS = {
     },
 }
 
-# CHAIN-01 pertenece a ambos contratos de fase 3, pero URAM reutiliza de forma
-# deliberada el test end-to-end de la cadena. El resto de IDs usa el directorio
-# espejo declarado por su campaña en specs/gherkin-espejos.json.
+# CHAIN-01 belongs to both phase 3 contracts, but URAM deliberately reuses the
+# end-to-end test of the chain. The rest of the IDs use the mirror directory
+# declared by their campaign in specs/gherkin-espejos.json.
 EXTERNAL_TESTS = {
     ("fase3-uram", "CHAIN-01"):
         "verification/testbenches/phase3/test_chain32.py",
@@ -77,35 +77,35 @@ def _matches_test(case, name):
 
 
 def check_repo(root):
-    """Devuelve una lista estable de incumplimientos; vacío significa PASS."""
+    """Returns a stable list of failures; empty means PASS."""
     root = Path(root)
     errors = []
     manifest_path = root / "specs/gherkin-espejos.json"
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return [f"manifiesto ilegible: {exc}"]
+        return [f"unreadable manifest: {exc}"]
     if not isinstance(manifest, dict) or not manifest:
-        return ["manifiesto vacío"]
+        return ["empty manifest"]
 
     for gherkin, tests in manifest.items():
         if not isinstance(gherkin, str) or not isinstance(tests, str):
-            errors.append("manifiesto: claves y espejos deben ser rutas de texto")
+            errors.append("manifest: keys and mirrors must be text paths")
             continue
         if not (root / gherkin).is_dir():
-            errors.append(f"{gherkin}: ruta Gherkin inexistente")
+            errors.append(f"{gherkin}: nonexistent Gherkin path")
         if not (root / tests).exists():
-            errors.append(f"{gherkin}: ruta espejo inexistente: {tests}")
+            errors.append(f"{gherkin}: nonexistent mirror path: {tests}")
 
     for campaign, contract in CAMPAIGNS.items():
         gherkin_rel = f"specs/{campaign}/gherkin"
         expected_tests = contract["tests"]
         if gherkin_rel not in manifest:
-            errors.append(f"{gherkin_rel}: ausente del manifiesto")
+            errors.append(f"{gherkin_rel}: missing from the manifest")
         elif manifest[gherkin_rel] != expected_tests:
             errors.append(
-                f"{gherkin_rel}: espejo {manifest[gherkin_rel]}, "
-                f"esperado {expected_tests}")
+                f"{gherkin_rel}: mirror {manifest[gherkin_rel]}, "
+                f"expected {expected_tests}")
 
         feature_dir = root / gherkin_rel
         scenario_ids = _scenario_ids(feature_dir) if feature_dir.is_dir() else []
@@ -118,18 +118,18 @@ def check_repo(root):
             count = scenario_ids.count(case)
             if count != 1:
                 errors.append(
-                    f"{campaign}/{case}: aparece {count} veces en su corpus Gherkin")
+                    f"{campaign}/{case}: appears {count} times in its Gherkin corpus")
             if not _contains_id(spec_text, case):
-                errors.append(f"{campaign}/{case}: ausente de spec.md")
+                errors.append(f"{campaign}/{case}: missing from spec.md")
             if not _contains_id(report_text, case):
-                errors.append(f"{campaign}/{case}: ausente de verify-report.md")
+                errors.append(f"{campaign}/{case}: missing from verify-report.md")
 
             test_rel = EXTERNAL_TESTS.get((campaign, case), expected_tests)
             test_path = root / test_rel
             names = _test_names(test_path) if test_path.exists() else []
             if not any(_matches_test(case, name) for name in names):
                 errors.append(
-                    f"{campaign}/{case}: sin test espejo explícito en {test_rel}")
+                    f"{campaign}/{case}: no explicit mirror test in {test_rel}")
     return errors
 
 
@@ -143,10 +143,10 @@ def main():
             print(f"FAIL: {error}")
         raise SystemExit(1)
     print(
-        "Gate F PASS: 12 IDs en 3 campañas; Gherkin único por campaña, "
-        "spec/test/verify-report presentes y rutas del manifiesto existentes")
+        "Gate F PASS: 12 IDs in 3 campaigns; unique Gherkin per campaign, "
+        "spec/test/verify-report present and manifest paths existing")
     print(
-        "Espejo externo verificado: fase3-uram/CHAIN-01 -> "
+        "External mirror verified: fase3-uram/CHAIN-01 -> "
         "verification/testbenches/phase3/test_chain32.py")
 
 

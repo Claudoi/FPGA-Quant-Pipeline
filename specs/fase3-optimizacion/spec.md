@@ -1,889 +1,857 @@
-# fase3-optimizacion (fase 3 del maestro — Optimización y cierre)
+# fase3-optimizacion (phase 3 of the master plan — Optimization and closure)
 
 ## Goal
 
-Llevar el pipeline (parser ITCH + order book) a la **variante 32-bit @
-322,265625 MHz** (XGMII, = 10,3125 Gbps = line-rate 10G), con la tabla de
-órdenes en **URAM con hash + linear probing** (decisión del maestro, diferida
-en fase 2), salida **top-N pública**, latencia determinista medida por tipo de
-mensaje, y **cierre de timing en UltraScale+** con evidencia real (el owner
-corre Vivado en otra máquina; aquí se preparan RTL, constraints y script tcl).
+Bring the pipeline (ITCH parser + order book) to the **32-bit @ 322.265625 MHz**
+variant (XGMII, = 10.3125 Gbps = 10G line rate), with the order table in
+**URAM with hash + linear probing** (master decision, deferred in phase 2),
+public **top-N** output, deterministic latency measured per message type, and
+**timing closure on UltraScale+** with real evidence (the owner runs Vivado on
+another machine; here RTL, constraints and the tcl script are prepared).
 
-Es el capítulo final del maestro: convierte «simulado correcto» en «diseñado
-para el silicio con timing cerrado a 10G».
+It is the final chapter of the master plan: it turns "simulation-correct" into
+"designed for silicon with timing closed at 10G".
 
 ## Scope
 
 **In scope:**
 
-- **Parametrización DW=32 del parser** (`rtl/parser/itch_parser.sv` ya tiene
-  `parameter DW=64`): la variante 32-bit debe cumplir los criterios de fase 1
-  (registro Anexo A bit a bit, line-rate 1 palabra/ciclo, framing/gaps/sesión,
-  backpressure, truncado y bytes válidos por `tkeep`) y la variante 64-bit queda
-  en regresión verde.
-- **Parametrización DW=32 del book** (`rtl/orderbook/orderbook.sv` ya tiene
-  `parameter DW=64`): Anexo A de 32 bits (w0={type,locate,len}, w1=msg_idx,
-  w2..=cuerpo MSB-first — **layout recortado por la campaña fase3-uram,
-  criterio 1: las words de ts se eliminaron**), decodificador con
-  los mismos offsets de `golden_model/itch/messages.py`, criterios de fase 2
-  bit a bit. Variante 64-bit en regresión verde.
-- **Cadena parser→book a DW=32** verificada end-to-end (feed real + vectores).
-- **Hash + linear probing** de la tabla de órdenes: `2^SLOT` slots
-  (SLOT=16 → 65.536), entrada {valid, ref, side, price, qty}, búsqueda por
-  `ref mod 2^SLOT` con probing lineal acotado (máx. `PROBE` pasos, PROBE=8);
-  ref desconocida tras agotar probes = anomalía (misma semántica que fase 2);
-  tabla llena = `error` señalizado, nunca silencio.
-- **Top-N público**: salida `depth_tdata` con los ND=5 mejores niveles por
-  lado del símbolo del evento BBO (bid best-first descendente, ask best-first
-  ascendente, cada nivel {px[31:0], qty[31:0]}, vacíos a 0), validada bit a
-  bit contra los niveles del golden `book.py`.
-- **Hardening de grade fase 2 (lente 9)**: guard de NSYM (símbolo 21 → pulso
-  `error`, jamás índice OOB) y handshake `bbo_tready` en ST_EMIT (evento BBO
-  nunca perdido bajo backpressure).
-- **Latencia**: histograma wire→BBO por tipo de mensaje (ciclos desde el
-  handshake del mensaje en `s_axis` hasta su evento BBO en `bbo_tvalid`) en la
-  cadena parser→book, commiteado como JSON en `verification/vectors/latency/`.
-- **Pipeline para URAM**: lecturas de la tabla de órdenes **registradas**
-  (1 ciclo, patrón de lectura registrada de URAM); documentación del mapeo
-  (**32 URAM288 reales, medido en el run 2026-08-18**, para 65.536×86 bits) y
-  de las técnicas de retiming/pipelining en
-  `docs/writeup/`.
-- **Síntesis**: constraints 322,265625 MHz + script tcl de synth/impl
-  (part US+ objetivo) commiteados en `synth/`; el owner corre Vivado fuera y
-  pega el informe (WNS/TNS + utilización LUT/FF/BRAM/URAM) en `synth/reports/`.
+- **DW=32 parameterization of the parser** (`rtl/parser/itch_parser.sv` already
+  has `parameter DW=64`): the 32-bit variant must meet the phase-1 criteria
+  (bit-exact Annex-A record, 1 word/cycle line rate, framing/gaps/session,
+  backpressure, truncation and valid bytes via `tkeep`) and the 64-bit variant
+  stays green in regression.
+- **DW=32 parameterization of the book** (`rtl/orderbook/orderbook.sv` already
+  has `parameter DW=64`): 32-bit Annex A (w0={type,locate,len}, w1=msg_idx,
+  w2..=body MSB-first — **layout trimmed by the fase3-uram campaign, criterion
+  1: the ts words were removed**), decoder with the same offsets of
+  `golden_model/itch/messages.py`, phase-2 criteria bit-exact. 64-bit variant
+  green in regression.
+- **Parser→book chain at DW=32** verified end-to-end (real feed + vectors).
+- **Hash + linear probing** of the order table: `2^SLOT` slots (SLOT=16 →
+  65,536), entry {valid, ref, side, price, qty}, lookup by `ref mod 2^SLOT` with
+  bounded linear probing (max `PROBE` steps, PROBE=8); unknown ref after
+  exhausting probes = anomaly (same semantics as phase 2); full table = `error`
+  signalled, never silent.
+- **Public top-N**: `depth_tdata` output with the ND=5 best levels per side of
+  the BBO-event symbol (bid best-first descending, ask best-first ascending,
+  each level {px[31:0], qty[31:0]}, empty to 0), validated bit-exact against the
+  golden `book.py` levels.
+- **Phase-2 grade hardening (lens 9)**: NSYM guard (symbol 21 → `error` pulse,
+  never OOB index) and `bbo_tready` handshake in ST_EMIT (BBO event never lost
+  under backpressure).
+- **Latency**: wire→BBO histogram per message type (cycles from the message
+  handshake on `s_axis` to its BBO event on `bbo_tvalid`) in the parser→book
+  chain, committed as JSON in `verification/vectors/latency/`.
+- **Pipeline for URAM**: **registered** order-table reads (1 cycle, URAM
+  registered-read pattern); documentation of the mapping (**32 real URAM288,
+  measured in the 2026-08-18 run**, for 65,536×86 bits) and of the
+  retiming/pipelining techniques in `docs/writeup/`.
+- **Synthesis**: 322.265625 MHz constraints + synth/impl tcl script (target US+
+  part) committed in `synth/`; the owner runs Vivado externally and pastes the
+  report (WNS/TNS + LUT/FF/BRAM/URAM utilization) in `synth/reports/`.
 
 **Out of scope (non-goals):**
 
-- Rehacer la semántica del book (es la de fase 2, replicada del golden).
-- Fase 4 (CME MDP3, host AXI/PCIe, write-up publicado).
-- Hash con cuckoo/robin-hood (probing lineal basta con la carga del subset:
-  pico 370 vivas sobre 65.536 slots ≈ 0,6 %).
-- Cambiar el layout del Anexo A de 64 bits (la variante 32 define su propio
-  layout de 32 bits; la de 64 no se toca).
-- Latencia en nanosegundos con datos reales wire-to-wire (requiere hardware):
-  la latencia se mide en ciclos en simulación y se convierte a ns con el reloj
-  objetivo (documentado).
+- Redoing the book semantics (it is phase 2's, replicated from the golden).
+- Phase 4 (CME MDP3, AXI/PCIe host, published write-up).
+- Cuckoo/robin-hood hashing (linear probing suffices at the subset load: peak
+  370 live out of 65,536 slots ≈ 0.6 %).
+- Changing the 64-bit Annex-A layout (the 32-bit variant defines its own
+  32-bit layout; the 64-bit one is untouched).
+- Latency in nanoseconds on real wire-to-wire data (requires hardware): latency
+  is measured in cycles in simulation and converted to ns with the target clock
+  (documented).
 
-**Radio medido (2026-08-13):** `rtl/parser/itch_parser.sv` (param `DW=64`,
-consumido solo por su testbench) y `rtl/orderbook/orderbook.sv` (param `DW=64`,
-consumido solo por su testbench); `verification/vectors/bbo/corpus_bbo.json` y
-`messages/corpus_all_types.json` reutilizables; `synth/` vacío. Ningún puerto se
-renombra: solo se añaden parámetros/puertos nuevos y se parametriza lo existente.
+**Measured radius (2026-08-13):** `rtl/parser/itch_parser.sv` (param `DW=64`,
+consumed only by its testbench) and `rtl/orderbook/orderbook.sv` (param `DW=64`,
+consumed only by its testbench); `verification/vectors/bbo/corpus_bbo.json` and
+`messages/corpus_all_types.json` reusable; `synth/` empty. No port is renamed:
+only new params/ports are added and the existing ones parameterized.
 
 ## Constraints
 
-- **Familia/part objetivo:** AMD/Xilinx UltraScale+ **xcku3p-ffva676-2L-e**
-  (Kintex XCKU3P; **48 URAM** (13,8 Mb), 162.720 CLB LUT, 360 BRAM36K — el
-  conteo «360 URAM» de la decisión 002 era erróneo: 360 es el BRAM; corregido
-  2026-08-18 con el dato del propio Vivado, `AVAILABLE_IOBS=256` y URAM=48).
-  Retarget desde el VU9P por decisión 002
-  (`docs/decisiones/002-retarget-kintex-xcku3p.md`): soportado en Vivado ML
-  Standard gratuito y reproducible sin licencia de pago — swappable en el
+- **Target family/part:** AMD/Xilinx UltraScale+ **xcku3p-ffva676-2L-e**
+  (Kintex XCKU3P; **48 URAM** (13.8 Mb), 162,720 CLB LUT, 360 BRAM36K — the
+  "360 URAM" count of decision 002 was wrong: 360 is the BRAM; corrected
+  2026-08-18 with Vivado's own data, `AVAILABLE_IOBS=256` and URAM=48). Retarget
+  from the VU9P by decision 002
+  (`docs/decisions/002-retarget-kintex-xcku3p.md`): supported in the free Vivado
+  ML Standard and reproducible without a paid license — swappable in the
   tcl/constraints.
-- **I/O del paquete:** FFVA676 → 256 I/O (`AVAILABLE_IOBS`). El top de
-  síntesis es el wrapper `synth/itch_chain_synth.sv` (contrato AXI, depth
-  recortado a 32 bits de observabilidad): `rtl/itch_chain.sv` expone 896
-  puertos de debug y no entra en el FFVA676 (Place 30-415, hallazgo
-  2026-08-18). El datapath medido es idéntico.
-- **Frecuencia:** 322,265625 MHz (variante 32-bit) y 156,25 MHz (regresión
-  64-bit). 32-bit @ 322,265625 = 10,3125 Gbps = line-rate 10G.
-- **Line-rate:** el datapath 32-bit acepta **1 palabra/ciclo en el peor caso**
-  (mensajes mínimos back-to-back) sin backpressure sostenida — igual régimen
-  que fase 1.
-- **URAM:** lectura registrada (1 ciclo) → el pipeline del book se diseña
-  alrededor de esa latencia (la búsqueda de la tabla se hace en un ciclo y la
-  operación se aplica en el siguiente), sin «arreglar» el signo con lógica
-  larga en el flanco de uso.
-- **Determinismo:** mismo stream → misma secuencia de BBO **y de depth**, bit
-  a bit igual al golden; sin pérdida ni doble cuenta, con y sin backpressure
-  de salida.
-- **Endianness:** cuerpo big-endian del wire; offsets exactos de
-  `golden_model/itch/messages.py` (fuente única, regla fases 0/1).
-- **Framing de entrada:** `itch_chain` expone `s_axis_tkeep[DW/8-1:0]` y hereda
-  literalmente el contrato de bytes válidos de fase 1. La interfaz interna
-  parser→book no cambia.
+- **Package I/O:** FFVA676 → 256 I/O (`AVAILABLE_IOBS`). The synthesis top is
+  the wrapper `synth/itch_chain_synth.sv` (AXI contract, depth trimmed to 32
+  bits of observability): `rtl/itch_chain.sv` exposes 896 debug ports and does
+  not fit the FFVA676 (Place 30-415, finding 2026-08-18). The measured datapath
+  is identical.
+- **Frequency:** 322.265625 MHz (32-bit variant) and 156.25 MHz (64-bit
+  regression). 32-bit @ 322.265625 = 10.3125 Gbps = 10G line rate.
+- **Line rate:** the 32-bit datapath accepts **1 word/cycle in the worst case**
+  (minimum messages back-to-back) without sustained backpressure — same regime
+  as phase 1.
+- **URAM:** registered read (1 cycle) → the book pipeline is designed around
+  that latency (table lookup in one cycle and the operation applied in the
+  next), without "fixing" the sign with long logic on the use edge.
+- **Determinism:** same stream → same BBO **and depth** sequence, bit-exact
+  against the golden; no loss or double-count, with and without output
+  backpressure.
+- **Endianness:** wire big-endian body; exact offsets of
+  `golden_model/itch/messages.py` (single source, phase-0/1 rule).
+- **Input framing:** `itch_chain` exposes `s_axis_tkeep[DW/8-1:0]` and inherits
+  literally the phase-1 valid-byte contract. The internal parser→book interface
+  does not change.
 
-## Superficie y amenazas
+## Surface and threats
 
-**Puerto nuevo del top de cadena:** `s_axis_tkeep[DW/8-1:0]`, conectado solo a
-`itch_parser`. Puertos nuevos del book (top `orderbook`):
+**New top-of-chain port:** `s_axis_tkeep[DW/8-1:0]`, connected only to
+`itch_parser`. New book ports (top `orderbook`):
 
-| Señal | Ancho | Descripción |
+| Signal | Width | Description |
 |---|---|---|
-| `depth_tdata` | `2*ND*64` (=640) | niveles por lado del símbolo del evento: `{bid[ND-1..0], ask[ND-1..0]}`, cada nivel `{px[31:0], qty[31:0]}`, mejor primero, vacíos 0 |
-| `depth_tvalid` | 1 | hay un evento depth (mismo pulso que el BBO del símbolo) |
-| `depth_tready` | 1 | backpressure del consumidor de depth (handshake igual que bbo) |
+| `depth_tdata` | `2*ND*64` (=640) | levels per side of the event symbol: `{bid[ND-1..0], ask[ND-1..0]}`, each level `{px[31:0], qty[31:0]}`, best first, empty 0 |
+| `depth_tvalid` | 1 | there is a depth event (same pulse as the symbol's BBO) |
+| `depth_tready` | 1 | backpressure from the depth consumer (handshake like bbo) |
 
-Parámetros nuevos: `DW` (32/64), `SLOT=16`, `PROBE=8`, `ND=5`. Parser: `DW`
-ya existe (se ejercita a 32).
+New parameters: `DW` (32/64), `SLOT=16`, `PROBE=8`, `ND=5`. Parser: `DW`
+already exists (exercised at 32).
 
-**Casos de abuso del dominio** (cada uno con escenario `SEC-` en Gherkin):
+**Domain abuse cases** (each with a `SEC-` scenario in Gherkin):
 
-- **Probing que agota**: ref en el slot pero probe bound excedido → anomalía
-  contada, no aborta. — SEC-HASH-01.
-- **Tabla llena**: insert con todos los slots ocupados → `error`, nunca wrap
-  ni overwrite silencioso. — SEC-HASH-02.
-- **Colisión de hash entre símbolos distintos**: refs de símbolos diferentes
-  que caen en el mismo slot → probing las distingue (el ref se guarda). —
+- **Exhausted probing**: ref in the slot but probe bound exceeded → counted
+  anomaly, no abort. — SEC-HASH-01.
+- **Full table**: insert with all slots occupied → `error`, never wrap nor
+  silent overwrite. — SEC-HASH-02.
+- **Hash collision between distinct symbols**: refs of different symbols falling
+  in the same slot → probing distinguishes them (the ref is stored). —
   SEC-HASH-03.
-- **Símbolo 21 (NSYM)**: locate fuera del subset → pulso `error`, jamás índice
-  OOB en los arrays de niveles. — SEC-NSYM-01.
-- **Backpressure de BBO**: `bbo_tready=0` cuando hay evento → el evento se
-  retiene (ST_EMIT se queda), nunca se pierde; al liberar, se entrega exacto.
-  — SEC-BP-01.
-- **Depth de símbolo vacío**: niveles inexistentes → 0; depth no diverge del
-  golden. — SEC-DP-01.
-- **Latencia determinista**: la misma secuencia produce los mismos ciclos por
-  tipo (histograma reproducible). — SEC-LAT-01.
+- **Symbol 21 (NSYM)**: locate outside the subset → `error` pulse, never OOB
+  index in the level arrays. — SEC-NSYM-01.
+- **BBO backpressure**: `bbo_tready=0` with an event present → the event is
+  held (ST_EMIT stays), never lost; on release it is delivered exactly. —
+  SEC-BP-01.
+- **Depth of empty symbol**: nonexistent levels → 0; depth does not diverge from
+  the golden. — SEC-DP-01.
+- **Deterministic latency**: the same sequence produces the same cycles per type
+  (reproducible histogram). — SEC-LAT-01.
 
-**Qué se arriesga del maestro:** el **line-rate de 10G** (32-bit/322 sin
-throttling), la **latencia determinista** y la **corrección estricta** del
-book con una tabla de órdenes que ya no es indexación directa (colisiones de
-hash = nuevo vector de error).
+**What is at risk from the master:** the **10G line rate** (32-bit/322 without
+throttling), the **deterministic latency** and the **strict book correctness**
+with an order table that is no longer direct indexing (hash collisions = a new
+error vector).
 
-## Reuso
+## Reuse
 
-- `rtl/parser/itch_parser.sv` — se **extiende** (DW ya parametrizado), no se
-  duplica; el decodificador/cuerpo se ejercita a 32 bits.
-- `rtl/orderbook/orderbook.sv` — se **extiende** (DW, hash, depth, hardening);
-  la semántica de `level_add`/`apply_one`/`emit_bbo` se conserva.
-- `golden_model/src/book.py` — oráculo de BBO **y de niveles** (top-N se deriva
-  de `_levels` ordenado, nunca del RTL).
-- `golden_model/itch/messages.py` — offsets de campos (fuente única).
-- Testbenches fase 1/2: drivers y helpers (`anexo_words`, `drive_pcap`,
-  `_pcap_msgs_subset`, constructores A/F/E/C/X/D/U/S/H) **se importan**, no se
-  copian: el área nueva `verification/testbenches/phase3/` reusa los módulos
-  existentes vía `sys.path` (regla de partición del README de testbenches).
-- `verification/vectors/{bbo,messages}/*.json` — vectores congelados
-  existentes, re-ejecutados a DW=32 y DW=64.
-- Código nuevo que duplique la semántica de `book.py`/`messages.py` con otro
-  literal (offsets a mano, top-N recalculado en RTL) = FAIL de la lente de
-  simplicidad de `/grade`.
+- `rtl/parser/itch_parser.sv` — **extended** (DW already parameterized), not
+  duplicated; the decoder/body is exercised at 32 bits.
+- `rtl/orderbook/orderbook.sv` — **extended** (DW, hash, depth, hardening); the
+  semantics of `level_add`/`apply_one`/`emit_bbo` are preserved.
+- `golden_model/src/book.py` — BBO **and level** oracle (top-N derived from the
+  ordered `_levels`, never from the RTL).
+- `golden_model/itch/messages.py` — field offsets (single source).
+- Phase-1/2 testbenches: drivers and helpers (`anexo_words`, `drive_pcap`,
+  `_pcap_msgs_subset`, A/F/E/C/X/D/U/S/H constructors) are **imported**, not
+  copied: the new `verification/testbenches/phase3/` area reuses the existing
+  modules via `sys.path` (testbench README partition rule).
+- `verification/vectors/{bbo,messages}/*.json` — existing frozen vectors,
+  re-run at DW=32 and DW=64.
+- New code that duplicates the `book.py`/`messages.py` semantics with another
+  literal (hand offsets, top-N recomputed in RTL) = FAIL of the `/grade`
+  simplicity lens.
 
-## Criterios de aceptación (Definition of Done)
+## Acceptance criteria (Definition of Done)
 
-1. [ ] **Parser DW=32**: el registro Anexo A de 32 bits es bit a bit idéntico
-     al oráculo `message_oracle` sobre el corpus sintético y el replay real
-     (mismos mensajes → mismas words); el peor caso (mensajes mínimos
-     back-to-back) se acepta 1 palabra/ciclo sin backpressure sostenida.
+1. [ ] **Parser DW=32**: the 32-bit Annex-A record is bit-exact against the
+     `message_oracle` oracle over the synthetic corpus and the real replay
+     (same messages → same words); the worst case (minimum messages
+     back-to-back) is accepted 1 word/cycle without sustained backpressure.
      — Gherkin: `optimizacion.feature` §P32-01, §P32-02
-2. [ ] **Book DW=32**: BBO bit a bit vs golden `book.py` sobre el corpus
-     sintético (criterios 1-7 de fase 2 re-ejecutados a 32 bits) y sobre el
-     replay real de 20 símbolos.
+2. [ ] **Book DW=32**: BBO bit-exact vs golden `book.py` over the synthetic
+     corpus (phase-2 criteria 1–7 re-run at 32 bits) and over the 20-symbol
+     real replay.
      — Gherkin: §B32-01, §B32-02
-3. [ ] **Regresión 64-bit**: suites completas vigentes de fases 1 y 2 verdes con
-     el RTL extendido (parametrización no rompe el default).
+3. [ ] **64-bit regression**: current full phase-1 and phase-2 suites green with
+     the extended RTL (parameterization does not break the default).
      — Gherkin: §REG-01
-4. [ ] **Cadena parser→book DW=32**: feed real decapado → BBO bit a bit vs
-     golden sobre el subset (REPLAY-01 encadenado a 32 bits).
+4. [ ] **Parser→book chain DW=32**: stripped real feed → BBO bit-exact vs golden
+     over the subset (REPLAY-01 chained at 32 bits).
      — Gherkin: §CHAIN-01
-5. [ ] **Hash + probing**: la tabla con hash reproduce la semántica exacta de
-     la indexación directa (mismos eventos, mismas anomalías, mismas refs);
-     probe agotado = anomalía, tabla llena = `error`.
+5. [ ] **Hash + probing**: the hashed table reproduces the exact semantics of
+     direct indexing (same events, same anomalies, same refs); exhausted probe =
+     anomaly, full table = `error`.
      — Gherkin: §SEC-HASH-01/02/03
-6. [ ] **Top-N parametrizado**: con ND=5 y una elaboración adversarial ND=3,
-     `depth_tdata` es bit a bit contra los niveles ordenados del golden para el
-     símbolo del evento; símbolo sin niveles → 0. `itch_chain` propaga ND al
-     book, no sólo al ancho del puerto top.
+6. [ ] **Parameterized top-N**: with ND=5 and an adversarial ND=3 elaboration,
+     `depth_tdata` is bit-exact against the golden's ordered levels for the
+     event symbol; symbol without levels → 0. `itch_chain` propagates ND to the
+     book, not only to the top port width.
      — Gherkin: §SEC-DP-01, §DP-01
-7. [ ] **Hardening**: símbolo 21 → `error` y `m_loc_idx < NSYM` en todo
-     ciclo; evento BBO retenido con `bbo_tready=0` después de observar
-     `bbo_tvalid=1`, estable al menos dos ciclos y entregado exacto al liberar.
+7. [ ] **Hardening**: symbol 21 → `error` and `m_loc_idx < NSYM` in every
+     cycle; BBO event held with `bbo_tready=0` after observing `bbo_tvalid=1`,
+     stable at least two cycles and delivered exactly on release.
      — Gherkin: §SEC-NSYM-01, §SEC-BP-01
-8. [ ] **Latencia**: histograma por tipo (ciclos wire→BBO en la cadena DW=32)
-     commiteado en `verification/vectors/latency/` y determinista
-     (re-ejecución idéntica); conversión a ns documentada en `docs/writeup/`.
+8. [ ] **Latency**: per-type histogram (wire→BBO cycles in the DW=32 chain)
+     committed in `verification/vectors/latency/` and deterministic (identical
+     re-run); ns conversion documented in `docs/writeup/`.
      — Gherkin: §SEC-LAT-01
-9. [ ] **Pipeline URAM**: las lecturas de la tabla de órdenes están registradas
-     (1 ciclo) y el mapeo (65.536×86 bits = **32 URAM288**, medido en el run
-     2026-08-18) se documenta en
-     `docs/writeup/`; no hay ruta O(P·P) en el cálculo del mejor precio.
-10. [ ] **Síntesis**: `synth/` contiene constraints (322,265625 MHz) + script
-     tcl (synth/impl, part `xcku3p-ffva676-2L-e`); el owner corre Vivado fuera y
-     pega el informe WNS/TNS y utilización en `synth/reports/` — WNS ≥ 0 en la
-     variante 32-bit.
-11. [ ] Cocotb + Verilator compilan ambos tops a DW=32 con `--Wall` sin
-     warnings reales silenciados; lint en verde sobre lo tocado.
-     — Gates B/C de verify.
+9. [ ] **URAM pipeline**: order-table reads are registered (1 cycle) and the
+     mapping (65,536×86 bits = **32 URAM288**, measured in the 2026-08-18 run) is
+     documented in `docs/writeup/`; there is no O(P·P) path in the best-price
+     computation.
+10. [ ] **Synthesis**: `synth/` contains constraints (322.265625 MHz) + tcl
+     script (synth/impl, part `xcku3p-ffva676-2L-e`); the owner runs Vivado
+     externally and pastes the WNS/TNS report and utilization in
+     `synth/reports/` — WNS ≥ 0 in the 32-bit variant.
+11. [ ] Cocotb + Verilator compile both tops at DW=32 with `--Wall` with no real
+     warnings silenced; lint green over what was touched.
+     — Gates B/C of verify.
 
-## Verificación
+## Verification
 
-| Criterio | Cómo se prueba |
+| Criterion | How it is tested |
 |---|---|
-| 1 | cocotb: corpus sintético + replay REP-02 a DW=32 (words 32-bit vs `message_oracle`); peor caso mínimo back-to-back sin backpressure |
-| 2 | cocotb: corpus BBO-01..SEC-* a DW=32 contra `book.py`; REPLAY-01 a 32 bits |
-| 3 | cocotb: `make sim` completo en `testbenches/parser` y `testbenches/orderbook` tras el cambio |
-| 4 | cocotb: top `chain32` (parser→book a DW=32) sobre el pcap real del subset |
-| 5 | cocotb: misma secuencia con tabla hashada vs directa; casos probe-limit y tabla-llena; mutante de hash (slot sin comparar ref) lo mata |
-| 6 | cocotb: depth vs `book.py` a ND=5 y `itch_chain -GND=3`; mutante de orden/truncado lo mata |
-| 7 | cocotb: `SEC-NSYM-01` (21 símbolos + muestreo del índice interno), `SEC-BP-01` (stall adaptativo que espera `tvalid`, retiene dos ciclos y libera) |
-| 8 | cocotb: recolector de ciclos por tipo → JSON; re-ejecución idéntica |
-| 9 | revisión + `verilator --lint-only`; documentación en writeup; la lectura registrada se audita por código |
-| 10 | tcl/constraints commiteados + informe del owner pegado en `synth/reports/` |
-| 11 | `verilator --lint-only -Wall` sobre parser y book a DW=32; verible si se instala |
+| 1 | cocotb: synthetic corpus + REP-02 replay at DW=32 (32-bit words vs `message_oracle`); minimum worst case back-to-back without backpressure |
+| 2 | cocotb: BBO-01..SEC-* corpus at DW=32 vs `book.py`; REPLAY-01 at 32 bits |
+| 3 | cocotb: full `make sim` in `testbenches/parser` and `testbenches/orderbook` after the change |
+| 4 | cocotb: top `chain32` (parser→book at DW=32) over the real subset pcap |
+| 5 | cocotb: same sequence with hashed vs direct table; probe-limit and full-table cases; a hash mutant (slot without ref compare) kills it |
+| 6 | cocotb: depth vs `book.py` at ND=5 and `itch_chain -GND=3`; an ordering/truncation mutant kills it |
+| 7 | cocotb: `SEC-NSYM-01` (21 symbols + internal index sampling), `SEC-BP-01` (adaptive stall that waits `tvalid`, holds two cycles and releases) |
+| 8 | cocotb: per-type cycle collector → JSON; identical re-run |
+| 9 | review + `verilator --lint-only`; write-up documentation; the registered read is audited by code |
+| 10 | committed tcl/constraints + owner report pasted in `synth/reports/` |
+| 11 | `verilator --lint-only -Wall` over parser and book at DW=32; verible if installed |
 
-Régimen completo: skill `verify` (gates A-G). Gate E: runner de mutación
-extendido a `phase3` (flips: hash sin comparar ref, probe bound off-by-one,
-depth mal ordenado, truncado de nivel, guard NSYM invertido, ST_EMIT sin
-retener). Gate F: espejos Gherkin (`specs/gherkin-espejos.json` → área nueva
-`verification/testbenches/phase3`). Gate G: G0 (datos reales fuera del repo),
-G2 (estado con hash), G3 (top-N deriva del golden), G timing = criterio 10 con
-evidencia del run externo del owner.
+Full regime: skill `verify` (gates A–G). Gate E: mutation runner extended to
+`phase3` (flips: hash without ref compare, probe bound off-by-one, depth
+mis-ordered, level truncation, inverted NSYM guard, ST_EMIT without holding).
+Gate F: Gherkin mirrors (`specs/gherkin-espejos.json` → new area
+`verification/testbenches/phase3`). Gate G: G0 (real data outside the repo),
+G2 (hashed state), G3 (top-N derived from the golden), G timing = criterion 10
+with the owner's external-run evidence.
 
-**Contratos sin gate** — invariantes que pueden romperse con suite y lint en
-verde:
+**Geless contracts** — invariants that can break with suite and lint green:
 
-1. **Layout del Anexo A de 32 bits mal definido** (offsets corridos entre
-   parser y book). Guardarraíl: ambos se definen desde `messages.py`; el
-   testbench re-parsea con `message_oracle` y compara words, no campos sueltos.
-2. **Hash que cambia la semántica de las anomalías** (probe agotado vs ref
-   ausente contados distinto). Guardarraíl: mismas anomalías que la
-   indexación directa en el mismo feed (criterio 5).
-3. **Top-N con niveles internos desordenados** (orden de burbuja best-first
-   mal transcrito al bus de salida). Guardarraíl: el oráculo ordena los
-   niveles del golden, nunca el RTL.
-4. **Lecturas de tabla no registradas** (patrón de URAM roto sin que la
-   simulación lo note). Guardarraíl: `synth_check.py` exige que la sonda lea
-   exclusivamente `rd_data` y prohíbe indexar `o_mem[pr_*]` de forma directa;
-   el informe Vivado del owner confirma además la inferencia física.
-5. **Latencia que «se ajusta» al peor caso** (medir solo el promedio).
-   Guardarraíl: histograma completo por tipo con re-ejecución idéntica.
+1. **Ill-defined 32-bit Annex-A layout** (shifted offsets between parser and
+   book). Guardrail: both are defined from `messages.py`; the testbench
+   re-parses with `message_oracle` and compares words, not loose fields.
+2. **Hash that changes the anomaly semantics** (exhausted probe vs absent ref
+   counted differently). Guardrail: same anomalies as direct indexing on the
+   same feed (criterion 5).
+3. **Top-N with unordered internal levels** (bubble best-first order badly
+   transcribed to the output bus). Guardrail: the oracle orders the golden
+   levels, never the RTL.
+4. **Unregistered table reads** (broken URAM pattern without noticing in
+   simulation). Guardrail: `synth_check.py` demands the probe read exclusively
+   `rd_data` and forbids direct `o_mem[pr_*]` indexing; the owner's Vivado
+   report also confirms the physical inference.
+5. **Latency "adjusted" to the worst case** (measuring only the average).
+   Guardrail: full per-type histogram with identical re-run.
 
 ## Loop
 
-Stop limit: **6 iteraciones**. Cadencia: encadenar build→verify→grade mientras
-quede cola. Orden sugerido: iter 1 (DW=32 parser+book + regresión 64) → iter 2
-(hash+probing) → iter 3 (top-N) → iter 4 (hardening + latencia) → iter 5
-(pipeline URAM + synth artifacts + informe del owner) → iter 6 (cierre/grade).
-Al agotar el límite con criterios en FAIL, escala al owner.
+Stop limit: **6 iterations**. Cadence: chain build→verify→grade while there is a
+queue. Suggested order: iter 1 (DW=32 parser+book + 64 regression) → iter 2
+(hash+probing) → iter 3 (top-N) → iter 4 (hardening + latency) → iter 5 (URAM
+pipeline + synth artifacts + owner report) → iter 6 (closure/grade). When the
+limit is reached with criteria in FAIL, escalate to the owner.
 
-## Addendum iteración 6 (2026-08-14 — revisión exhaustiva post-traslado)
+## Addendum iteration 6 (2026-08-14 — exhaustive post-migration review)
 
-Cierre del criterio 1 (line-rate) y del criterio 8 (latencia) con el hallazgo
-del backlog estacionario de la cola del parser:
+Closure of criterion 1 (line rate) and criterion 8 (latency) with the
+stationary-backlog finding of the parser queue:
 
-1. **Causa raíz de la latencia (medida, no teórica)**: la entrada fluye a
-   4 B/c mientras `qn+4 ≤ QB` y el drenaje puntual del ST_CAP promedia
-   ~2,7 B/c ⇒ la cola se fija en QB y cada mensaje espera ~QB/16 mensajes de
-   turno. Latencia ≈ backlog + procesamiento.
-2. **Parámetro efectivo**: el top de integración `itch_chain.sv` declara su
-   propio `QB` y lo pasa al parser (`.QB(QB)`): los defaults del módulo no
-   aplican en fase 3. Los parámetros de campaña viven en el top y en la línea
-   `-G` del Makefile (gotcha extendido del Makefile de phase3).
-3. **QB 128 → 64** (top de la cadena y default del parser alineados): latencia
-   total media 69,26 → 42,40 ciclos (214,9 → 131,5 ns a 322,265625 MHz;
-   p99 77 → 47), **~1,63×**, con la corrección bit a bit intacta (CHAIN-01:
-   30.729 eventos, 0 gaps). El barrel shifter del parser baja de 1024 a
-   512 bits (área/ruta para el criterio 10).
-4. **Régimen de stalls**: el peor caso probado (4 mensajes A/U back-to-back,
-   LIN-01/P32-02) pasa de 0 a **stalls acotados (~15)** — el criterio 1 exige
-   "sin backpressure sostenida" (feed infinito back-to-back está fuera de
-   alcance, documentado en LIN-01 alcance de fase 1 y en el régimen de la
-   línea 77). QB ≥ 88 conservaría 0 stalls (pico de cola ~80 B) con solo
-   ~1,4× de ganancia; se eligió QB=64 por el balance latencia/área.
-5. **Evidencia**: `verification/vectors/latency/latency_dw32.json` re-medido
-   (determinista, 2 ejecuciones idénticas); `docs/writeup/latencia.md`
-   actualizado; `docs/writeup/lecciones-aprendidas.md` con el
-   análisis completo (incl. los bloqueadores de síntesis B1/B2/B3 para el
-   criterio 10).
-6. **Criterio 10 — primer run físico (2026-08-18)**: Vivado 2023.2 ejecutado
+1. **Root cause of the latency (measured, not theoretical)**: the input flows at
+   4 B/c while `qn+4 ≤ QB` and the ST_CAP punctual drain averages ~2.7 B/c ⇒
+   the queue fixes at QB and each message waits ~QB/16 messages of turn.
+   Latency ≈ backlog + processing.
+2. **Effective parameter**: the integration top `itch_chain.sv` declares its own
+   `QB` and passes it to the parser (`.QB(QB)`): module defaults do not apply in
+   phase 3. The campaign parameters live in the top and in the Makefile `-G`
+   line (extended gotcha of the phase3 Makefile).
+3. **QB 128 → 64** (chain top and parser default aligned): mean total latency
+   69.26 → 42.40 cycles (214.9 → 131.5 ns at 322.265625 MHz; p99 77 → 47),
+   **~1.63×**, with bit-exact correctness intact (CHAIN-01: 30,729 events, 0
+   gaps). The parser barrel shifter drops from 1024 to 512 bits (area/path for
+   criterion 10).
+4. **Stall regime**: the tested worst case (4 A/U back-to-back messages,
+   LIN-01/P32-02) goes from 0 to **bounded stalls (~15)** — criterion 1 demands
+   "no sustained backpressure" (infinite back-to-back feed is out of scope,
+   documented in the LIN-01 phase-1 scope and in the line-77 regime). QB ≥ 88
+   would keep 0 stalls (queue peak ~80 B) with only ~1.4× gain; QB=64 was
+   chosen for the latency/area balance.
+5. **Evidence**: `verification/vectors/latency/latency_dw32.json` re-measured
+   (deterministic, 2 identical runs); `docs/writeup/latency.md` updated;
+   `docs/writeup/lessons-learned.md` with the full analysis (incl. the B1/
+   B2/B3 synthesis blockers for criterion 10).
+6. **Criterion 10 — first physical run (2026-08-18)**: Vivado 2023.2 executed
    (synth+place+route, wrapper `itch_chain_synth.sv`, part
-   `xcku3p-ffva676-2L-e`). La tabla se infiere en **32 URAM288** tras el fix
-   de escritura única (la `task mem_wr` rompía la inferencia y colgaba la
-   optimización). **NO cierra**: WNS = -10,492 ns (periodo 3,103 ns), TNS =
-   -590.856,875 ns, 181.711/275.646 endpoints, y **LUT al 100,33 %**
-   (163.259/162.720) — el diseño ni cabe. El cuello es la generación de
-   BBO/depth desde la lista de niveles (37-41 niveles de lógica, route 72,9 %
-   por congestión), no la URAM ni el parser. Evidencia y rutas críticas en
-   `verify-report.md`; el siguiente loop requiere cambio estructural con spec
-   nueva (pipeline/retiming del escaneo de niveles o BBO sombra incremental).
+   `xcku3p-ffva676-2L-e`). The table is inferred in **32 URAM288** after the
+   single-write fix (the `mem_wr` task broke inference and hung optimization).
+   **Does NOT close**: WNS = −10.492 ns (period 3.103 ns), TNS = −590,856.875
+   ns, 181,711/275,646 endpoints, and **LUT at 100.33 %** (163,259/162,720) —
+   the design does not even fit. The bottleneck is the BBO/depth generation from
+   the level list (37–41 logic levels, route 72.9 % by congestion), neither the
+   URAM nor the parser. Evidence and critical paths in `verify-report.md`; the
+   next loop requires a structural change with a new spec (pipeline/retiming of
+   the level scan or incremental shadow BBO).
 
-## Addendum iteración 7 (2026-08-18 — retiming del escaneo de niveles)
+## Addendum iteration 7 (2026-08-18 — retiming of the level scan)
 
-Cierre del criterio 10 con cambio estructural del camino del evento BBO.
-**La decisión de dirección la tomó el owner el 2026-08-18: retiming/pipeline
-del escaneo de niveles** (la alternativa «BBO sombra incremental» queda
-documentada como plan B en `docs/writeup/` si esta iteración no cierra).
+Closure of criterion 10 with a structural change of the BBO-event path. **The
+direction decision was the owner's on 2026-08-18: retiming/pipeline of the level
+scan** (the alternative "incremental shadow BBO" stays documented as plan B in
+`docs/writeup/` if this iteration does not close).
 
-### Causa raíz medida (run 2026-08-18, evidencia en `verify-report.md`)
+### Measured root cause (2026-08-18 run, evidence in `verify-report.md`)
 
-- WNS = -10,492 ns (periodo 3,103 ns), TNS = -590.856,875 ns, 181.711/275.646
-  endpoints en fallo; LUT al 100,33 % (163.259/162.720).
-- Rutas críticas: `u_book/m_loc_idx_reg → bbo_changed/bbo_tdata`, 37-41
-  niveles de LUT (2 CARRY8 + 37 LUT5/6), route 72,9 % por congestión. El
-  parser está en 12 niveles (fuera del límite); la URAM no es el cuello.
-- El culpable es `emit_bbo` (`rtl/orderbook/orderbook.sv:1045-1098`): en un
-  solo ciclo combinacional hace (a) mux de 40 grupos de niveles por
-  `m_loc_idx`, (b) find-first-nonzero de P=32 por lado, (c) `changed` contra
-  `prev_*` (otro mux por símbolo), (d) empaquetado depth 2×ND y (e) el
-  cross-check de mercado cruzado — lógica encadenada + fan-out gigante
-  (20.275 F7 + 8.930 F8 muxes).
+- WNS = −10.492 ns (period 3.103 ns), TNS = −590,856.875 ns, 181,711/275,646
+  endpoints failing; LUT at 100.33 % (163,259/162,720).
+- Critical paths: `u_book/m_loc_idx_reg → bbo_changed/bbo_tdata`, 37–41 LUT
+  levels (2 CARRY8 + 37 LUT5/6), route 72.9 % by congestion. The parser is at 12
+  levels (within limit); the URAM is not the bottleneck.
+- The culprit is `emit_bbo` (`rtl/orderbook/orderbook.sv:1045-1098`): in a
+  single combinational cycle it does (a) mux of 40 level groups by `m_loc_idx`,
+  (b) find-first-nonzero of P=32 per side, (c) `changed` against `prev_*`
+  (another per-symbol mux), (d) depth 2×ND packing and (e) the market-cross
+  check — chained logic + giant fan-out (20,275 F7 + 8,930 F8 muxes).
 
-### Cambio estructural: ST_EMIT → pipeline de 2 etapas registradas
+### Structural change: ST_EMIT → 2-stage registered pipeline
 
-`ST_EMIT` (un solo ciclo) se divide en tres estados: `ST_EMIT_A` (captura),
-`ST_EMIT_B` (selección + changed + depth) y `ST_EMIT_C` (handshake de
-salida). **+2 ciclos en el camino del evento BBO** — cambio de contrato de
-latencia, re-derivado abajo, jamás ocultado.
+`ST_EMIT` (single cycle) splits into three states: `ST_EMIT_A` (capture),
+`ST_EMIT_B` (selection + changed + depth) and `ST_EMIT_C` (output handshake).
+**+2 cycles on the BBO-event path** — latency contract change, re-derived below,
+never hidden.
 
-- **Etapa A (captura)**: registros `sm_cap[2*P]` de `{px, qty}` del símbolo
-  del evento + bandera `qty != 0` por slot. Solo el mux 40-grupos por
-  `m_loc_idx` (la misma selección que hoy, SIN el scan encadenado).
-- **Etapa B (selección)**: find-first por lado sobre la captura (P→1 con
-  prioridad), `changed` contra `prev_*` (comparación sobre captura),
-  empaquetado depth 2×ND (mux 2P→ND pequeño), actualización de `prev_*`,
-  cross-check de mercado cruzado.
-- **Etapa C (salida)**: `bbo_tdata/bbo_changed/depth_tdata` → registros de
-  salida con handshake idéntico al actual: retener con `tready=0`, entregar
-  exactamente una vez (hereda §SEC-BP-01).
-- Las etapas solo se recorren cuando `emit_ok` (evento real); la semántica de
-  anomalía/error/descarte no cambia.
-- **Plan B documentado** (si la etapa B aún no cierra): retiming de 1 etapa
-  (captura + recombinación de la selección) o BBO sombra incremental; ambos
-  requieren su propio mini-spec antes de tocar RTL.
+- **Stage A (capture)**: `sm_cap[2*P]` registers of `{px, qty}` of the event
+  symbol + a `qty != 0` flag per slot. Only the 40-group mux by `m_loc_idx` (the
+  same selection as today, WITHOUT the chained scan).
+- **Stage B (selection)**: find-first per side over the capture (P→1 with
+  priority), `changed` against `prev_*` (comparison over capture), 2×ND depth
+  packing (small 2P→ND mux), update of `prev_*`, market-cross check.
+- **Stage C (output)**: `bbo_tdata/bbo_changed/depth_tdata` → output registers
+  with an identical handshake to today's: hold with `tready=0`, deliver exactly
+  once (inherits §SEC-BP-01).
+- The stages only run when `emit_ok` (real event); anomaly/error/discard
+  semantics do not change.
+- **Plan B documented** (if stage B still does not close): 1-stage retiming
+  (capture + selection recombination) or incremental shadow BBO; both require
+  their own mini-spec before touching RTL.
 
-### Cambios de contrato (explícitos, no ocultados)
+### Contract changes (explicit, not hidden)
 
-1. **Latencia — enmienda del umbral de SEC-URAM-04**: «media ≤ 45 ciclos» →
-   **media ≤ 48 ciclos**. Re-derivación: +2 ciclos ≈ +6,2 ns → media estimada
-   ~46,3 ciclos (línea base vigente 44,318); 48 × 3,103 ns = 148,9 ns, aún
-   muy por debajo del presupuesto wire→BBO original de 214,9 ns
-   (`docs/writeup/latencia.md`); margen 1,7 ciclos sobre la estimación. La
-   campaña fase3-uram no se reabre: el umbral numérico migra al criterio 8 de
-   esta campaña (§RTM-LAT-01) con su re-derivación documentada.
-2. **Histograma**: se re-mide (determinista, 2 ejecuciones idénticas) y se
-   commitea de nuevo en `verification/vectors/latency/`.
-3. **Puertos**: `bbo_*` y `depth_*` no cambian (mismo contrato AXI); el
-   wrapper `itch_chain_synth.sv` no cambia.
+1. **Latency — SEC-URAM-04 threshold amendment**: "mean ≤ 45 cycles" →
+   **mean ≤ 48 cycles**. Re-derivation: +2 cycles ≈ +6.2 ns → estimated mean
+   ~46.3 cycles (current baseline 44.318); 48 × 3.103 ns = 148.9 ns, still well
+   below the original wire→BBO budget of 214.9 ns (`docs/writeup/latency.md`);
+   margin 1.7 cycles over the estimate. The fase3-uram campaign is not reopened:
+   the numeric threshold migrates to criterion 8 of this campaign (§RTM-LAT-01)
+   with its re-derivation documented.
+2. **Histogram**: re-measured (deterministic, 2 identical runs) and re-committed
+   in `verification/vectors/latency/`.
+3. **Ports**: `bbo_*` and `depth_*` do not change (same AXI contract); the
+   `itch_chain_synth.sv` wrapper does not change.
 
-### Objetivos físicos de esta iteración (criterio 10 re-definido)
+### Physical goals of this iteration (criterion 10 redefined)
 
-- WNS ≥ 0 y TNS = 0 post-route a 3,103 ns (el tcl ya aborta con
-  `FASE3 TIMING FAIL` ante slack negativo — mismo gate, cero cambio).
-- **LUT ≤ 95 %** post-route (el 100,33 % actual no deja headroom de
-  placement; la congestión domina la ruta). Si el pipeline no baja LUT lo
-  suficiente, la etapa B además simplifica los muxes F7/F8 del depth pack.
-- WHS ≥ 0 (hold limpio — hoy -1,145 ns por congestión).
-- URAM 32/48 (66,67 %) y BlockRAM 0 se conservan (la tabla no se toca).
+- WNS ≥ 0 and TNS = 0 post-route at 3.103 ns (the tcl already aborts with
+  `FASE3 TIMING FAIL` on negative slack — same gate, zero change).
+- **LUT ≤ 95 %** post-route (the current 100.33 % leaves no placement headroom;
+  congestion dominates the route). If the pipeline does not lower LUT enough,
+  stage B additionally simplifies the F7/F8 muxes of the depth pack.
+- WHS ≥ 0 (clean hold — today −1.145 ns by congestion).
+- URAM 32/48 (66.67 %) and BlockRAM 0 are kept (the table is untouched).
 
-### Equivalencia y regresión
+### Equivalence and regression
 
-- BBO/depth bit a bit vs golden (ND=5 y elaboración ND=3), con y sin
-  backpressure — los criterios 2/4/6/7 de la campaña se re-ejecutan.
-- Regresión 64-bit completa (fases 1-2): el pipeline es del book compartido,
-  el default DW=64 se re-ejecuta — §RTM-REG-01.
-- Gate E: mutantes nuevos del escaneo (etapa A omitida leyendo los arrays en
-  ST_EMIT, find-first con prioridad invertida, `changed` contra `prev_*`
-  incorrecto, depth empaquetado de la captura del lado contrario) — cada uno
-  debe compilar y morir.
+- BBO/depth bit-exact vs golden (ND=5 and elaboration ND=3), with and without
+  backpressure — criteria 2/4/6/7 of the campaign are re-run.
+- Full 64-bit regression (phases 1–2): the pipeline is of the shared book, the
+  DW=64 default is re-run — §RTM-REG-01.
+- Gate E: new scan mutants (stage A omitted reading the arrays in ST_EMIT,
+  inverted-priority find-first, `changed` against the wrong `prev_*`, depth
+  packed from the opposite side's capture) — each must compile and die.
 
-### Gherkin y gate F
+### Gherkin and gate F
 
-Escenarios nuevos en `optimizacion.feature`: **RTM-01** (pipeline registrado,
-sonda estructural como SEC-URAM-01), **RTM-02** (consistencia BBO↔captura
-sobre la invariante de lista ordenada: el «mejor en el último slot» era
-invisible — la lista se compacta siempre; enmendado 2026-08-18 antes de
-implementar), **RTM-03** (`changed` sobre la captura), **RTM-04** (backpressure
-en la salida pipelined), **RTM-LAT-01** (media ≤ 48 + determinismo),
-**RTM-REG-01** (regresión 64). Espejo de tests con títulos literales en
-`verification/testbenches/phase3/` (gate F).
+New scenarios in `optimizacion.feature`: **RTM-01** (registered pipeline,
+structural probe like SEC-URAM-01), **RTM-02** (BBO↔capture consistency over the
+ordered-list invariant: the "best in the last slot" was invisible — the list is
+always compacted; amended 2026-08-18 before implementing), **RTM-03** (`changed`
+over the capture), **RTM-04** (backpressure in the pipelined output),
+**RTM-LAT-01** (mean ≤ 48 + determinism), **RTM-REG-01** (64-bit regression).
+Mirror tests with literal titles in `verification/testbenches/phase3/` (gate F).
 
-### Iteraciones y stop
+### Iterations and stop
 
-Límite de **2 iteraciones** para este loop: iter 7a (pipeline de 2 etapas,
-red→verde completo) → iter 7b (solo si 7a no cierra: retiming dirigido de la
-etapa B o paso al plan B). Al agotar el límite con WNS < 0 o LUT > 95 %,
-escala al owner con la evidencia del run (nunca se rebaja el gate del tcl).
+Limit of **2 iterations** for this loop: iter 7a (2-stage pipeline, full
+red→green) → iter 7b (only if 7a does not close: directed stage-B retiming or
+move to plan B). On reaching the limit with WNS < 0 or LUT > 95 %, escalate to
+the owner with the run evidence (the tcl gate is never lowered).
 
-**Estado 2026-08-18**: la iter 7a está implementada y commiteada (`2fa7250`:
-RTL del pipeline A/B/C + tests RTM-01..04/RTM-REG-01/RTM-LAT-01 + targets
-`sim-rtm`/`sim-rtm64`; checks estáticos verdes: py_compile, gate F,
-synth_check 24/24, xvlog 0 errores). Falta el red→verde de
-`sim-rtm`/`sim-rtm64`/`sim-lat` y los gates A/E/B/C en la máquina con cocotb,
-y el re-run Vivado (mismo tcl) para WNS ≥ 0, TNS = 0 y LUT ≤ 95 %. Mientras
-esas pasadas no existan, la iteración 7a no está cerrada y la 7b sigue en
-reserva (los criterios de aceptación no cambian).
+**Status 2026-08-18**: iter 7a is implemented and committed (`2fa7250`: A/B/C
+pipeline RTL + RTM-01..04/RTM-REG-01/RTM-LAT-01 tests + `sim-rtm`/`sim-rtm64`
+targets; static checks green: py_compile, gate F, synth_check 24/24, xvlog 0
+errors). Missing: the red→green of `sim-rtm`/`sim-rtm64`/`sim-lat` and the
+A/E/B/C gates on the cocotb machine, and the Vivado re-run (same tcl) for
+WNS ≥ 0, TNS = 0 and LUT ≤ 95 %. Until those runs exist, iteration 7a is not
+closed and 7b stays in reserve (the acceptance criteria do not change).
 
-## Addendum iteración 8 (2026-08-18 — retiming del decode y pines del wrapper)
+## Addendum iteration 8 (2026-08-18 — decode retiming and wrapper pins)
 
-### Causa raíz medida (re-run 14:11, evidencia en `verify-report.md`)
+### Measured root cause (re-run 14:11, evidence in `verify-report.md`)
 
-El pipeline A/B/C de la iter 7 movió el indicador (WNS -10,492 → -7,395 ns,
-LUT 100,33 → 96,49 %) pero el re-run mostró **tres** familias de rutas
-violadas, ninguna en la emisión:
+The iter-7 A/B/C pipeline moved the indicator (WNS −10.492 → −7.395 ns, LUT
+100.33 → 96.49 %) but the re-run showed **three** families of violated paths,
+none in the emission:
 
-1. **I/O del wrapper (peor ruta absoluta, -7,395 ns)**: `msg_len_reg →
-   s_axis_tready` (11 niveles + OBUF + 1 ns de output delay + skew de clock
-   tree). El parser empuja su drenaje de cola hasta el pin del wrapper; en la
-   integración real ese puerto alimenta el registro/FIFO del maestro, no un
-   pad.
-2. **decode_lv2 (2ª-10ª rutas, -5,84 a -5,60 ns)**: `lv_eq_reg →
-   lv2_mode_reg` con 31 niveles. La etapa 2 del pipeline de niveles hace en
-   UN ciclo los tres find-first seriales (fnd/emp/btx, cadenas de prioridad
-   de 32), el mux 32:1 de `lv_cand_newq[fnd]` y la prioridad de condiciones.
-   NO es la etapa B de emisión: es la máquina de actualización del nivel.
-3. **Reset (rst_n → lv_qty_reg/R, ~-5,7 ns)**: el reset síncrono del pin se
-   infiere al pin R del FDRE sobre 1.280+ registros con skew del pin.
+1. **Wrapper I/O (worst absolute path, −7.395 ns)**: `msg_len_reg →
+   s_axis_tready` (11 levels + OBUF + 1 ns output delay + clock tree skew). The
+   parser pushes its queue drain to the wrapper pin; in the real integration
+   that port feeds the master's register/FIFO, not a pad.
+2. **decode_lv2 (2nd–10th paths, −5.84 to −5.60 ns)**: `lv_eq_reg → lv2_mode_reg`
+   with 31 levels. Stage 2 of the level pipeline does in ONE cycle the three
+   serial find-firsts (fnd/emp/btx, 32-deep priority chains), the 32:1 mux of
+   `lv_cand_newq[fnd]` and the condition priority. It is NOT the emission stage
+   B: it is the level-update machine.
+3. **Reset (rst_n → lv_qty_reg/R, ~−5.7 ns)**: the pin's synchronous reset is
+   inferred to the R pin of the FDRE over 1,280+ registers with pin skew.
 
-### Cambios estructurales
+### Structural changes
 
-1. **decode_lv2 partido en dos etapas registradas (book, `orderbook.sv`)**:
-   - **decode_lv2a** (ST_LV2, nuevo): tres encoders first-hot en **árbol
-     log2(P)** (función `first_one`: OR-tree por niveles + decisión binaria
-     de mayor a menor bit — sin cadenas seriales) → registros
+1. **decode_lv2 split into two registered stages (book, `orderbook.sv`)**:
+   - **decode_lv2a** (ST_LV2, new): three first-hot encoders in a **log2(P)
+     tree** (`first_one` function: per-level OR-tree + binary decision from
+     highest to lowest bit — no serial chains) → registers
      `lv2_fnd/lv2_emp/lv2_btx` + flags `lv2_afnd/lv2_aemp/lv2_abtx`.
-   - **decode_lv2b** (ST_LV2B nuevo): la prioridad de condiciones y el mux
-     `lv_cand_newq[lv2_fnd]` sobre los índices ya resueltos → los mismos
-     `lv2_mode/lv2_found/lv2_empty/lv2_ins/lv2_newq` y el pulso `error` del
-     decode actual. `lv2_found/lv2_empty/lv2_ins` conservan el valor
-     `0xFFFFFFFF` (ex -1) cuando no hay nivel, para que la etapa 3
-     (`materialize_write`) se comporte idéntica.
-   - El FSM pasa de ST_LV2 → ST_LV3 a ST_LV2 → ST_LV2B → ST_LV3. La etapa 3
-     ya consumía los `lv2_*` un ciclo después del decode; ahora los consume
-     un ciclo después de 2b — semántica observada idéntica.
-   - **Latencia: +1 ciclo** en el camino de todo mensaje de libro (media
-     esperada 44,318 → ~45,3). SEC-URAM-04 (media ≤ 48) se mantiene sin
-     enmendar: margen 2,7 ciclos; si la medida real supera 48, el umbral se
-     re-abre (nunca se ajusta el peor caso).
-2. **Wrapper de síntesis (`itch_chain_synth.sv`) — pines registrados**:
-   - **FIFO de entrada de 4×DW** entre el pin `s_axis_*` y el parser: el
-     `s_axis_tready` del pin lo gobierna un contador local
-     (`f_n < 3`, ruta FF→pin de ~3 niveles) — la ruta `msg_len → tready`
-     desaparece del análisis. Régimen documentado (no ocultado): la
-     backpressure del pin se difiere hasta 3 palabras de amortiguación; la
-     cadena interna y su régimen no cambian; latencia de pin +1 ciclo
-     (la métrica SEC-URAM-04/RTM-LAT-01 mide la cadena, no el wrapper).
-   - **rst_n regenerado** en un FF local (`rst_n_c <= rst_n`): corta la
-     ruta del pin a los R de los FDRE (familias 3). Reset sincronizador de
-     práctica estándar en el wrapper de síntesis.
-   - Los puertos de salida (bbo/depth) NO se registran: el re-run mostró
-     sus rutas en slack inf (salidas del book ya registradas); el
-     `bbo_tready/depth_tready` del pin no aparecen entre las violadas.
-3. **Sin cambios** en: emisión A/B/C (iter 7), sonda estructural
-   (`sm_cap_*`), hash/probe, URAM, contratos AXI de la cadena, tests.
+   - **decode_lv2b** (ST_LV2B, new): condition priority and the mux
+     `lv_cand_newq[lv2_fnd]` over the already-resolved indices → the same
+     `lv2_mode/lv2_found/lv2_empty/lv2_ins/lv2_newq` and the `error` pulse of
+     the current decode. `lv2_found/lv2_empty/lv2_ins` keep the `0xFFFFFFFF`
+     value (ex −1) when there is no level, so stage 3 (`materialize_write`)
+     behaves identically.
+   - The FSM goes from ST_LV2 → ST_LV3 to ST_LV2 → ST_LV2B → ST_LV3. Stage 3
+     already consumed the `lv2_*` one cycle after the decode; now it consumes
+     them one cycle after 2b — observed semantics identical.
+   - **Latency: +1 cycle** on the path of every book message (expected mean
+     44.318 → ~45.3). SEC-URAM-04 (mean ≤ 48) stays without amendment: margin
+     2.7 cycles; if the real measure exceeds 48, the threshold reopens (the worst
+     case is never adjusted).
+2. **Synthesis wrapper (`itch_chain_synth.sv`) — registered pins**:
+   - **4×DW input FIFO** between the `s_axis_*` pin and the parser: the pin's
+     `s_axis_tready` is governed by a local counter (`f_n < 3`, ~3-level FF→pin
+     path) — the `msg_len → tready` path disappears from the analysis. Documented
+     regime (not hidden): the pin's backpressure defers up to 3 words of
+     buffering; the internal chain and its regime do not change; pin latency +1
+     cycle (the SEC-URAM-04/RTM-LAT-01 metric measures the chain, not the
+     wrapper).
+   - **rst_n regenerated** in a local FF (`rst_n_c <= rst_n`): cuts the pin→R
+     path of the FDREs (family 3). Standard synchronizer reset in the synthesis
+     wrapper.
+   - The output ports (bbo/depth) are NOT registered: the re-run showed their
+     paths at inf slack (book outputs already registered); the pin
+     `bbo_tready/depth_tready` do not appear among the violated.
+3. **No change** in: emission A/B/C (iter 7), structural probe (`sm_cap_*`),
+   hash/probe, URAM, chain AXI contracts, tests.
 
-### Objetivos físicos (criterio 10, mismo gate del tcl)
+### Physical goals (criterion 10, same tcl gate)
 
-- WNS ≥ 0 y TNS = 0 post-route a 3,103 ns (el gate `FASE3 TIMING FAIL`
-  sigue intacto; el run mide la cadena en su contexto de integración
-  registrado, documentado arriba).
-- LUT ≤ 95 % post-route (96,49 % actual; la FIFO del wrapper añade ~200 FF
-  y el árbol de 2a reduce la lógica del decode).
-- WHS ≥ 0; URAM 32/48 conservada.
+- WNS ≥ 0 and TNS = 0 post-route at 3.103 ns (the `FASE3 TIMING FAIL` gate is
+  intact; the run measures the chain in its documented registered integration
+  context).
+- LUT ≤ 95 % post-route (96.49 % current; the wrapper FIFO adds ~200 FF and the
+  2a tree reduces the decode logic).
+- WHS ≥ 0; URAM 32/48 kept.
 
-### Equivalencia y regresión
+### Equivalence and regression
 
-- BBO/depth bit a bit vs golden (ND=5 y ND=3), con y sin backpressure: los
-  tests existentes del área (orderbook/phase3/uram + RTM-01..04 +
-  RTM-REG-01 + RTM-LAT-01) son el espejo — la iter 8 no cambia nada
-  observable (misma sonda, mismas salidas, +1 ciclo de latencia cubierto
-  por el umbral). El red→verde de la iter 7 y de la 8 se ejecuta contra el
-  RTL final de la 8 en la máquina con cocotb (el red de la 7 sobre el
-  commit base queda como evidencia histórica: los tests ya existen).
-- Gate E: los 30 mutantes del runner vigente (incluidos los 4 del addendum
-  iter 7) deben compilar y morir contra el RTL de la 8; no se añaden
-  mutantes nuevos (2a/2b no crea contratos nuevos: los índices
-  `lv2_fnd/emp/btx` son internos; un mutante de `first_one` (bit de
-  prioridad invertido) se propone como opcional en la máquina con cocotb.
-- Gate F: sin escenarios nuevos (RTM-01..04/RTM-LAT-01/RTM-REG-01 ya
-  espejan el contrato; la división 2a/2b es interna).
+- BBO/depth bit-exact vs golden (ND=5 and ND=3), with and without backpressure:
+  the existing area tests (orderbook/phase3/uram + RTM-01..04 + RTM-REG-01 +
+  RTM-LAT-01) are the mirror — iter 8 changes nothing observable (same probe,
+  same outputs, +1 latency cycle covered by the threshold). The red→green of
+  iters 7 and 8 runs against the final iter-8 RTL on the cocotb machine (the
+  iter-7 red over the base commit remains as historical evidence: the tests
+  already exist).
+- Gate E: the 30 mutants of the current runner (incl. the 4 of the iter-7
+  addendum) must compile and die against the iter-8 RTL; no new mutants are
+  added (2a/2b creates no new contracts: `lv2_fnd/emp/btx` indices are internal;
+  a `first_one` mutant (inverted priority bit) is proposed as optional on the
+  cocotb machine).
+- Gate F: no new scenarios (RTM-01..04/RTM-LAT-01/RTM-REG-01 already mirror the
+  contract; the 2a/2b split is internal).
 
-### Iteraciones y stop
+### Iterations and stop
 
-Límite de **2 iteraciones** para este loop: iter 8 (decode partido + pines
-registrados, red→verde + run) → iter 9 solo si 8 no cierra (retiming
-dirigido adicional: p. ej. registro de `lv_cand_newq` en la etapa 1 o
-árbol de muxes para el depth pack). Al agotar el límite con WNS < 0 o
-LUT > 95 %, escala al owner con la evidencia del run (el gate del tcl
-nunca se rebaja).
+Limit of **2 iterations** for this loop: iter 8 (split decode + registered pins,
+red→green + run) → iter 9 only if 8 does not close (additional directed
+retiming: e.g. registering `lv_cand_newq` in stage 1 or a mux tree for the
+depth pack). On reaching the limit with WNS < 0 or LUT > 95 %, escalate to the
+owner with the run evidence (the tcl gate is never lowered).
 
-### Addendum iter 9 (2026-08-18) - ultima iteracion del loop
+### Addendum iter 9 (2026-08-18) — last iteration of the loop
 
-**Diagnostico del re-run iter 8 (evidencia en verify-report)**: gate FAIL
-`FASE3 TIMING FAIL: WNS=-4,052 ns` (antes -7,395), TNS -213.040,636 ns
-(antes -430.582,411), LUT as Logic 95,68 % (antes 96,49), URAM 32/48 igual.
-Dos familias de rutas violadas:
+**Iter-8 re-run diagnosis (evidence in verify-report)**: gate FAIL
+`FASE3 TIMING FAIL: WNS=−4.052 ns` (was −7.395), TNS −213,040.636 ns (was
+−430,582.411), LUT as Logic 95.68 % (was 96.49), URAM 32/48 unchanged. Two
+families of violated paths:
 
-1. **Pines del wrapper -> tabla** (las 10 peores, todas el mismo patron):
-   `depth_tready` (pin) -> `o_mem CAS_IN_DIN_B` / FDRE, 12 niveles con
-   7 URAM288 en cascade (write por cascade height 8), input delay 1 ns +
-   skew del pin 2,2 ns. El camino existe porque el guard de aceptacion del
-   par BBO/depth vive en la **entrada de ST_APPLY** (espera `bbo_tready &&
-   depth_tready` antes de aplicar/reescribir la tabla): el `tready` entra
-   en la ruta de decision del write de la URAM.
-2. **Prioridad serial de la emision**: `sm_cap_nzb_reg[2]_rep` ->
-   `sm_changed_reg` con **31 niveles** (CARRY8=2 LUT5=16 LUT6=12 MUXF7=1):
-   los bucles `for (i = 0; i < P && !bdone; i++)` del find-first de la
-   etapa B (P=32) sintetizan la cadena serial de prioridad que la iter 8
-   elimino del decode de niveles pero quedo en la emision.
+1. **Wrapper pins → table** (the 10 worst, all the same pattern): `depth_tready`
+   (pin) → `o_mem CAS_IN_DIN_B` / FDRE, 12 levels with 7 URAM288 in cascade
+   (write by cascade height 8), input delay 1 ns + pin skew 2.2 ns. The path
+   exists because the BBO/depth pair acceptance guard lives at the **entry of
+   ST_APPLY** (waits `bbo_tready && depth_tready` before applying/rewriting the
+   table): the `tready` enters the URAM write decision path.
+2. **Serial emission priority**: `sm_cap_nzb_reg[2]_rep` → `sm_changed_reg` with
+   **31 levels** (CARRY8=2 LUT5=16 LUT6=12 MUXF7=1): the stage-B find-first
+   `for (i = 0; i < P && !bdone; i++)` loops (P=32) synthesize the serial
+   priority chain that iter 8 removed from the level decode but left in the
+   emission.
 
-**Cambios (los tres en el mismo bloque; es la ultima iteracion):**
+**Changes (all three in the same block; it is the last iteration):**
 
-- **a. Guard de aceptacion movido (solo tvalid)**: el par BBO/depth se
-  emite en ST_EMIT_C solo cuando el bus esta vacio
-  (!bbo_tvalid && !depth_tvalid); la cola (apply/swap/writes de la
-  tabla) avanza sin esperar el pin. El tready NO participa en ninguna
-  decision de avance: la ruta tready -> we de la URAM desaparece.
-  Enmienda de diseno (ver c): un tready registrado (aceptacion diferida
-  1 ciclo) duplicaria el par para el consumidor cuando levanta tready un
-  ciclo despues de la emision (el par retenido queda visible dos ciclos
-  con tvalid=1 y tready=1); por eso el guard mira solo los tvalid y el
-  tready del pin se conecta directo a la retencion (linea 501), como en
-  fase 3: sin perdida ni duplicado (SEC-BP-01), la emision del evento
-  siguiente espera el bus vacio y la retirada del par previo (1 ciclo
-  tras su aceptacion, inobservable).
-- **b. Find-first de emision precomputado en la etapa A**: la captura
-  computa tambien `sm_bsel = first_one(nzb_next)` y `sm_asel =
-  first_one(nza_next)` (misma funcion arbol de la iter 8, registrada); la
-  etapa B selecciona por indice: `bp = sm_cap_px[sm_bsel]` (mux directo,
-  sin cadena). Equivalencia: el mux por el primer slot no vacio es la misma
-  operacion del bucle `!bdone`; con todos los slots vacios
-  `first_one = 0` y `sm_cap_px[0] = 0` (igual que el bucle con `bdone=0`).
-- **c. (enmendado) Sin registro de tready en el wrapper**: el analisis
-  del duplicado (ver a) descarta registrar bbo_tready/depth_tready; los
-  pines quedan directos. La familia del pin del run 8 muere por el guard
-  (a): el tready ya no alimenta ninguna ruta al write de la URAM.
-**Objetivos**: WNS >= 0 y TNS = 0 post-route (gate del tcl intacto),
-LUT <= 95 % (95,68 % actual, margen 0,68 pp), URAM 32/48 conservada.
-Latencia de la cadena: sin cambio en esta iteracion (la seleccion por
-indice vive dentro de la etapa A/B existentes).
+- **a. Acceptance guard moved (tvalid only)**: the BBO/depth pair is emitted in
+  ST_EMIT_C only when the bus is empty (!bbo_tvalid && !depth_tvalid); the queue
+  (apply/swap/table writes) advances without waiting for the pin. The tready no
+  longer participates in any advance decision: the tready → URAM we path
+  disappears. Design note (see c): a registered tready (1-cycle deferred
+  acceptance) would duplicate the pair for the consumer when it raises tready
+  one cycle after the emission (the held pair stays visible two cycles with
+  tvalid=1 and tready=1); hence the guard looks only at the tvalids and the
+  pin tready connects directly to the hold (line 501), as in phase 3: no loss
+  nor duplicate (SEC-BP-01), the next event's emission waits for the empty bus
+  and the removal of the previous pair (1 cycle after its acceptance,
+  unobservable).
+- **b. Emission find-first precomputed in stage A**: the capture also computes
+  `sm_bsel = first_one(nzb_next)` and `sm_asel = first_one(nza_next)` (same tree
+  function as iter 8, registered); stage B selects by index:
+  `bp = sm_cap_px[sm_bsel]` (direct mux, no chain). Equivalence: the mux by the
+  first non-empty slot is the same operation as the `!bdone` loop; with all
+  slots empty `first_one = 0` and `sm_cap_px[0] = 0` (same as the loop with
+  `bdone=0`).
+- **c. (amended) No tready register in the wrapper**: the duplicate analysis (see
+  a) discards registering bbo_tready/depth_tready; the pins stay direct. The
+  run-8 pin family dies by the guard (a): tready no longer feeds any path to
+  the URAM write.
 
-**Equivalencia y regresion**: la semantica observada del par BBO/depth no
-cambia (orden, retencion, atomicidad); los writes adelantados respecto a
-la aceptacion del pin son inobservables en los puertos. Rojo->verde de
-RTM-01..04/RTM-LAT-01/RTM-REG-01 contra el RTL final de la 9 en la maquina
-con cocotb (la 8 y la 9 se validan juntas en ese red).
+**Goals**: WNS ≥ 0 and TNS = 0 post-route (tcl gate intact), LUT ≤ 95 %
+(95.68 % current, margin 0.68 pp), URAM 32/48 kept. Chain latency: no change in
+this iteration (the index selection lives inside the existing stages A/B).
 
-**Mutantes**: EMIT-FINDFIRST-INV se migra al objetivo nuevo
-(`sm_bsel <= first_one(nzb_next)` -> `first_one(~nzb_next)`, prioridad
-invertida: el BBO elige el ultimo slot no vacio); los demas objetivos se
-revalidan por coincidencia unica (30/30) y parse xvlog antes del run.
-Sin escenarios Gherkin nuevos (gate F sin cambios).
+**Equivalence and regression**: the observed BBO/depth pair semantics do not
+change (order, hold, atomicity); the writes advanced relative to pin acceptance
+are unobservable at the ports. Red→green of RTM-01..04/RTM-LAT-01/RTM-REG-01
+against the final iter-9 RTL on the cocotb machine (8 and 9 validate together in
+that red).
 
-**Stop**: esta es la ultima iteracion del loop. Si el run no cierra
-WNS >= 0 / TNS = 0 / LUT <= 95 %, el criterio 10 queda abierto y se escala
-al owner con la evidencia del run (WNS/TNS/LUT/URAM + rutas criticas
-residuales); el gate del tcl no se rebaja.
+**Mutants**: EMIT-FINDFIRST-INV migrates to the new target
+(`sm_bsel <= first_one(nzb_next)` → `first_one(~nzb_next)`, inverted priority:
+the BBO picks the last non-empty slot); the other targets revalidate by unique
+match (30/30) and xvlog parse before the run. No new Gherkin scenarios (gate F
+unchanged).
 
-## Addendum iter 10 (2026-08-18, enmienda de continuidad)
+**Stop**: this is the last iteration of the loop. If the run does not close
+WNS ≥ 0 / TNS = 0 / LUT ≤ 95 %, criterion 10 stays open and escalates to the
+owner with the run evidence (WNS/TNS/LUT/URAM + residual critical paths); the
+tcl gate is not lowered.
 
-**Evidencia del run iter 9 (commiteada)**: FASE3 TIMING FAIL: WNS =
--3,527 ns (era -4,052), TNS = -211.438,033 ns (era -213.040,636), 177.459
-endpoints failing, LUT as Logic 155.893/162.720 = **95,80 %**, URAM 32/48,
-IOB 222, DRC 0. El retiming del book funciono: la familia del pin
-depth_tready (12 niveles + URAM cascade del run 8) desaparecio del
-top-10. Las 10 peores del run 9 son la **familia I/O del wrapper**:
-bo_locate_reg[0]/C -> bbo_locate[0] (pin) con 1 nivel (OBUF) pero
-**Clock Path Skew -2,671 ns** (SCD 2,671: el arbol de reloj al area del
-book con LUT al 96 %), Output Delay 1 ns, Data Path 2,924 ns; mismo
-patron en depth_tdata_reg[0] y _n_reg[1] -> s_axis_tready (pin);
-ademas rutas internas cortas de area: out_data_reg_reg[23] (parser ->
-FIFO del wrapper) y ody_acc_reg[2][28] (book) a FDRE, ~12 niveles de
-skew de regiones congestionadas.
+## Addendum iter 10 (2026-08-18, continuity amendment)
 
-**Decision**: la iter 9 era la ultima del loop por el stop documentado;
-por decision del owner se abre UNA iteracion mas, limitada estrictamente
-al wrapper de sintesis (sin tocar el book ni el parser: los gates y el
-red rojo->verde pendiente no cambian de objetivo).
+**Iter-9 run evidence (committed)**: FASE3 TIMING FAIL: WNS = −3.527 ns (was
+−4.052), TNS = −211,438.033 ns (was −213,040.636), 177,459 endpoints failing,
+LUT as Logic 155,893/162,720 = **95.80 %**, URAM 32/48, IOB 222, DRC 0. The
+book retiming worked: the depth_tready pin family (12 levels + URAM cascade of
+run 8) disappeared from the top-10. The 10 worst of run 9 are the **wrapper I/O
+family**: bbo_locate_reg[0]/C → bbo_locate[0] (pin) with 1 level (OBUF) but
+**Clock Path Skew −2.671 ns** (SCD 2.671: the clock tree to the book area with
+LUT at 96 %), Output Delay 1 ns, Data Path 2.924 ns; same pattern in
+depth_tdata_reg[0] and f_n_reg[1] → s_axis_tready (pin); plus short internal
+area paths: out_data_reg_reg[23] (parser → wrapper FIFO) and body_acc_reg[2][28]
+(book) to FDRE, ~12 levels of congested-region skew.
 
-**Cambios (solo synth/itch_chain_synth.sv)**:
+**Decision**: iter 9 was the last of the loop by the documented stop; by owner
+decision ONE more iteration opens, strictly limited to the synthesis wrapper
+(without touching the book or the parser: the gates and the pending red→green do
+not change target).
 
-- **a. IOB packing de las salidas**: los puertos bo_locate,
-  bo_tdata, bo_tvalid, bo_changed, depth_tdata,
-  depth_tvalid llevan (* IOB = \'TRUE\' *); sus FFs (los FFs de
-  salida del book, que solo alimentan el pin, sin fanout interno) se
-  ubican en el IOB, donde el skew del arbol I/O es ~0 y la ruta
-  FF->pin cierra sin el skew -2,67 ns. Efecto secundario: 192 FFs salen
-  del area del book (el arbol interno se alivia y las rutas internas de
-  regiones pueden mejorar).
-- **b. tready de entrada registrado**: s_axis_tready <= (f_n < 3) en
-  un FF propio (con rst_n_c), tambien con IOB. El handshake del pin usa
-  el tready registrado (fifo_hs = tvalid && tready_ff): el productor
-  empuja cuando ve ready=1 y el wrapper cuenta el mismo ready: regimen
-  coherente, sin overflow (f_n <= 3 por construccion), backpressure
-  diferida 1 ciclo en el pin (SEC-BP-01 de la cadena intacta: el parser
-  retiene su par; la FIFO sigue siendo 4xDW).
-  Enmienda respecto al analisis de la iter 9 (c): alli se descarto
-  registrar el tready PORQUE el guard de emision lo miraba; el guard
-  (iter 9 a) ya no mira el tready y el registro vive SOLO en el wrapper:
-  no afecta a la retencion del par (linea 501, pin directo del book).
-  El wrapper no se simula (RTM-LAT mide la cadena, no el wrapper).
+**Changes (only `synth/itch_chain_synth.sv`)**:
 
-**Objetivos**: WNS >= 0 y TNS = 0 post-route (gate intacto), LUT <= 95 %
-(la salida de FFs del area no reduce LUT, solo libera FFs/arbol; 95,80 %
-actual), URAM 32/48, IOB 222 conservado (el packing usa los IOB
-existentes).
+- **a. IOB packing of the outputs**: the ports bbo_locate, bbo_tdata, bbo_tvalid,
+  bbo_changed, depth_tdata, depth_tvalid carry `(* IOB = "TRUE" *)`; their FFs
+  (the book output FFs, which only feed the pin, no internal fanout) are placed
+  in the IOB, where the I/O tree skew is ~0 and the FF→pin path closes without
+  the −2.67 ns skew. Side effect: 192 FFs leave the book area (the internal tree
+  is relieved and internal region paths can improve).
+- **b. Registered input tready**: s_axis_tready <= (f_n < 3) in its own FF (with
+  rst_n_c), also with IOB. The pin handshake uses the registered tready
+  (fifo_hs = tvalid && tready_ff): the producer pushes when it sees ready=1 and
+  the wrapper counts the same ready: coherent regime, no overflow (f_n ≤ 3 by
+  construction), backpressure deferred 1 cycle at the pin (chain SEC-BP-01
+  intact: the parser holds its pair; the FIFO stays 4×DW). Amendment vs the iter-9
+  analysis (c): there it was discarded to register the tready BECAUSE the
+  emission guard looked at it; the guard (iter 9 a) no longer looks at the tready
+  and the register lives ONLY in the wrapper: it does not affect the pair hold
+  (line 501, direct book pin). The wrapper is not simulated (RTM-LAT measures the
+  chain, not the wrapper).
 
-**Equivalencia**: el contrato del pin (AXI-S) se mantiene (ready diferido
-1 ciclo es backpressure legal); el par BBO/depth, la retencion y la
-atomicidad no cambian. Sin escenarios Gherkin nuevos; sin mutantes
-nuevos (el wrapper no se muta).
+**Goals**: WNS ≥ 0 and TNS = 0 post-route (gate intact), LUT ≤ 95 % (moving FFs
+out of the area does not reduce LUT, only frees FFs/tree; 95.80 % current), URAM
+32/48, IOB 222 kept (the packing uses the existing IOBs).
 
-**Stop final**: este es el ultimo run del loop. Si no cierra WNS >= 0 /
-TNS = 0 / LUT <= 95 %, el criterio 10 queda abierto y se escala al owner
-con la evidencia acumulada (run 8: -4,052; run 9: -3,527; run 10: este);
-el gate del tcl no se rebaja.
+**Equivalence**: the pin contract (AXI-S) holds (ready deferred 1 cycle is legal
+backpressure); the BBO/depth pair, the hold and the atomicity do not change. No
+new Gherkin scenarios; no new mutants (the wrapper is not mutated).
 
-## Addendum iter 11 (2026-08-18, enmienda de continuidad)
+**Final stop**: this is the last run of the loop. If it does not close WNS ≥ 0 /
+TNS = 0 / LUT ≤ 95 %, criterion 10 stays open and escalates to the owner with
+the accumulated evidence (run 8: −4.052; run 9: −3.527; run 10: this one); the
+tcl gate is not lowered.
 
-**Evidencia del run iter 10 (commiteada)**: WNS = -3,748 ns (era -3,527),
-TNS = -221.038,368 ns, 178.310 endpoints failing, LUT 155.876/162.720 =
-**95,79 %**, URAM 32/48, IOB 222, DRC 0. El IOB packing **NO mueve los FFs
-de salida del book** (`u_book/bbo_changed_reg` etc. siguen dentro del area,
-Clock Path Skew -3,112 ns en las 10 peores): esos FFs tienen fanout interno
-real (retencion linea 507-508 + guard 838) y el placer no los replica; solo
-se replico `tready_ff` (FF del wrapper). Leccion escrita en
-`docs/writeup/lecciones-aprendidas.md` §7: el IOB packing aplica solo a
-FFs sin fanout interno; un FF interno -> pin pierde ~2,7-3,1 ns de skew
-del arbol (LUT ~96 %) + 1 ns de output delay.
+## Addendum iter 11 (2026-08-18, continuity amendment)
 
-**Decision**: un run mas (iter 11), limitado estrictamente al wrapper de
-sintesis; no toca el book ni el parser (los gates y el red rojo->verde ya
-cerrado en WSL no cambian). Si falla, el criterio 10 queda ABIERTO y se
-escala al owner; el gate del tcl no se rebaja.
+**Iter-10 run evidence (committed)**: WNS = −3.748 ns (was −3.527), TNS =
+−221,038.368 ns, 178,310 endpoints failing, LUT 155,876/162,720 = **95.79 %**,
+URAM 32/48, IOB 222, DRC 0. The IOB packing **does NOT move the book output
+FFs** (`u_book/bbo_changed_reg` etc. remain inside the area, Clock Path Skew
+−3.112 ns in the 10 worst): those FFs have real internal fanout (line 507–508
+hold + 838 guard) and the placer does not replicate them; only `tready_ff`
+(wrapper FF) was replicated. Lesson written in
+`docs/writeup/lessons-learned.md` §7: IOB packing applies only to FFs
+without internal fanout; an internal FF → pin loses ~2.7–3.1 ns of tree skew
+(LUT ~96 %) + 1 ns of output delay.
 
-**Cambios (solo `synth/itch_chain_synth.sv`)**:
+**Decision**: one more run (iter 11), strictly limited to the synthesis wrapper;
+does not touch the book or the parser (the gates and the WSL red→green already
+closed do not change). If it fails, criterion 10 stays OPEN and escalates to the
+owner; the tcl gate is not lowered.
 
-- **Pipeline de salida con retencion del lado del pin**: las salidas
-  `bbo_locate`/`bbo_tdata`/`bbo_tvalid`/`bbo_changed`/`depth_tdata`/
-  `depth_tvalid` dejan de ser los FFs del book (fanout interno, no
-  empaquetables). Se registran en FFs PROPIOS del wrapper con
-  `(* IOB = "TRUE" *)` (el mismo mecanismo que replico tready_ff):
-  - captura cuando el book ofrece un par nuevo: condicion
-    `bbo_tvalid_i && !bbo_tvalid_o` (tvalid interno sin par en el pin).
-  - retencion del lado del pin: `bbo_tvalid_o <= bbo_tvalid_o && !
-    bbo_tready` (el par se retira 1 ciclo despues de la aceptacion
-    externa, identico al regimen del book interno).
-  - `bbo_tready`/`depth_tready` del pin pasan directo al book (linea 501
-    intacta: la retencion interna del par sigue respondiendo al tready
-    externo).
-- El par en el pin es visible exactamente hasta la aceptacion externa; no
-  se duplica si el consumidor mantiene tready=1 (la retencion del pin lo
-  retira). +1 ciclo de latencia SOLO en el pin del wrapper (RTM-LAT mide
-  `itch_chain`, no el wrapper).
+**Changes (only `synth/itch_chain_synth.sv`)**:
 
-**Objetivos**: WNS >= 0 y TNS = 0 post-route (gate intacto), LUT <= 95 %
-(95,79 % actual; el pipeline anade FFs pero no LUT de arbol), URAM 32/48,
-IOB 222 conservado.
+- **Output pipeline with pin-side hold**: the outputs bbo_locate/bbo_tdata/
+  bbo_tvalid/bbo_changed/depth_tdata/depth_tvalid stop being the book FFs
+  (internal fanout, not packable). They are registered in the wrapper's OWN FFs
+  with `(* IOB = "TRUE" *)` (the same mechanism that replicated tready_ff):
+  - capture when the book offers a new pair: condition `bbo_tvalid_i &&
+    !bbo_tvalid_o` (internal tvalid without a pair at the pin).
+  - pin-side hold: `bbo_tvalid_o <= bbo_tvalid_o && !bbo_tready` (the pair is
+    removed 1 cycle after external acceptance, identical to the internal book
+    regime).
+  - the pin `bbo_tready`/`depth_tready` pass directly to the book (line 501
+    intact: the internal pair hold still responds to the external tready).
+- The pair at the pin is visible exactly until external acceptance; it is not
+  duplicated if the consumer keeps tready=1 (the pin hold removes it). +1 latency
+  cycle ONLY at the wrapper pin (RTM-LAT measures `itch_chain`, not the wrapper).
 
-**Equivalencia**: el contrato AXI-S del pin se mantiene; +1 ciclo de
-latencia de pin (documentada). Sin escenarios Gherkin nuevos; sin mutantes
-nuevos (el wrapper no se muta).
+**Goals**: WNS ≥ 0 and TNS = 0 post-route (gate intact), LUT ≤ 95 % (95.79 %
+current; the pipeline adds FFs but no tree LUT), URAM 32/48, IOB 222 kept.
 
-## Addendum iter 11b (2026-08-19) — presupuesto de pines de la variante 156 MHz
+**Equivalence**: the pin AXI-S contract holds; +1 pin latency cycle (documented).
+No new Gherkin scenarios; no new mutants (the wrapper is not mutated).
 
-La variante **DW=64 @ 156,25 MHz** (periodo 6,400 ns) con el wrapper
-completo expone **258 pines > 256 disponibles** del FFVA676 (entrada 64+8,
-bbo_tdata 128, depth_tdata 32) y el placer aborta con `Place 30-58`
-(unplaced IO 257 > 256). No es un problema de timing: es el presupuesto de
-I/O del paquete con la observabilidad completa a DW=64.
+## Addendum iter 11b (2026-08-19) — pin budget of the 156 MHz variant
 
-**Decisión**: el wrapper de síntesis ya recorta observabilidad (depth_tdata
-a [31:0], cross_events/anomaly/error sin pin). Para la variante 156 se
-parametriza el ancho de salida `bbo_tdata` a **64 bits** (`BBO_W=64`, solo
-los precios bid/ask — bits [127:64] del bus del book) y la entrada se queda
-igual. Total: **194 pines <= 256**. El datapath del book/parser NO cambia
-(la lógica medida es idéntica); solo se recorta el bus de observabilidad al
-pin, mismo patrón que el recorte de depth_tdata.
+The **DW=64 @ 156.25 MHz** variant (period 6.400 ns) with the full wrapper
+exposes **258 pins > 256 available** of the FFVA676 (input 64+8, bbo_tdata 128,
+depth_tdata 32) and the placer aborts with `Place 30-58` (unplaced IO 257 > 256).
+It is not a timing problem: it is the package's I/O budget with full
+observability at DW=64.
 
-El tcl `fase3_156mhz.tcl` fija `generic {DW=64 BBO_W=64 K=19 QB=46}` y usa
-`constraints/fase3_156mhz.xdc` (periodo 6,400). El wrapper lo acepta via el
-nuevo `parameter BBO_W = 128` (default) / 64 (variante). La variante 322
-MHz no cambia (BBO_W=128 por defecto).
+**Decision**: the synthesis wrapper already trims observability (depth_tdata to
+[31:0], cross_events/anomaly/error without pin). For the 156 variant the
+`bbo_tdata` output width is parameterized to **64 bits** (`BBO_W=64`, only the
+bid/ask prices — bits [127:64] of the book bus) and the input stays the same.
+Total: **194 pins ≤ 256**. The book/parser datapath does NOT change (the measured
+logic is identical); only the observability bus to the pin is trimmed, the same
+pattern as the depth_tdata trim.
 
-## Addendum iteración 12 (2026-08-19) — feed real de apertura: K=64 y drenado oversize
+The tcl `fase3_156mhz.tcl` sets `generic {DW=64 BBO_W=64 K=19 QB=46}` and uses
+`constraints/fase3_156mhz.xdc` (period 6.400). The wrapper accepts it via the new
+`parameter BBO_W = 128` (default) / 64 (variant). The 322 MHz variant does not
+change (BBO_W=128 by default).
 
-**La campaña se REABRE por dos bugs estructurales que el feed real de
-apertura (210k paquetes / 10,2M mensajes del día 2019-12-30, tramo sin
-filtrar) expone en el RTL verificado de fases 2/3.** El corpus sintético y
-los tramos históricos pequeños nunca los dispararon; la evidencia «feed
-real» anterior (iter 4, media 44,5) era **dependiente del tramo** (su pcap
-tenía refs ≤ 372.297 y ningún mensaje > 44 B — selección afortunada, hoy
-inexistente).
+## Addendum iteration 12 (2026-08-19) — real market-open feed: K=64 and oversize drain
 
-### Hallazgo 1 — REFW/K=19 truncaba refs del día real (REPLAY-01 rojo)
+**The campaign REOPENS for two structural bugs that the real market-open feed
+(210k packets / 10.2M messages of day 2019-12-30, unfiltered stretch) exposes in
+the phase-2/3 verified RTL.** The synthetic corpus and the small historical
+stretches never triggered them; the previous "real feed" evidence (iter 4, mean
+44.5) was **stretch-dependent** (its pcap had refs ≤ 372,297 and no message >
+44 B — a lucky selection, nonexistent today).
 
-Los refs del día real llegan a ~1,7M en la apertura — muy por encima de
-2^19=524.288 (K=19, calibrado sobre el subset chico de fase 2). El RTL
-trunca `K'(ref)` y la tabla guarda REFW=20 bits: dos refs distintos con el
-mismo residuo mod 2^19 colisionan. Reproducción exacta con una réplica
-Python del probe engine (hash=residuo[15:0], PROBE=8, tombstones, semántica
-de qty) sobre el subset de 20 símbolos:
+### Finding 1 — REFW/K=19 truncated real-day refs (REPLAY-01 red)
 
-- **254 eventos perdidos = 17484 (golden) − 17230 (RTL)** — exacto: 223
-  rechazos A/F «duplicada» (residuo ocupado por otro ref vivo), 14 U-newdup,
-  3 rest_neg, 14 anomalías.
-- El primer desajuste visible (evento 2072 = D(2744)) es un síntoma de
-  cascada: el D borra ref=1499381, cuyo A fue rechazado antes por colisión
-  de residuo → la sonda no encuentra la ref → anomaly sin evento.
+The real-day refs reach ~1.7M at the open — far above 2^19=524,288 (K=19,
+calibrated on the small phase-2 subset). The RTL truncates `K'(ref)` and the
+table stores REFW=20 bits: two distinct refs with the same residue mod 2^19
+collide. Exact reproduction with a Python replica of the probe engine
+(hash=residue[15:0], PROBE=8, tombstones, qty semantics) over the 20-symbol
+subset:
 
-**Fix**: `K` default 19 → **64** (ref del wire sin truncar; 64 bits del
-contrato del golden) y `REFW` pasa de localparam fijo 20 a
-`max(K, 20)` (K≤20 conserva el layout verificado de 86 bits; K=64 →
-OW=1+64+1+32+32=**130 bits**). URAM estimada **32/48 conservada** (2
-columnas de 72 bits por banco; 130 ≤ 144; la inferencia se re-mide en el
-re-run). La réplica sin truncar da **17.484 eventos y 0 anomalías** —
-coincide con el golden bit a bit.
+- **254 lost events = 17,484 (golden) − 17,230 (RTL)** — exact: 223 rejected
+  A/F "duplicate" (residue occupied by another live ref), 14 U-newdup, 3
+  rest_neg, 14 anomalies.
+- The first visible mismatch (event 2072 = D(2744)) is a cascade symptom: the D
+  deletes ref=1,499,381, whose A was rejected earlier by residue collision → the
+  probe does not find the ref → anomaly without event.
 
-### Hallazgo 2 — el parser deadlockeaba con mensajes > 44 B (sim-lat rojo)
+**Fix**: `K` default 19 → **64** (wire ref untruncated; 64 bits of the golden
+contract) and `REFW` goes from fixed localparam 20 to `max(K, 20)` (K≤20 keeps
+the verified 86-bit layout; K=64 → OW=1+64+1+32+32=**130 bits**). Estimated URAM
+**32/48 kept** (2 columns of 72 bits per bank; 130 ≤ 144; the inference is
+re-measured in the re-run). The untruncated replica gives **17,484 events and 0
+anomalies** — matches the golden bit-exact.
 
-`itch_chain.sv` fija `QB=46`; `ST_LEN` espera `avail >= 2+len` para capturar
-a `msg_reg` (352 bits = 44 B máx.). El subset de apertura contiene **2.289
-mensajes I (NOII, 50 B)**: `2+len=52 > 46` → la condición nunca se cumple →
-`tready=0` indefinido (la cola no puede completar el mensaje y el eop del
-burst no llega) → «tlast aceptados=0». A DW=64/QB=64 (fase 2) 52 ≤ 64 cabe:
-por eso el bug solo muerde en la variante 32.
+### Finding 2 — the parser deadlocked with messages > 44 B (sim-lat red)
 
-**Fix**: nuevo estado `ST_DRAIN` en el parser: si `2+len > QB` el mensaje se
-**drena por el stream sin buffer ni registro** (drenaje dinámico
-`min(drop_left, avail)` por la cola + aceptación en paralelo `can_da`, que
-conserva el alineamiento del mensaje siguiente). El I no está en el subset
-del parser (`issubset`) → jamás emite registro; la validación `explen`
-consistente con el resto del framer. El datagrama truncado dentro de un
-oversize mantiene la semántica SEC-FRM-01 (error + reinicio).
+`itch_chain.sv` sets `QB=46`; `ST_LEN` waits `avail >= 2+len` to capture to
+`msg_reg` (352 bits = 44 B max). The open subset contains **2,289 I messages
+(NOII, 50 B)**: `2+len=52 > 46` → the condition never holds → `tready=0`
+indefinitely (the queue cannot complete the message and the burst eop never
+arrives) → "accepted tlasts=0". At DW=64/QB=64 (phase 2) 52 ≤ 64 fits: that is
+why the bug only bites in the 32 variant.
 
-### Criterios reabiertos y evidencia
+**Fix**: new `ST_DRAIN` state in the parser: if `2+len > QB` the message is
+**drained by the stream without buffer or record** (dynamic drain
+`min(drop_left, avail)` through the queue + parallel acceptance `can_da`, which
+preserves the alignment of the next message). The I is not in the parser subset
+(`issubset`) → never emits a record; the `explen` validation consistent with the
+rest of the framer. A datagram truncated inside an oversize keeps the SEC-FRM-01
+semantics (error + restart).
 
-- **Criterios 2/4/8 (fase3-optimizacion)** y **REPLAY-01/REPLAY-02 (fase 2)**:
-  re-ejecutados con K=64 sobre el subset real — deben volver a verde
-  (rojo→verde explícito, el rojo queda documentado con esta enmienda).
-- **Criterio 10**: la síntesis se re-ejecuta (mismos tcl, `K=64`):
-  WNS/TNS/utilización frescos con OW=130. El wrapper `itch_chain_synth.sv`
-  y los tcl actualizan su default/`generic` de K a 64.
-- **Criterio 8 (latencia)**: el histograma cambia (los hashes de refs ≥ 2^19
-  cambian de base: el hash usa el ref completo, no el residuo truncado); se
-  re-mide y re-commitea (determinista dentro de la config nueva). El umbral
-  RTM-LAT-01 (media ≤ 48) se mantiene sin enmendar.
-- **Gherkin**: escenarios nuevos **REF64-01** (subset real bit a bit con
-  K=64), **REF64-02** (refs que difieren en 2^19 no colisionan; rojo a
-  K=19), **OVR-01** (drenado oversize sin deadlock). Gate F actualizado.
-- **Mutantes (gate E)**: el runner se re-ejecuta (30/30); los literales de
-  `apply_one`/sonda no cambian. Un mutante nuevo **REF-TRUNC-01** (hash o
-  comparación sobre el ref truncado a 19 bits) mata con REF64-01/02.
+### Reopened criteria and evidence
 
-## Addendum iteración 13 (2026-08-19) — push-out P=32: el desborde ya no congela el BBO
+- **Criteria 2/4/8 (fase3-optimizacion)** and **REPLAY-01/REPLAY-02 (phase 2)**:
+  re-run with K=64 over the real subset — must return to green (explicit
+  red→green, the red is documented with this addendum).
+- **Criterion 10**: synthesis re-run (same tcl, `K=64`): fresh WNS/TNS/
+  utilization with OW=130. The `itch_chain_synth.sv` wrapper and the tcls update
+  their default/`generic` K to 64.
+- **Criterion 8 (latency)**: the histogram changes (the hashes of refs ≥ 2^19
+  change base: the hash uses the full ref, not the truncated residue); re-measured
+  and re-committed (deterministic within the new config). The RTM-LAT-01
+  threshold (mean ≤ 48) stays without amendment.
+- **Gherkin**: new scenarios **REF64-01** (real subset bit-exact with K=64),
+  **REF64-02** (refs differing by 2^19 do not collide; red at K=19), **OVR-01**
+  (oversize drain without deadlock). Gate F updated.
+- **Mutants (gate E)**: the runner re-runs (30/30); the `apply_one`/probe
+  literals do not change. A new mutant **REF-TRUNC-01** (hash or comparison over
+  the ref truncated to 19 bits) is killed by REF64-01/02.
 
-**REPLAY-01 seguía rojo tras el K=64** con el RTL ya corregido en 12: los
-totales coincidían (17.484 eventos) pero el primer desajuste se movió al
-**evento 3353**. `sm_cap` mostró la causa: la lista ask del símbolo 13 estaba
-**llena a 32 niveles invariantes** (último `3030000,20`) y el guard de
-`decode_lv2b` (SEC-OV-01, iter 3) **rechazaba el insert incluso cuando el
-precio nuevo era mejor que el peor nivel** — el BBO ask quedaba congelado.
+## Addendum iteration 13 (2026-08-19) — push-out P=32: the overflow no longer freezes the BBO
 
-### Hallazgo 3 — el golden sin límite de niveles vs P=32 con rechazo
+**REPLAY-01 stayed red after K=64** with the RTL already corrected in 12: the
+totals matched (17,484 events) but the first mismatch moved to **event 3353**.
+`sm_cap` showed the cause: the ask list of symbol 13 was **full at 32 invariant
+levels** (last `3030000,20`) and the `decode_lv2b` guard (SEC-OV-01, iter 3)
+**rejected the insert even when the new price was better than the worst level** —
+the ask BBO stayed frozen.
 
-`max_levels_day.py` sobre el subset real: el día alcanza **420 niveles bid
-(loc 13, pico en msg 20689), 291 ask (loc 13)**, resto ≤ 174. P=32 se
-dimensionó sobre un tramo antiguo (máx. 17). La réplica push-out con el
-golden corregido mide:
+### Finding 3 — the golden without level limit vs P=32 with rejection
 
-| Arquitectura | 17484 eventos | Divergencia | Coste |
+`max_levels_day.py` over the real subset: the day reaches **420 bid levels
+(loc 13, peak at msg 20689), 291 ask (loc 13)**, rest ≤ 174. P=32 was sized on
+an old stretch (max 17). The push-out replica with the corrected golden measures:
+
+| Architecture | 17,484 events | Divergence | Cost |
 |---|---|---|---|
-| Rechazo (RTL pre-13) | 1 | evento 3353 (BBO congelado) | — |
-| **Push-out P=32** | **0** en BBO | — | 3.156 descartes fuera del top-32 (SEC-OV) |
-| Top-P + tail hash P=32/64/96 | 0 (también profundidad) | — | 1.465/790/750 rebalanceos; tail ≤ 388 |
+| Rejection (RTL pre-13) | 1 | event 3353 (frozen BBO) | — |
+| **Push-out P=32** | **0** in BBO | — | 3,156 discards outside the top-32 (SEC-OV) |
+| Top-P + tail hash P=32/64/96 | 0 (also depth) | — | 1,465/790/750 rebalances; tail ≤ 388 |
 
-Además: el guard de rechazo descartaba el insert aunque hubiera metro del
-mejor al peor en la lista llena; el `materialize` de la etapa 3 **ya
-implementaba el push-out** (`lv2_empty=0xFFFFFFFF` → desplazamiento a la
-derecha y descarte del peor), así que el push-out fue un cambio de guard, no
-de materialización. `P=512` FF para cubrir el día bit a bit sin tail es
-inviable (presupuesto LUT/FF + cierre de timing).
+Additionally: the rejection guard discarded the insert even though there was a
+better-than-worst in the full list; the stage-3 `materialize` **already
+implemented the push-out** (`lv2_empty=0xFFFFFFFF` → shift right and discard the
+worst), so the push-out was a guard change, not a materialization change. `P=512`
+FF to cover the day bit-exact without tail is unviable (LUT/FF budget + timing
+closure).
 
-### Decisión — SEC-OV-01 enmendado: push-out en el desborde
+### Decision — SEC-OV-01 amended: push-out on overflow
 
-En `decode_lv2b`, cuando `!lv2_afnd && !lv2_aemp` (lista llena y nivel
-ausente):
+In `decode_lv2b`, when `!lv2_afnd && !lv2_aemp` (list full and level absent):
 
-- `delta > 0` y hay un nivel peor que el nuevo (`lv2_abtx`): **INSERT**
-  (push-out): entra en `lv2_ins=lv2_btx`, el materialize desplaza a la
-  derecha y descarta el peor. El libro conserva el mejor-P.
-- resto (`delta < 0` sobre un nivel ya descartado por overflow previo, o add
-  peor que el peor): **descarte SEC-OV-01** (pulso `error`, jamás phantom).
+- `delta > 0` and there is a level worse than the new one (`lv2_abtx`): **INSERT**
+  (push-out): enters `lv2_ins=lv2_btx`, the materialize shifts right and discards
+  the worst. The book keeps the best-P.
+- rest (`delta < 0` over an already-discarded-by-overflow level, or an add worse
+  than the worst): **SEC-OV-01 discard** (pulse `error`, never phantom).
 
-Consecuencias verificadas (réplicas): el BBO del día es **bit a bit** con
-P=32 (0 divergencias en 17.484 eventos); el top-P siempre contiene el mejor-P
-vigente; la profundidad top-N (N ≤ P) es exacta; los niveles más allá de P se
-señalizan con `error` (SEC-OV) y se documentan como límite de la variante. El
-régimen de backpressure/latencia no cambia (el push-out se resuelve en las
-mismas etapas 2b/3).
+Verified consequences (replicas): the day's BBO is **bit-exact** with P=32 (0
+divergences in 17,484 events); the top-P always contains the current best-P; the
+top-N depth (N ≤ P) is exact; the levels beyond P are signalled with `error`
+(SEC-OV) and documented as the variant's limit. The backpressure/latency regime
+does not change (the push-out resolves in the same stages 2b/3).
 
-Mejora futura documentada (no implementada; opción B medida): **top-P + tail
-hash en URAM** para exactitud total también de profundidad; coste estimado
-1.465 rebalanceos/día × escaneo acotado del tail (≤ 388 niveles) y reuso de
-los 32 URAM.
+Documented future improvement (not implemented; option B measured): **top-P +
+tail hash in URAM** for total depth exactness too; estimated cost 1,465
+rebalances/day × bounded tail scan (≤ 388 levels) and reuse of the 32 URAM.
 
-### Evidencia pendiente
+### Pending evidence
 
-- Rojo del evento 3353 ya documentado arriba (REPLAY-01, RTL pre-13).
-- Verde: `test_repro_ask_insert_mejor_precio` (ventana 4.042) y REPLAY-01
-  completo bit a bit sobre el subset real en WSL.
-- Regresión fase 2/3 completa (orderbook + phase3 + uram) y gate E. Las
-  constantes de RTL verificadas (K=64, OW=130) no cambian; la síntesis de la
-  iter 12 no se re-ejecuta salvo que el cierre lo exija.
-- Gherkin: **SEC-OV-01** se enmienda a la semántica push-out (escenario
-  nuevo `OVR-PUSH-01`: lista llena + add mejor que el peor → el BBO refleja
-  el nuevo mejor y el peor sale; add peor que el peor → `error`).
+- Red of event 3353 already documented above (REPLAY-01, RTL pre-13).
+- Green: `test_repro_ask_insert_mejor_precio` (window 4,042) and full REPLAY-01
+  bit-exact over the real subset in WSL.
+- Full phase-2/3 regression (orderbook + phase3 + uram) and gate E. The verified
+  RTL constants (K=64, OW=130) do not change; the iter-12 synthesis is not
+  re-run unless closure demands it.
+- Gherkin: **SEC-OV-01** amended to the push-out semantics (new scenario
+  `OVR-PUSH-01`: full list + add better than the worst → the BBO reflects the new
+  best and the worst leaves; add worse than the worst → `error`).
 
-## Addendum iteración 15 (2026-08-20) — drenado oversize bit a bit + re-derivación de latencia
+## Addendum iteration 15 (2026-08-20) — bit-exact oversize drain + latency re-derivation
 
-**REPLAY-01 / CHAIN-01 ya daban el BBO bit a bit con el push-out del 13, pero
-el chain01 sobre el feed real seguía rojo: el parser a DW=32/QB=46 perdía el
-mensaje siguiente a cada `I` (NOII, 2+len=52 > QB=46) drenado.** Sobre el
-subset real, 2.289 `I` obligan al drenado (el mensaje no cabe en la cola de
-46 bytes). El análisis aisló tres causas acumuladas del drenado, todas
-corregidas en `itch_parser.sv`:
+**REPLAY-01 / CHAIN-01 already gave the bit-exact BBO with the iter-13 push-out,
+but chain01 over the real feed stayed red: the parser at DW=32/QB=46 lost the
+message following each drained `I` (NOII, 2+len=52 > QB=46).** Over the real
+subset, 2,289 `I` force the drain (the message does not fit the 46-byte queue).
+The analysis isolated three accumulated drain causes, all fixed in
+`itch_parser.sv`:
 
-### Hallazgo A — `drop_left` sin descontar el beat del ciclo de detección
+### Finding A — `drop_left` without discounting the detection-cycle beat
 
-La rama oversize de `ST_LEN` calculaba `drop_left = 2+len - avail` sin contar
-el beat aceptado por `can_aug` en el MISMO ciclo de detección (cuyos bytes se
-descartan): el drenado consumía un beat de más del mensaje siguiente (3 bytes
-comidos → loc 14 leído como 13 en chain01). **Fix**: `drop_left = 2+len -
-qn_post` (avail + el beat del ciclo).
+The oversize `ST_LEN` branch computed `drop_left = 2+len - avail` without
+counting the beat accepted by `can_aug` in the SAME detection cycle (whose bytes
+are discarded): the drain consumed one extra beat of the next message (3 bytes
+eaten → loc 14 read as 13 in chain01). **Fix**: `drop_left = 2+len - qn_post`
+(avail + the cycle's beat).
 
-### Hallazgo B — la retención del cruce de beat conservaba los bytes equivocados
+### Finding B — the beat-crossing hold kept the wrong bytes
 
-El `drain_strad` retenía `in_compact >> (8*drop_left)`, i.e. los bytes ALTOS
-(los del mensaje a descartar, `byte0` = primer-recibido en el MSB) en vez de
-la cola del mensaje siguiente. **Fix**: retener la máscara de los bytes BAJOS
-(`in_compact & ((1 << 8*retain_n) - 1)`), con `retain_n = in_nbytes -
-drop_left`. Sin esto el mensaje siguiente quedaba sin su campo `size`/`type`.
+The `drain_strad` held `in_compact >> (8*drop_left)`, i.e. the HIGH bytes (those
+of the message to discard, `byte0` = first-received in the MSB) instead of the
+next message's tail. **Fix**: hold the mask of the LOW bytes
+(`in_compact & ((1 << 8*retain_n) - 1)`), with `retain_n = in_nbytes -
+drop_left`. Without this the next message lost its `size`/`type` field.
 
-### Hallazgo C — (sanezamiento) el mencion se hará según el feed
+### Finding C — (cleanup) the mention will follow the feed
 
-Cronología del parlamento brevísimo: tras A y B, chain01 sobre el feed real a
-QB=46 queda **bit a bit** (17484 BBO + conteo exacto + depth), y la regresión
-fase 2/3 completa (parser 32/32, orderbook 17/17, uram) queda verde.
+Brief chronology: after A and B, chain01 over the real feed at QB=46 is
+**bit-exact** (17,484 BBO + exact count + depth), and the full phase-2/3
+regression (parser 32/32, orderbook 17/17, uram) is green.
 
-### Criterio 8 (latencia) — re-derivación sobre el feed real
+### Criterion 8 (latency) — re-derivation over the real feed
 
-El umbral `RTM-LAT-01` (media wire→BBO ≤ 48 ciclos, addendum iter 7) fue
-calibrado sobre el tramo novedoso que el propio addendum iter 12 declaraba
-«selección afortunada, hoy inexistente» (refs ≤ 372k, sin mensajes > 44 B).
-Sobre el feed real representativo (2019-12-30, con 2.289 `I` que empujan el
-drenado a QB=46 en carga sostenida), la media es **65,5 ciclos (203,3 ns @
-322,265625 MHz)**, determinista entre re-ejecuciones. El presupuesto absoluto
-del documento maestro (§0.1) sigue satisfecho (203,3 ns < 214,9 ns). Por
-decisión de contrato documentada, el umbral se **re-deriva a `mean <= 70
-ciclos` (217,3 ns)** con margen sobre la media medida y el histograma por
-tipo persistido en `verification/vectors/latency/latency_dw32.json`. No se
-rebaja en silencio: la evidencia cruda y la justificación viven aquí y en el
-test (`LAT_THRESHOLD_CICLOS = 70`).
+The `RTM-LAT-01` threshold (mean wire→BBO ≤ 48 cycles, iter-7 addendum) was
+calibrated on the lucky stretch that iter-12 itself declared "a lucky selection,
+nonexistent today" (refs ≤ 372k, no message > 44 B). Over the representative real
+feed (2019-12-30, with 2,289 `I` that push the drain at QB=46 under sustained
+load), the mean is **65.5 cycles (203.3 ns @ 322.265625 MHz)**, deterministic
+across re-runs. The master document's absolute budget (§0.1) still holds (203.3
+ns < 214.9 ns). By documented contract decision, the threshold is **re-derived to
+`mean ≤ 70 cycles` (217.3 ns)** with margin over the measured mean and the
+per-type histogram persisted in
+`verification/vectors/latency/latency_dw32.json`. Not lowered silently: the raw
+evidence and justification live here and in the test
+(`LAT_THRESHOLD_CICLOS = 70`).
 
-### Enmiendas de criterios por el push-out (mismo contrato del 13)
+### Criterion amendments for the push-out (same iter-13 contract)
 
-- **OVR-01 / INV-OV-01 / SEC-URAM-03**: con P=32+push-out el add-33 a un
-  precio MEJOR que el peor entra legítimamente (ya NO descarta la op con
-  error, como hacía el rechazo del iter 3); solo el reduce sobre un nivel
-  descartado en el desborde señala `SEC-OV` (`errores == 1`, no `>= 2`).
-- **Depth (CHAIN-01 / DP-02)**: la profundidad top-N es `bit a bit` mientras
-  un lado no supere P=32 niveles; un nivel descartado en un pico >P puede
-  **re-entrar** en el top-N (loc13 llega a 420 en el día) → la exactitud bit
-  a bit del depth es imposible con P finito para este feed, y las cantidades
-  de los niveles re-entrados pueden ser parciales. Contrato enmendado
-  (`OVR-PUSH-01`): BBO **bit a bit**; depth bit a bit hasta la 1ª re-entrada
-  (`evento 14461`, loc13) y subconjunto a nivel de **precio** después
-  (jamás un fantasma). La opción B (tail hash en URAM) daría depth exacto
-  para el día, con ~1.465 rebalances y un tail ≤ 388 niveles (medida de la
-  iter 13, no implementada).
+- **OVR-01 / INV-OV-01 / SEC-URAM-03**: with P=32+push-out the add-33 at a price
+  BETTER than the worst enters legitimately (it NO LONGER discards the op with
+  error, as the iter-3 rejection did); only a reduce over a level discarded in
+  the overflow signals `SEC-OV` (`errores == 1`, not `>= 2`).
+- **Depth (CHAIN-01 / DP-02)**: the top-N depth is `bit-exact` while a side does
+  not exceed P=32 levels; a level discarded at a >P peak can **re-enter** the
+  top-N (loc13 reaches 420 on the day) → bit-exact depth is impossible with
+  finite P for this feed, and the quantities of the re-entered levels may be
+  partial. Amended contract (`OVR-PUSH-01`): BBO **bit-exact**; depth bit-exact
+  until the first re-entry (`event 14461`, loc13) and a subset at **price** level
+  afterwards (never a phantom). Option B (tail hash in URAM) would give exact day
+  depth, with ~1,465 rebalances and a tail ≤ 388 levels (iter-13 measure, not
+  implemented).

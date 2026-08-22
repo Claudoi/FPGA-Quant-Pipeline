@@ -1,0 +1,2459 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanced Micro Devices, Inc. All Rights Reserved.
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version      : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
+| Date              : Fri Aug 21 18:15:21 2026
+| Host              : atini running 64-bit major release  (build 9200)
+| Command           : report_timing_summary -check_timing_verbose -report_unconstrained -max_paths 10 -file <local-build-path>/synth/reports/322mhz/timing_impl.txt
+| Design            : itch_chain_synth
+| Device            : xcku3p-ffva676
+| Speed File        : -2L  PRODUCTION 1.29 05-01-2022
+| Design State      : Routed
+| Temperature Grade : E
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Summary Report
+
+------------------------------------------------------------------------------------------------
+| Timer Settings
+| --------------
+------------------------------------------------------------------------------------------------
+
+  Enable Multi Corner Analysis               :  Yes
+  Enable Pessimism Removal                   :  Yes
+  Pessimism Removal Resolution               :  Nearest Common Node
+  Enable Input Delay Default Clock           :  No
+  Enable Preset / Clear Arcs                 :  No
+  Disable Flight Delays                      :  No
+  Ignore I/O Paths                           :  No
+  Timing Early Launch at Borrowing Latches   :  No
+  Borrow Time for Max Delay Exceptions       :  Yes
+  Merge Timing Exceptions                    :  Yes
+  Inter-SLR Compensation                     :  Conservative
+
+  Corner  Analyze    Analyze    
+  Name    Max Paths  Min Paths  
+  ------  ---------  ---------  
+  Slow    Yes        Yes        
+  Fast    Yes        Yes        
+
+
+------------------------------------------------------------------------------------------------
+| Report Methodology
+| ------------------
+------------------------------------------------------------------------------------------------
+
+Rule       Severity  Description                                             Violations  
+---------  --------  ------------------------------------------------------  ----------  
+TIMING-16  Warning   Large setup violation                                   1000        
+CLKC-54    Advisory  Pulse Width or Min Period Violation on FD placed in IO  204         
+
+Note: This report is based on the most recent report_methodology run and may not be up-to-date. Run report_methodology on the current design for the latest report.
+
+
+
+check_timing report
+
+Table of Contents
+-----------------
+1. checking no_clock (0)
+2. checking constant_clock (0)
+3. checking pulse_width_clock (0)
+4. checking unconstrained_internal_endpoints (0)
+5. checking no_input_delay (0)
+6. checking no_output_delay (0)
+7. checking multiple_clock (0)
+8. checking generated_clocks (0)
+9. checking loops (0)
+10. checking partial_input_delay (0)
+11. checking partial_output_delay (0)
+12. checking latch_loops (0)
+
+1. checking no_clock (0)
+------------------------
+ There are 0 register/latch pins with no clock.
+
+
+2. checking constant_clock (0)
+------------------------------
+ There are 0 register/latch pins with constant_clock.
+
+
+3. checking pulse_width_clock (0)
+---------------------------------
+ There are 0 register/latch pins which need pulse_width check
+
+
+4. checking unconstrained_internal_endpoints (0)
+------------------------------------------------
+ There are 0 pins that are not constrained for maximum delay.
+
+ There are 0 pins that are not constrained for maximum delay due to constant clock.
+
+
+5. checking no_input_delay (0)
+------------------------------
+ There are 0 input ports with no input delay specified.
+
+ There are 0 input ports with no input delay but user has a false path constraint.
+
+
+6. checking no_output_delay (0)
+-------------------------------
+ There are 0 ports with no output delay specified.
+
+ There are 0 ports with no output delay but user has a false path constraint
+
+ There are 0 ports with no output delay but with a timing clock defined on it or propagating through it
+
+
+7. checking multiple_clock (0)
+------------------------------
+ There are 0 register/latch pins with multiple clocks.
+
+
+8. checking generated_clocks (0)
+--------------------------------
+ There are 0 generated clocks that are not connected to a clock source.
+
+
+9. checking loops (0)
+---------------------
+ There are 0 combinational loops in the design.
+
+
+10. checking partial_input_delay (0)
+------------------------------------
+ There are 0 input ports with partial input delay specified.
+
+
+11. checking partial_output_delay (0)
+-------------------------------------
+ There are 0 ports with partial output delay specified.
+
+
+12. checking latch_loops (0)
+----------------------------
+ There are 0 combinational latch loops in the design through latch input
+
+
+
+------------------------------------------------------------------------------------------------
+| Design Timing Summary
+| ---------------------
+------------------------------------------------------------------------------------------------
+
+    WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
+    -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
+     -3.330  -202927.375                 181910               289957        0.020        0.000                      0               289957       -4.897     -131.880                     180                 95586  
+
+
+Timing constraints are not met.
+
+
+------------------------------------------------------------------------------------------------
+| Clock Summary
+| -------------
+------------------------------------------------------------------------------------------------
+
+Clock         Waveform(ns)         Period(ns)      Frequency(MHz)
+-----         ------------         ----------      --------------
+clk_pipeline  {0.000 1.551}        3.103           322.269         
+
+
+------------------------------------------------------------------------------------------------
+| Intra Clock Table
+| -----------------
+------------------------------------------------------------------------------------------------
+
+Clock             WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints     WPWS(ns)     TPWS(ns)  TPWS Failing Endpoints  TPWS Total Endpoints  
+-----             -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------     --------     --------  ----------------------  --------------------  
+clk_pipeline       -3.330  -202927.375                 181910               289957        0.020        0.000                      0               289957       -4.897     -131.880                     180                 95586  
+
+
+------------------------------------------------------------------------------------------------
+| Inter Clock Table
+| -----------------
+------------------------------------------------------------------------------------------------
+
+From Clock    To Clock          WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints  
+----------    --------          -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------  
+
+
+------------------------------------------------------------------------------------------------
+| Other Path Groups Table
+| -----------------------
+------------------------------------------------------------------------------------------------
+
+Path Group    From Clock    To Clock          WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints      WHS(ns)      THS(ns)  THS Failing Endpoints  THS Total Endpoints  
+----------    ----------    --------          -------      -------  ---------------------  -------------------      -------      -------  ---------------------  -------------------  
+
+
+------------------------------------------------------------------------------------------------
+| User Ignored Path Table
+| -----------------------
+------------------------------------------------------------------------------------------------
+
+Path Group    From Clock    To Clock    
+----------    ----------    --------    
+
+
+------------------------------------------------------------------------------------------------
+| Unconstrained Path Table
+| ------------------------
+------------------------------------------------------------------------------------------------
+
+Path Group    From Clock    To Clock    
+----------    ----------    --------    
+(none)                      clk_pipeline  
+
+
+------------------------------------------------------------------------------------------------
+| Timing Details
+| --------------
+------------------------------------------------------------------------------------------------
+
+
+---------------------------------------------------------------------------------------------------
+From Clock:  clk_pipeline
+  To Clock:  clk_pipeline
+
+Setup :       181910  Failing Endpoints,  Worst Slack       -3.330ns,  Total Violation  -202927.375ns
+Hold  :            0  Failing Endpoints,  Worst Slack        0.020ns,  Total Violation        0.000ns
+PW    :          180  Failing Endpoints,  Worst Slack       -4.897ns,  Total Violation     -131.880ns
+---------------------------------------------------------------------------------------------------
+
+
+Max Delay Paths
+--------------------------------------------------------------------------------------
+Slack (VIOLATED) :        -3.330ns  (required time - arrival time)
+  Source:                 bbo_locate_o_reg[15]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[15]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.703ns  (logic 2.700ns (99.889%)  route 0.003ns (0.111%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.695ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.695ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.422ns (routing 0.347ns, distribution 1.075ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.422     2.695    clk_IBUF_BUFG
+    HDIOLOGIC_M_X0Y15    FDRE                                         r  bbo_locate_o_reg[15]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_M_X0Y15    FDRE (Prop_OPFF_HDIOLOGIC_M_C_Q)
+                                                      0.366     3.061 r  bbo_locate_o_reg[15]/Q
+                         net (fo=1, routed)           0.003     3.064    bbo_locate_OBUF[15]
+    AE10                 OBUF (Prop_OUTBUF_HDIOB_M_I_O)
+                                                      2.334     5.398 r  bbo_locate_OBUF[15]_inst/O
+                         net (fo=0)                   0.000     5.398    bbo_locate[15]
+    AE10                                                              r  bbo_locate[15] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.398    
+  -------------------------------------------------------------------
+                         slack                                 -3.330    
+
+Slack (VIOLATED) :        -3.315ns  (required time - arrival time)
+  Source:                 depth_tdata_o_reg[0]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            depth_tdata[0]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.666ns  (logic 2.663ns (99.887%)  route 0.003ns (0.113%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.717ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.717ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.444ns (routing 0.347ns, distribution 1.097ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.444     2.717    clk_IBUF_BUFG
+    HDIOLOGIC_M_X0Y11    FDRE                                         r  depth_tdata_o_reg[0]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_M_X0Y11    FDRE (Prop_OPFF_HDIOLOGIC_M_C_Q)
+                                                      0.366     3.083 r  depth_tdata_o_reg[0]/Q
+                         net (fo=1, routed)           0.003     3.086    depth_tdata_OBUF[0]
+    AB12                 OBUF (Prop_OUTBUF_HDIOB_M_I_O)
+                                                      2.297     5.383 r  depth_tdata_OBUF[0]_inst/O
+                         net (fo=0)                   0.000     5.383    depth_tdata[0]
+    AB12                                                              r  depth_tdata[0] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.383    
+  -------------------------------------------------------------------
+                         slack                                 -3.315    
+
+Slack (VIOLATED) :        -3.312ns  (required time - arrival time)
+  Source:                 depth_tdata_o_reg[1]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            depth_tdata[1]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.663ns  (logic 2.660ns (99.887%)  route 0.003ns (0.113%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.717ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.717ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.444ns (routing 0.347ns, distribution 1.097ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.444     2.717    clk_IBUF_BUFG
+    HDIOLOGIC_S_X0Y11    FDRE                                         r  depth_tdata_o_reg[1]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_S_X0Y11    FDRE (Prop_OPFF_HDIOLOGIC_S_C_Q)
+                                                      0.359     3.076 r  depth_tdata_o_reg[1]/Q
+                         net (fo=1, routed)           0.003     3.079    depth_tdata_OBUF[1]
+    AB11                 OBUF (Prop_OUTBUF_HDIOB_S_I_O)
+                                                      2.301     5.380 r  depth_tdata_OBUF[1]_inst/O
+                         net (fo=0)                   0.000     5.380    depth_tdata[1]
+    AB11                                                              r  depth_tdata[1] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.380    
+  -------------------------------------------------------------------
+                         slack                                 -3.312    
+
+Slack (VIOLATED) :        -3.310ns  (required time - arrival time)
+  Source:                 bbo_locate_o_reg[2]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[2]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.682ns  (logic 2.679ns (99.888%)  route 0.003ns (0.112%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.696ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.696ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.423ns (routing 0.347ns, distribution 1.076ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.423     2.696    clk_IBUF_BUFG
+    HDIOLOGIC_M_X0Y22    FDRE                                         r  bbo_locate_o_reg[2]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_M_X0Y22    FDRE (Prop_OPFF_HDIOLOGIC_M_C_Q)
+                                                      0.366     3.062 r  bbo_locate_o_reg[2]/Q
+                         net (fo=1, routed)           0.003     3.065    bbo_locate_OBUF[2]
+    W9                   OBUF (Prop_OUTBUF_HDIOB_M_I_O)
+                                                      2.313     5.378 r  bbo_locate_OBUF[2]_inst/O
+                         net (fo=0)                   0.000     5.378    bbo_locate[2]
+    W9                                                                r  bbo_locate[2] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.378    
+  -------------------------------------------------------------------
+                         slack                                 -3.310    
+
+Slack (VIOLATED) :        -3.309ns  (required time - arrival time)
+  Source:                 bbo_locate_o_reg[14]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[14]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.690ns  (logic 2.687ns (99.888%)  route 0.003ns (0.112%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.687ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.687ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.414ns (routing 0.347ns, distribution 1.067ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.414     2.687    clk_IBUF_BUFG
+    HDIOLOGIC_S_X0Y16    FDRE                                         r  bbo_locate_o_reg[14]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_S_X0Y16    FDRE (Prop_OPFF_HDIOLOGIC_S_C_Q)
+                                                      0.359     3.046 r  bbo_locate_o_reg[14]/Q
+                         net (fo=1, routed)           0.003     3.049    bbo_locate_OBUF[14]
+    AD8                  OBUF (Prop_OUTBUF_HDIOB_S_I_O)
+                                                      2.328     5.377 r  bbo_locate_OBUF[14]_inst/O
+                         net (fo=0)                   0.000     5.377    bbo_locate[14]
+    AD8                                                               r  bbo_locate[14] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.377    
+  -------------------------------------------------------------------
+                         slack                                 -3.309    
+
+Slack (VIOLATED) :        -3.307ns  (required time - arrival time)
+  Source:                 bbo_locate_o_reg[6]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[6]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.685ns  (logic 2.682ns (99.888%)  route 0.003ns (0.112%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.690ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.690ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.417ns (routing 0.347ns, distribution 1.070ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.417     2.690    clk_IBUF_BUFG
+    HDIOLOGIC_M_X0Y20    FDRE                                         r  bbo_locate_o_reg[6]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_M_X0Y20    FDRE (Prop_OPFF_HDIOLOGIC_M_C_Q)
+                                                      0.366     3.056 r  bbo_locate_o_reg[6]/Q
+                         net (fo=1, routed)           0.003     3.059    bbo_locate_OBUF[6]
+    Y8                   OBUF (Prop_OUTBUF_HDIOB_M_I_O)
+                                                      2.316     5.375 r  bbo_locate_OBUF[6]_inst/O
+                         net (fo=0)                   0.000     5.375    bbo_locate[6]
+    Y8                                                                r  bbo_locate[6] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.375    
+  -------------------------------------------------------------------
+                         slack                                 -3.307    
+
+Slack (VIOLATED) :        -3.305ns  (required time - arrival time)
+  Source:                 depth_tdata_o_reg[3]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            depth_tdata[3]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.657ns  (logic 2.654ns (99.887%)  route 0.003ns (0.113%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.716ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.716ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.443ns (routing 0.347ns, distribution 1.096ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.443     2.716    clk_IBUF_BUFG
+    HDIOLOGIC_S_X0Y10    FDRE                                         r  depth_tdata_o_reg[3]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_S_X0Y10    FDRE (Prop_OPFF_HDIOLOGIC_S_C_Q)
+                                                      0.359     3.075 r  depth_tdata_o_reg[3]/Q
+                         net (fo=1, routed)           0.003     3.078    depth_tdata_OBUF[3]
+    AA12                 OBUF (Prop_OUTBUF_HDIOB_S_I_O)
+                                                      2.295     5.372 r  depth_tdata_OBUF[3]_inst/O
+                         net (fo=0)                   0.000     5.372    depth_tdata[3]
+    AA12                                                              r  depth_tdata[3] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.372    
+  -------------------------------------------------------------------
+                         slack                                 -3.305    
+
+Slack (VIOLATED) :        -3.301ns  (required time - arrival time)
+  Source:                 bbo_locate_o_reg[12]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[12]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.685ns  (logic 2.682ns (99.888%)  route 0.003ns (0.112%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.684ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.684ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.411ns (routing 0.347ns, distribution 1.064ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.411     2.684    clk_IBUF_BUFG
+    HDIOLOGIC_M_X0Y17    FDRE                                         r  bbo_locate_o_reg[12]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_M_X0Y17    FDRE (Prop_OPFF_HDIOLOGIC_M_C_Q)
+                                                      0.366     3.050 r  bbo_locate_o_reg[12]/Q
+                         net (fo=1, routed)           0.003     3.053    bbo_locate_OBUF[12]
+    AB10                 OBUF (Prop_OUTBUF_HDIOB_M_I_O)
+                                                      2.316     5.368 r  bbo_locate_OBUF[12]_inst/O
+                         net (fo=0)                   0.000     5.368    bbo_locate[12]
+    AB10                                                              r  bbo_locate[12] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.368    
+  -------------------------------------------------------------------
+                         slack                                 -3.301    
+
+Slack (VIOLATED) :        -3.300ns  (required time - arrival time)
+  Source:                 depth_tdata_o_reg[2]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            depth_tdata[2]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.652ns  (logic 2.649ns (99.887%)  route 0.003ns (0.113%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.716ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.716ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.443ns (routing 0.347ns, distribution 1.096ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.443     2.716    clk_IBUF_BUFG
+    HDIOLOGIC_M_X0Y10    FDRE                                         r  depth_tdata_o_reg[2]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_M_X0Y10    FDRE (Prop_OPFF_HDIOLOGIC_M_C_Q)
+                                                      0.366     3.082 r  depth_tdata_o_reg[2]/Q
+                         net (fo=1, routed)           0.003     3.085    depth_tdata_OBUF[2]
+    AA13                 OBUF (Prop_OUTBUF_HDIOB_M_I_O)
+                                                      2.283     5.368 r  depth_tdata_OBUF[2]_inst/O
+                         net (fo=0)                   0.000     5.368    depth_tdata[2]
+    AA13                                                              r  depth_tdata[2] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.368    
+  -------------------------------------------------------------------
+                         slack                                 -3.300    
+
+Slack (VIOLATED) :        -3.296ns  (required time - arrival time)
+  Source:                 bbo_locate_o_reg[3]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            bbo_locate[3]
+                            (output port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Max at Slow Process Corner
+  Requirement:            3.103ns  (clk_pipeline rise@3.103ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.679ns  (logic 2.676ns (99.888%)  route 0.003ns (0.112%))
+  Logic Levels:           1  (OBUF=1)
+  Output Delay:           1.000ns
+  Clock Path Skew:        -2.685ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.000ns = ( 3.103 - 3.103 ) 
+    Source Clock Delay      (SCD):    2.685ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Source):      1.412ns (routing 0.347ns, distribution 1.065ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.412     2.685    clk_IBUF_BUFG
+    HDIOLOGIC_S_X0Y22    FDRE                                         r  bbo_locate_o_reg[3]/C
+  -------------------------------------------------------------------    -------------------
+    HDIOLOGIC_S_X0Y22    FDRE (Prop_OPFF_HDIOLOGIC_S_C_Q)
+                                                      0.359     3.044 r  bbo_locate_o_reg[3]/Q
+                         net (fo=1, routed)           0.003     3.047    bbo_locate_OBUF[3]
+    W8                   OBUF (Prop_OUTBUF_HDIOB_S_I_O)
+                                                      2.317     5.364 r  bbo_locate_OBUF[3]_inst/O
+                         net (fo=0)                   0.000     5.364    bbo_locate[3]
+    W8                                                                r  bbo_locate[3] (OUT)
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      3.103     3.103 r  
+                         clock pessimism              0.000     3.103    
+                         clock uncertainty           -0.035     3.068    
+                         output delay                -1.000     2.068    
+  -------------------------------------------------------------------
+                         required time                          2.068    
+                         arrival time                          -5.364    
+  -------------------------------------------------------------------
+                         slack                                 -3.296    
+
+
+
+
+
+Min Delay Paths
+--------------------------------------------------------------------------------------
+Slack (MET) :             0.020ns  (arrival time - required time)
+  Source:                 s_axis_tdata[21]
+                            (input port clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            f_mem_reg_0_3_14_27/RAMD_D1/I
+                            (rising edge-triggered cell RAMD32 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        2.979ns  (logic 0.284ns (9.542%)  route 2.695ns (90.458%))
+  Logic Levels:           2  (IBUFCTRL=1 INBUF=1)
+  Input Delay:            0.000ns
+  Clock Path Skew:        2.901ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.901ns
+    Source Clock Delay      (SCD):    0.000ns
+    Clock Pessimism Removal (CPR):    -0.000ns
+  Clock Net Delay (Destination): 1.628ns (routing 0.347ns, distribution 1.281ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+                         input delay                  0.000     0.000    
+    C18                                               0.000     0.000 r  s_axis_tdata[21] (IN)
+                         net (fo=0)                   0.000     0.000    s_axis_tdata_IBUF[21]_inst/I
+    C18                  INBUF (Prop_INBUF_HPIOB_S_PAD_O)
+                                                      0.284     0.284 r  s_axis_tdata_IBUF[21]_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.284    s_axis_tdata_IBUF[21]_inst/OUT
+    C18                  IBUFCTRL (Prop_IBUFCTRL_HPIOB_S_I_O)
+                                                      0.000     0.284 r  s_axis_tdata_IBUF[21]_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           2.695     2.979    f_mem_reg_0_3_14_27/DID1
+    SLICE_X10Y214        RAMD32                                       r  f_mem_reg_0_3_14_27/RAMD_D1/I
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.628     2.901    f_mem_reg_0_3_14_27/WCLK
+    SLICE_X10Y214        RAMD32                                       r  f_mem_reg_0_3_14_27/RAMD_D1/CLK
+                         clock pessimism              0.000     2.901    
+    SLICE_X10Y214        RAMD32 (Hold_D6LUT_SLICEM_CLK_I)
+                                                      0.059     2.960    f_mem_reg_0_3_14_27/RAMD_D1
+  -------------------------------------------------------------------
+                         required time                         -2.960    
+                         arrival time                           2.979    
+  -------------------------------------------------------------------
+                         slack                                  0.020    
+
+Slack (MET) :             0.028ns  (arrival time - required time)
+  Source:                 u_book/m_locate_reg[3]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/bbo_locate_reg[3]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.130ns  (logic 0.058ns (44.615%)  route 0.072ns (55.385%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.040ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.733ns
+    Source Clock Delay      (SCD):    1.996ns
+    Clock Pessimism Removal (CPR):    0.696ns
+  Clock Net Delay (Source):      1.270ns (routing 0.316ns, distribution 0.954ns)
+  Clock Net Delay (Destination): 1.460ns (routing 0.347ns, distribution 1.113ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.270     1.996    u_book/clk_IBUF_BUFG
+    SLICE_X46Y183        FDRE                                         r  u_book/m_locate_reg[3]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X46Y183        FDRE (Prop_CFF_SLICEL_C_Q)
+                                                      0.058     2.054 r  u_book/m_locate_reg[3]/Q
+                         net (fo=1, routed)           0.072     2.126    u_book/m_locate[3]
+    SLICE_X46Y183        FDRE                                         r  u_book/bbo_locate_reg[3]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.460     2.733    u_book/clk_IBUF_BUFG
+    SLICE_X46Y183        FDRE                                         r  u_book/bbo_locate_reg[3]/C
+                         clock pessimism             -0.696     2.036    
+    SLICE_X46Y183        FDRE (Hold_HFF2_SLICEL_C_D)
+                                                      0.062     2.098    u_book/bbo_locate_reg[3]
+  -------------------------------------------------------------------
+                         required time                         -2.098    
+                         arrival time                           2.126    
+  -------------------------------------------------------------------
+                         slack                                  0.028    
+
+Slack (MET) :             0.029ns  (arrival time - required time)
+  Source:                 u_parser/q_reg[293]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_parser/msg_reg_reg[269]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.197ns  (logic 0.058ns (29.489%)  route 0.139ns (70.511%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.106ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.761ns
+    Source Clock Delay      (SCD):    2.020ns
+    Clock Pessimism Removal (CPR):    0.635ns
+  Clock Net Delay (Source):      1.294ns (routing 0.316ns, distribution 0.978ns)
+  Clock Net Delay (Destination): 1.488ns (routing 0.347ns, distribution 1.141ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.294     2.020    u_parser/clk_IBUF_BUFG
+    SLICE_X34Y223        FDRE                                         r  u_parser/q_reg[293]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X34Y223        FDRE (Prop_DFF_SLICEM_C_Q)
+                                                      0.058     2.078 r  u_parser/q_reg[293]/Q
+                         net (fo=3, routed)           0.139     2.217    u_parser/p_0_in[45]
+    SLICE_X38Y223        FDRE                                         r  u_parser/msg_reg_reg[269]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.488     2.761    u_parser/clk_IBUF_BUFG
+    SLICE_X38Y223        FDRE                                         r  u_parser/msg_reg_reg[269]/C
+                         clock pessimism             -0.635     2.126    
+    SLICE_X38Y223        FDRE (Hold_GFF2_SLICEL_C_D)
+                                                      0.062     2.188    u_parser/msg_reg_reg[269]
+  -------------------------------------------------------------------
+                         required time                         -2.188    
+                         arrival time                           2.217    
+  -------------------------------------------------------------------
+                         slack                                  0.029    
+
+Slack (MET) :             0.032ns  (arrival time - required time)
+  Source:                 u_book/pr_new_empty_reg[10]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/u_nidx_reg[10]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.142ns  (logic 0.058ns (40.845%)  route 0.084ns (59.155%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.048ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.889ns
+    Source Clock Delay      (SCD):    2.141ns
+    Clock Pessimism Removal (CPR):    0.699ns
+  Clock Net Delay (Source):      1.415ns (routing 0.316ns, distribution 1.099ns)
+  Clock Net Delay (Destination): 1.616ns (routing 0.347ns, distribution 1.269ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.415     2.141    u_book/clk_IBUF_BUFG
+    SLICE_X82Y185        FDRE                                         r  u_book/pr_new_empty_reg[10]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X82Y185        FDRE (Prop_EFF_SLICEM_C_Q)
+                                                      0.058     2.199 r  u_book/pr_new_empty_reg[10]/Q
+                         net (fo=1, routed)           0.084     2.283    u_book/pr_new_empty_reg_n_0_[10]
+    SLICE_X82Y184        FDRE                                         r  u_book/u_nidx_reg[10]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.616     2.889    u_book/clk_IBUF_BUFG
+    SLICE_X82Y184        FDRE                                         r  u_book/u_nidx_reg[10]/C
+                         clock pessimism             -0.699     2.190    
+    SLICE_X82Y184        FDRE (Hold_GFF2_SLICEM_C_D)
+                                                      0.062     2.252    u_book/u_nidx_reg[10]
+  -------------------------------------------------------------------
+                         required time                         -2.252    
+                         arrival time                           2.283    
+  -------------------------------------------------------------------
+                         slack                                  0.032    
+
+Slack (MET) :             0.034ns  (arrival time - required time)
+  Source:                 u_book/sm_dacc_reg[18]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/depth_tdata_reg[18]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.198ns  (logic 0.060ns (30.303%)  route 0.138ns (69.697%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.102ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.707ns
+    Source Clock Delay      (SCD):    1.978ns
+    Clock Pessimism Removal (CPR):    0.626ns
+  Clock Net Delay (Source):      1.252ns (routing 0.316ns, distribution 0.936ns)
+  Clock Net Delay (Destination): 1.434ns (routing 0.347ns, distribution 1.087ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.252     1.978    u_book/clk_IBUF_BUFG
+    SLICE_X32Y110        FDRE                                         r  u_book/sm_dacc_reg[18]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X32Y110        FDRE (Prop_BFF2_SLICEM_C_Q)
+                                                      0.060     2.038 r  u_book/sm_dacc_reg[18]/Q
+                         net (fo=1, routed)           0.138     2.176    u_book/sm_dacc_reg_n_0_[18]
+    SLICE_X29Y110        FDRE                                         r  u_book/depth_tdata_reg[18]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.434     2.707    u_book/clk_IBUF_BUFG
+    SLICE_X29Y110        FDRE                                         r  u_book/depth_tdata_reg[18]/C
+                         clock pessimism             -0.626     2.081    
+    SLICE_X29Y110        FDRE (Hold_GFF2_SLICEM_C_D)
+                                                      0.062     2.143    u_book/depth_tdata_reg[18]
+  -------------------------------------------------------------------
+                         required time                         -2.143    
+                         arrival time                           2.176    
+  -------------------------------------------------------------------
+                         slack                                  0.034    
+
+Slack (MET) :             0.034ns  (arrival time - required time)
+  Source:                 u_book/nx_body_acc_reg[0][18]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/body_acc_reg[0][18]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.205ns  (logic 0.080ns (39.004%)  route 0.125ns (60.996%))
+  Logic Levels:           1  (LUT5=1)
+  Clock Path Skew:        0.111ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.894ns
+    Source Clock Delay      (SCD):    2.142ns
+    Clock Pessimism Removal (CPR):    0.640ns
+  Clock Net Delay (Source):      1.416ns (routing 0.316ns, distribution 1.100ns)
+  Clock Net Delay (Destination): 1.621ns (routing 0.347ns, distribution 1.274ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.416     2.142    u_book/clk_IBUF_BUFG
+    SLICE_X85Y181        FDRE                                         r  u_book/nx_body_acc_reg[0][18]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X85Y181        FDRE (Prop_FFF_SLICEL_C_Q)
+                                                      0.058     2.200 r  u_book/nx_body_acc_reg[0][18]/Q
+                         net (fo=2, routed)           0.089     2.289    u_book/nx_body_acc_reg[0]_2636[18]
+    SLICE_X86Y182        LUT5 (Prop_D6LUT_SLICEM_I1_O)
+                                                      0.022     2.311 r  u_book/body_acc[0][18]_i_1/O
+                         net (fo=1, routed)           0.036     2.347    u_book/body_acc[0][18]_i_1_n_0
+    SLICE_X86Y182        FDRE                                         r  u_book/body_acc_reg[0][18]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.621     2.894    u_book/clk_IBUF_BUFG
+    SLICE_X86Y182        FDRE                                         r  u_book/body_acc_reg[0][18]/C
+                         clock pessimism             -0.640     2.253    
+    SLICE_X86Y182        FDRE (Hold_DFF_SLICEM_C_D)
+                                                      0.060     2.313    u_book/body_acc_reg[0][18]
+  -------------------------------------------------------------------
+                         required time                         -2.313    
+                         arrival time                           2.347    
+  -------------------------------------------------------------------
+                         slack                                  0.034    
+
+Slack (MET) :             0.035ns  (arrival time - required time)
+  Source:                 u_book/sm_dacc_reg[19]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/depth_tdata_reg[19]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.272ns  (logic 0.061ns (22.426%)  route 0.211ns (77.573%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.177ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.788ns
+    Source Clock Delay      (SCD):    1.982ns
+    Clock Pessimism Removal (CPR):    0.629ns
+  Clock Net Delay (Source):      1.256ns (routing 0.316ns, distribution 0.940ns)
+  Clock Net Delay (Destination): 1.515ns (routing 0.347ns, distribution 1.168ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.256     1.982    u_book/clk_IBUF_BUFG
+    SLICE_X29Y115        FDRE                                         r  u_book/sm_dacc_reg[19]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X29Y115        FDRE (Prop_DFF2_SLICEM_C_Q)
+                                                      0.061     2.043 r  u_book/sm_dacc_reg[19]/Q
+                         net (fo=1, routed)           0.211     2.254    u_book/sm_dacc_reg_n_0_[19]
+    SLICE_X25Y113        FDRE                                         r  u_book/depth_tdata_reg[19]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.515     2.788    u_book/clk_IBUF_BUFG
+    SLICE_X25Y113        FDRE                                         r  u_book/depth_tdata_reg[19]/C
+                         clock pessimism             -0.629     2.159    
+    SLICE_X25Y113        FDRE (Hold_HFF_SLICEM_C_D)
+                                                      0.060     2.219    u_book/depth_tdata_reg[19]
+  -------------------------------------------------------------------
+                         required time                         -2.219    
+                         arrival time                           2.254    
+  -------------------------------------------------------------------
+                         slack                                  0.035    
+
+Slack (MET) :             0.036ns  (arrival time - required time)
+  Source:                 u_book/sm_dacc_reg[25]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/depth_tdata_reg[25]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.191ns  (logic 0.061ns (31.937%)  route 0.130ns (68.063%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.093ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.787ns
+    Source Clock Delay      (SCD):    2.055ns
+    Clock Pessimism Removal (CPR):    0.638ns
+  Clock Net Delay (Source):      1.329ns (routing 0.316ns, distribution 1.013ns)
+  Clock Net Delay (Destination): 1.514ns (routing 0.347ns, distribution 1.167ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.329     2.055    u_book/clk_IBUF_BUFG
+    SLICE_X24Y112        FDRE                                         r  u_book/sm_dacc_reg[25]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X24Y112        FDRE (Prop_DFF2_SLICEL_C_Q)
+                                                      0.061     2.116 r  u_book/sm_dacc_reg[25]/Q
+                         net (fo=1, routed)           0.130     2.246    u_book/sm_dacc_reg_n_0_[25]
+    SLICE_X25Y111        FDRE                                         r  u_book/depth_tdata_reg[25]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.514     2.787    u_book/clk_IBUF_BUFG
+    SLICE_X25Y111        FDRE                                         r  u_book/depth_tdata_reg[25]/C
+                         clock pessimism             -0.638     2.148    
+    SLICE_X25Y111        FDRE (Hold_GFF2_SLICEM_C_D)
+                                                      0.062     2.210    u_book/depth_tdata_reg[25]
+  -------------------------------------------------------------------
+                         required time                         -2.210    
+                         arrival time                           2.246    
+  -------------------------------------------------------------------
+                         slack                                  0.036    
+
+Slack (MET) :             0.036ns  (arrival time - required time)
+  Source:                 u_book/lv_base_reg[7]_replica_17/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/lv_qty_reg[715][17]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.214ns  (logic 0.098ns (45.717%)  route 0.116ns (54.283%))
+  Logic Levels:           1  (LUT6=1)
+  Clock Path Skew:        0.118ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.842ns
+    Source Clock Delay      (SCD):    2.088ns
+    Clock Pessimism Removal (CPR):    0.636ns
+  Clock Net Delay (Source):      1.362ns (routing 0.316ns, distribution 1.046ns)
+  Clock Net Delay (Destination): 1.569ns (routing 0.347ns, distribution 1.222ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.362     2.088    u_book/clk_IBUF_BUFG
+    SLICE_X74Y128        FDRE                                         r  u_book/lv_base_reg[7]_replica_17/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X74Y128        FDRE (Prop_DFF2_SLICEM_C_Q)
+                                                      0.061     2.149 r  u_book/lv_base_reg[7]_replica_17/Q
+                         net (fo=132, routed)         0.086     2.235    u_book/lv_base[7]_repN_17
+    SLICE_X75Y128        LUT6 (Prop_H6LUT_SLICEM_I4_O)
+                                                      0.037     2.272 r  u_book/lv_qty[715][17]_i_1/O
+                         net (fo=1, routed)           0.030     2.302    u_book/lv_qty[715][17]_i_1_n_0
+    SLICE_X75Y128        FDRE                                         r  u_book/lv_qty_reg[715][17]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.569     2.842    u_book/clk_IBUF_BUFG
+    SLICE_X75Y128        FDRE                                         r  u_book/lv_qty_reg[715][17]/C
+                         clock pessimism             -0.636     2.206    
+    SLICE_X75Y128        FDRE (Hold_HFF_SLICEM_C_D)
+                                                      0.060     2.266    u_book/lv_qty_reg[715][17]
+  -------------------------------------------------------------------
+                         required time                         -2.266    
+                         arrival time                           2.302    
+  -------------------------------------------------------------------
+                         slack                                  0.036    
+
+Slack (MET) :             0.037ns  (arrival time - required time)
+  Source:                 u_book/sm_dacc_reg[7]/C
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Destination:            u_book/depth_tdata_reg[7]/D
+                            (rising edge-triggered cell FDRE clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             clk_pipeline
+  Path Type:              Hold (Min at Slow Process Corner)
+  Requirement:            0.000ns  (clk_pipeline rise@0.000ns - clk_pipeline rise@0.000ns)
+  Data Path Delay:        0.142ns  (logic 0.058ns (40.845%)  route 0.084ns (59.155%))
+  Logic Levels:           0  
+  Clock Path Skew:        0.043ns (DCD - SCD - CPR)
+    Destination Clock Delay (DCD):    2.684ns
+    Source Clock Delay      (SCD):    1.960ns
+    Clock Pessimism Removal (CPR):    0.680ns
+  Clock Net Delay (Source):      1.234ns (routing 0.316ns, distribution 0.918ns)
+  Clock Net Delay (Destination): 1.411ns (routing 0.347ns, distribution 1.064ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.234     1.960    u_book/clk_IBUF_BUFG
+    SLICE_X32Y92         FDRE                                         r  u_book/sm_dacc_reg[7]/C
+  -------------------------------------------------------------------    -------------------
+    SLICE_X32Y92         FDRE (Prop_HFF_SLICEM_C_Q)
+                                                      0.058     2.018 r  u_book/sm_dacc_reg[7]/Q
+                         net (fo=1, routed)           0.084     2.102    u_book/sm_dacc_reg_n_0_[7]
+    SLICE_X32Y90         FDRE                                         r  u_book/depth_tdata_reg[7]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.411     2.684    u_book/clk_IBUF_BUFG
+    SLICE_X32Y90         FDRE                                         r  u_book/depth_tdata_reg[7]/C
+                         clock pessimism             -0.680     2.004    
+    SLICE_X32Y90         FDRE (Hold_GFF2_SLICEM_C_D)
+                                                      0.062     2.066    u_book/depth_tdata_reg[7]
+  -------------------------------------------------------------------
+                         required time                         -2.066    
+                         arrival time                           2.102    
+  -------------------------------------------------------------------
+                         slack                                  0.037    
+
+
+
+
+
+Pulse Width Checks
+--------------------------------------------------------------------------------------
+Clock Name:         clk_pipeline
+Waveform(ns):       { 0.000 1.551 }
+Period(ns):         3.103
+Sources:            { clk }
+
+Check Type        Corner  Lib Pin  Reference Pin  Required(ns)  Actual(ns)  Slack(ns)  Location           Pin
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_M_X0Y9   bbo_changed_o_reg/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_M_X0Y23  bbo_locate_o_reg[0]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_M_X0Y18  bbo_locate_o_reg[10]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_S_X0Y18  bbo_locate_o_reg[11]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_M_X0Y17  bbo_locate_o_reg[12]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_S_X0Y17  bbo_locate_o_reg[13]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_S_X0Y16  bbo_locate_o_reg[14]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_M_X0Y15  bbo_locate_o_reg[15]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_S_X0Y23  bbo_locate_o_reg[1]/C
+Min Period        n/a     FDRE/C   n/a            8.000         3.103       -4.897     HDIOLOGIC_M_X0Y22  bbo_locate_o_reg[2]/C
+Low Pulse Width   Slow    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y9   bbo_changed_o_reg/C
+Low Pulse Width   Fast    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y9   bbo_changed_o_reg/C
+Low Pulse Width   Slow    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y23  bbo_locate_o_reg[0]/C
+Low Pulse Width   Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y23  bbo_locate_o_reg[0]/C
+Low Pulse Width   Slow    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y18  bbo_locate_o_reg[10]/C
+Low Pulse Width   Fast    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y18  bbo_locate_o_reg[10]/C
+Low Pulse Width   Slow    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_S_X0Y18  bbo_locate_o_reg[11]/C
+Low Pulse Width   Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_S_X0Y18  bbo_locate_o_reg[11]/C
+Low Pulse Width   Slow    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y17  bbo_locate_o_reg[12]/C
+Low Pulse Width   Fast    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y17  bbo_locate_o_reg[12]/C
+High Pulse Width  Slow    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y9   bbo_changed_o_reg/C
+High Pulse Width  Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y9   bbo_changed_o_reg/C
+High Pulse Width  Slow    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y23  bbo_locate_o_reg[0]/C
+High Pulse Width  Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y23  bbo_locate_o_reg[0]/C
+High Pulse Width  Slow    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y18  bbo_locate_o_reg[10]/C
+High Pulse Width  Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y18  bbo_locate_o_reg[10]/C
+High Pulse Width  Slow    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_S_X0Y18  bbo_locate_o_reg[11]/C
+High Pulse Width  Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_S_X0Y18  bbo_locate_o_reg[11]/C
+High Pulse Width  Slow    FDRE/C   n/a            4.000         1.552       -2.448     HDIOLOGIC_M_X0Y17  bbo_locate_o_reg[12]/C
+High Pulse Width  Fast    FDRE/C   n/a            4.000         1.551       -2.449     HDIOLOGIC_M_X0Y17  bbo_locate_o_reg[12]/C
+
+
+
+--------------------------------------------------------------------------------------
+Path Group:  (none)
+From Clock:  
+  To Clock:  clk_pipeline
+
+Max Delay          2940 Endpoints
+Min Delay          2940 Endpoints
+--------------------------------------------------------------------------------------
+
+
+Max Delay Paths
+--------------------------------------------------------------------------------------
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[17]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[17]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.430ns (routing 0.316ns, distribution 1.114ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y40        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_9_Cas_DinA_1[17]
+    URAM288_X0Y41        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.212 r  u_book/o_mem_reg_uram_9/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.214    u_book/o_mem_reg_uram_10_Cas_DinA_2[17]
+    URAM288_X0Y42        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.424 r  u_book/o_mem_reg_uram_10/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.426    u_book/o_mem_reg_uram_11_Cas_DinA_3[17]
+    URAM288_X0Y43        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.636 r  u_book/o_mem_reg_uram_11/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.638    u_book/o_mem_reg_uram_12_Cas_DinA_4[17]
+    URAM288_X0Y44        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.848 r  u_book/o_mem_reg_uram_12/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.850    u_book/o_mem_reg_uram_13_Cas_DinA_5[17]
+    URAM288_X0Y45        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.060 r  u_book/o_mem_reg_uram_13/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.062    u_book/o_mem_reg_uram_14_Cas_DinA_6[17]
+    URAM288_X0Y46        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.272 r  u_book/o_mem_reg_uram_14/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.274    u_book/o_mem_reg_uram_15_Cas_DinA_7[17]
+    URAM288_X0Y47        URAM288                                      r  u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[17]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.430     2.157    u_book/clk_IBUF_BUFG
+    URAM288_X0Y47        URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[17]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[17]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.389ns (routing 0.316ns, distribution 1.073ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y24        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_17_Cas_DinA_1[17]
+    URAM288_X0Y25        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.212 r  u_book/o_mem_reg_uram_17/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.214    u_book/o_mem_reg_uram_18_Cas_DinA_2[17]
+    URAM288_X0Y26        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.424 r  u_book/o_mem_reg_uram_18/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.426    u_book/o_mem_reg_uram_19_Cas_DinA_3[17]
+    URAM288_X0Y27        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.636 r  u_book/o_mem_reg_uram_19/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.638    u_book/o_mem_reg_uram_20_Cas_DinA_4[17]
+    URAM288_X0Y28        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.848 r  u_book/o_mem_reg_uram_20/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.850    u_book/o_mem_reg_uram_21_Cas_DinA_5[17]
+    URAM288_X0Y29        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.060 r  u_book/o_mem_reg_uram_21/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.062    u_book/o_mem_reg_uram_22_Cas_DinA_6[17]
+    URAM288_X0Y30        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.272 r  u_book/o_mem_reg_uram_22/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.274    u_book/o_mem_reg_uram_23_Cas_DinA_7[17]
+    URAM288_X0Y31        URAM288                                      r  u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[17]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.389     2.116    u_book/clk_IBUF_BUFG
+    URAM288_X0Y31        URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_24/CAS_OUT_DIN_A[17]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_31/CAS_IN_DIN_A[17]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.412ns (routing 0.316ns, distribution 1.096ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y32        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_24/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_25_Cas_DinA_1[17]
+    URAM288_X0Y33        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.212 r  u_book/o_mem_reg_uram_25/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.214    u_book/o_mem_reg_uram_26_Cas_DinA_2[17]
+    URAM288_X0Y34        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.424 r  u_book/o_mem_reg_uram_26/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.426    u_book/o_mem_reg_uram_27_Cas_DinA_3[17]
+    URAM288_X0Y35        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.636 r  u_book/o_mem_reg_uram_27/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.638    u_book/o_mem_reg_uram_28_Cas_DinA_4[17]
+    URAM288_X0Y36        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.848 r  u_book/o_mem_reg_uram_28/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.850    u_book/o_mem_reg_uram_29_Cas_DinA_5[17]
+    URAM288_X0Y37        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.060 r  u_book/o_mem_reg_uram_29/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.062    u_book/o_mem_reg_uram_30_Cas_DinA_6[17]
+    URAM288_X0Y38        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.272 r  u_book/o_mem_reg_uram_30/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.274    u_book/o_mem_reg_uram_31_Cas_DinA_7[17]
+    URAM288_X0Y39        URAM288                                      r  u_book/o_mem_reg_uram_31/CAS_IN_DIN_A[17]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.412     2.139    u_book/clk_IBUF_BUFG
+    URAM288_X0Y39        URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[17]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_7/CAS_IN_DIN_A[17]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.274ns  (logic 1.260ns (98.901%)  route 0.014ns (1.099%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.427ns (routing 0.316ns, distribution 1.111ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_1_Cas_DinA_1[17]
+    URAM288_X0Y49        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.212 r  u_book/o_mem_reg_uram_1/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.214    u_book/o_mem_reg_uram_2_Cas_DinA_2[17]
+    URAM288_X0Y50        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.424 r  u_book/o_mem_reg_uram_2/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.426    u_book/o_mem_reg_uram_3_Cas_DinA_3[17]
+    URAM288_X0Y51        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.636 r  u_book/o_mem_reg_uram_3/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.638    u_book/o_mem_reg_uram_4_Cas_DinA_4[17]
+    URAM288_X0Y52        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     0.848 r  u_book/o_mem_reg_uram_4/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     0.850    u_book/o_mem_reg_uram_5_Cas_DinA_5[17]
+    URAM288_X0Y53        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.060 r  u_book/o_mem_reg_uram_5/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.062    u_book/o_mem_reg_uram_6_Cas_DinA_6[17]
+    URAM288_X0Y54        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[17]_CAS_OUT_DIN_A[17])
+                                                      0.210     1.272 r  u_book/o_mem_reg_uram_6/CAS_OUT_DIN_A[17]
+                         net (fo=1, routed)           0.002     1.274    u_book/o_mem_reg_uram_7_Cas_DinA_7[17]
+    URAM288_X0Y55        URAM288                                      r  u_book/o_mem_reg_uram_7/CAS_IN_DIN_A[17]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.427     2.154    u_book/clk_IBUF_BUFG
+    URAM288_X0Y55        URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[25]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[25]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.430ns (routing 0.316ns, distribution 1.114ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y40        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_9_Cas_DinA_1[25]
+    URAM288_X0Y41        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.207 r  u_book/o_mem_reg_uram_9/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.209    u_book/o_mem_reg_uram_10_Cas_DinA_2[25]
+    URAM288_X0Y42        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.414 r  u_book/o_mem_reg_uram_10/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.416    u_book/o_mem_reg_uram_11_Cas_DinA_3[25]
+    URAM288_X0Y43        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.621 r  u_book/o_mem_reg_uram_11/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.623    u_book/o_mem_reg_uram_12_Cas_DinA_4[25]
+    URAM288_X0Y44        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.828 r  u_book/o_mem_reg_uram_12/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.830    u_book/o_mem_reg_uram_13_Cas_DinA_5[25]
+    URAM288_X0Y45        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.035 r  u_book/o_mem_reg_uram_13/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.037    u_book/o_mem_reg_uram_14_Cas_DinA_6[25]
+    URAM288_X0Y46        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.242 r  u_book/o_mem_reg_uram_14/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.244    u_book/o_mem_reg_uram_15_Cas_DinA_7[25]
+    URAM288_X0Y47        URAM288                                      r  u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[25]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.430     2.157    u_book/clk_IBUF_BUFG
+    URAM288_X0Y47        URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[25]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[25]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.389ns (routing 0.316ns, distribution 1.073ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y24        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_17_Cas_DinA_1[25]
+    URAM288_X0Y25        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.207 r  u_book/o_mem_reg_uram_17/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.209    u_book/o_mem_reg_uram_18_Cas_DinA_2[25]
+    URAM288_X0Y26        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.414 r  u_book/o_mem_reg_uram_18/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.416    u_book/o_mem_reg_uram_19_Cas_DinA_3[25]
+    URAM288_X0Y27        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.621 r  u_book/o_mem_reg_uram_19/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.623    u_book/o_mem_reg_uram_20_Cas_DinA_4[25]
+    URAM288_X0Y28        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.828 r  u_book/o_mem_reg_uram_20/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.830    u_book/o_mem_reg_uram_21_Cas_DinA_5[25]
+    URAM288_X0Y29        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.035 r  u_book/o_mem_reg_uram_21/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.037    u_book/o_mem_reg_uram_22_Cas_DinA_6[25]
+    URAM288_X0Y30        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.242 r  u_book/o_mem_reg_uram_22/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.244    u_book/o_mem_reg_uram_23_Cas_DinA_7[25]
+    URAM288_X0Y31        URAM288                                      r  u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[25]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.389     2.116    u_book/clk_IBUF_BUFG
+    URAM288_X0Y31        URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_24/CAS_OUT_DIN_A[25]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_31/CAS_IN_DIN_A[25]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.412ns (routing 0.316ns, distribution 1.096ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y32        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_24/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_25_Cas_DinA_1[25]
+    URAM288_X0Y33        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.207 r  u_book/o_mem_reg_uram_25/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.209    u_book/o_mem_reg_uram_26_Cas_DinA_2[25]
+    URAM288_X0Y34        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.414 r  u_book/o_mem_reg_uram_26/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.416    u_book/o_mem_reg_uram_27_Cas_DinA_3[25]
+    URAM288_X0Y35        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.621 r  u_book/o_mem_reg_uram_27/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.623    u_book/o_mem_reg_uram_28_Cas_DinA_4[25]
+    URAM288_X0Y36        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.828 r  u_book/o_mem_reg_uram_28/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.830    u_book/o_mem_reg_uram_29_Cas_DinA_5[25]
+    URAM288_X0Y37        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.035 r  u_book/o_mem_reg_uram_29/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.037    u_book/o_mem_reg_uram_30_Cas_DinA_6[25]
+    URAM288_X0Y38        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.242 r  u_book/o_mem_reg_uram_30/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.244    u_book/o_mem_reg_uram_31_Cas_DinA_7[25]
+    URAM288_X0Y39        URAM288                                      r  u_book/o_mem_reg_uram_31/CAS_IN_DIN_A[25]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.412     2.139    u_book/clk_IBUF_BUFG
+    URAM288_X0Y39        URAM288                                      r  u_book/o_mem_reg_uram_31/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[25]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_7/CAS_IN_DIN_A[25]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.244ns  (logic 1.230ns (98.875%)  route 0.014ns (1.125%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.427ns (routing 0.316ns, distribution 1.111ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.002    u_book/o_mem_reg_uram_1_Cas_DinA_1[25]
+    URAM288_X0Y49        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.207 r  u_book/o_mem_reg_uram_1/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.209    u_book/o_mem_reg_uram_2_Cas_DinA_2[25]
+    URAM288_X0Y50        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.414 r  u_book/o_mem_reg_uram_2/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.416    u_book/o_mem_reg_uram_3_Cas_DinA_3[25]
+    URAM288_X0Y51        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.621 r  u_book/o_mem_reg_uram_3/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.623    u_book/o_mem_reg_uram_4_Cas_DinA_4[25]
+    URAM288_X0Y52        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     0.828 r  u_book/o_mem_reg_uram_4/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     0.830    u_book/o_mem_reg_uram_5_Cas_DinA_5[25]
+    URAM288_X0Y53        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.035 r  u_book/o_mem_reg_uram_5/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.037    u_book/o_mem_reg_uram_6_Cas_DinA_6[25]
+    URAM288_X0Y54        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[25]_CAS_OUT_DIN_A[25])
+                                                      0.205     1.242 r  u_book/o_mem_reg_uram_6/CAS_OUT_DIN_A[25]
+                         net (fo=1, routed)           0.002     1.244    u_book/o_mem_reg_uram_7_Cas_DinA_7[25]
+    URAM288_X0Y55        URAM288                                      r  u_book/o_mem_reg_uram_7/CAS_IN_DIN_A[25]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.427     2.154    u_book/clk_IBUF_BUFG
+    URAM288_X0Y55        URAM288                                      r  u_book/o_mem_reg_uram_7/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[22]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[22]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.220ns  (logic 1.212ns (99.344%)  route 0.008ns (0.656%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.430ns (routing 0.316ns, distribution 1.114ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y40        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_8/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.001    u_book/o_mem_reg_uram_9_Cas_DinA_1[22]
+    URAM288_X0Y41        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.203 r  u_book/o_mem_reg_uram_9/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.204    u_book/o_mem_reg_uram_10_Cas_DinA_2[22]
+    URAM288_X0Y42        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.406 r  u_book/o_mem_reg_uram_10/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.407    u_book/o_mem_reg_uram_11_Cas_DinA_3[22]
+    URAM288_X0Y43        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.609 r  u_book/o_mem_reg_uram_11/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.002     0.611    u_book/o_mem_reg_uram_12_Cas_DinA_4[22]
+    URAM288_X0Y44        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.813 r  u_book/o_mem_reg_uram_12/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.814    u_book/o_mem_reg_uram_13_Cas_DinA_5[22]
+    URAM288_X0Y45        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     1.016 r  u_book/o_mem_reg_uram_13/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     1.017    u_book/o_mem_reg_uram_14_Cas_DinA_6[22]
+    URAM288_X0Y46        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     1.219 r  u_book/o_mem_reg_uram_14/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     1.220    u_book/o_mem_reg_uram_15_Cas_DinA_7[22]
+    URAM288_X0Y47        URAM288                                      r  u_book/o_mem_reg_uram_15/CAS_IN_DIN_A[22]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.430     2.157    u_book/clk_IBUF_BUFG
+    URAM288_X0Y47        URAM288                                      r  u_book/o_mem_reg_uram_15/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[22]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[22]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Setup (Max at Slow Process Corner)
+  Data Path Delay:        1.220ns  (logic 1.212ns (99.344%)  route 0.008ns (0.656%))
+  Logic Levels:           6  (URAM288=6)
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.389ns (routing 0.316ns, distribution 1.073ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y24        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_16/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.001    u_book/o_mem_reg_uram_17_Cas_DinA_1[22]
+    URAM288_X0Y25        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.203 r  u_book/o_mem_reg_uram_17/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.204    u_book/o_mem_reg_uram_18_Cas_DinA_2[22]
+    URAM288_X0Y26        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.406 r  u_book/o_mem_reg_uram_18/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.407    u_book/o_mem_reg_uram_19_Cas_DinA_3[22]
+    URAM288_X0Y27        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.609 r  u_book/o_mem_reg_uram_19/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.002     0.611    u_book/o_mem_reg_uram_20_Cas_DinA_4[22]
+    URAM288_X0Y28        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     0.813 r  u_book/o_mem_reg_uram_20/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     0.814    u_book/o_mem_reg_uram_21_Cas_DinA_5[22]
+    URAM288_X0Y29        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     1.016 r  u_book/o_mem_reg_uram_21/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     1.017    u_book/o_mem_reg_uram_22_Cas_DinA_6[22]
+    URAM288_X0Y30        URAM288 (Prop_URAM_288K_INST_URAM288_CAS_IN_DIN_A[22]_CAS_OUT_DIN_A[22])
+                                                      0.202     1.219 r  u_book/o_mem_reg_uram_22/CAS_OUT_DIN_A[22]
+                         net (fo=1, routed)           0.001     1.220    u_book/o_mem_reg_uram_23_Cas_DinA_7[22]
+    URAM288_X0Y31        URAM288                                      r  u_book/o_mem_reg_uram_23/CAS_IN_DIN_A[22]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      0.533     0.533 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     0.533    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     0.533 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.169     0.702    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.024     0.726 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.389     2.116    u_book/clk_IBUF_BUFG
+    URAM288_X0Y31        URAM288                                      r  u_book/o_mem_reg_uram_23/CLK
+
+
+
+
+
+Min Delay Paths
+--------------------------------------------------------------------------------------
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_ADDR_B[19]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_ADDR_B[19]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_ADDR_B[19]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_AddrB_1[19]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_ADDR_B[19]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[28]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[28]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[28]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[28]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[28]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[32]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[32]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[32]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[32]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[32]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[34]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[34]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[34]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[34]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[34]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[36]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[36]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[36]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[36]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[36]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[42]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[42]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[42]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[42]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[42]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[52]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[52]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[52]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[52]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[52]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[64]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[64]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[64]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[64]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[64]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[68]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[68]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[68]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[68]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[68]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+Slack:                    inf
+  Source:                 u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[6]
+                            (internal pin)
+  Destination:            u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[6]
+                            (rising edge-triggered cell URAM288 clocked by clk_pipeline  {rise@0.000ns fall@1.551ns period=3.103ns})
+  Path Group:             (none)
+  Path Type:              Hold (Min at Slow Process Corner)
+  Data Path Delay:        0.000ns  (logic 0.000ns (0.000%)  route 0.000ns (0.000%))
+  Logic Levels:           0  
+  Clock Uncertainty:      0.025ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.050ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+  Clock Net Delay (Destination): 1.644ns (routing 0.347ns, distribution 1.297ns)
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+    URAM288_X0Y48        URAM288                      0.000     0.000 r  u_book/o_mem_reg_uram_0/CAS_OUT_DIN_A[6]
+                         net (fo=1, routed)           0.000     0.000    u_book/o_mem_reg_uram_1_Cas_DinA_1[6]
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CAS_IN_DIN_A[6]
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk_pipeline rise edge)
+                                                      0.000     0.000 r  
+    AC8                                               0.000     0.000 r  clk (IN)
+                         net (fo=0)                   0.000     0.000    clk_IBUF_inst/I
+    AC8                  INBUF (Prop_INBUF_HDIOB_M_PAD_O)
+                                                      1.041     1.041 r  clk_IBUF_inst/INBUF_INST/O
+                         net (fo=1, routed)           0.000     1.041    clk_IBUF_inst/OUT
+    AC8                  IBUFCTRL (Prop_IBUFCTRL_HDIOB_M_I_O)
+                                                      0.000     1.041 r  clk_IBUF_inst/IBUFCTRL_INST/O
+                         net (fo=1, routed)           0.204     1.245    clk_IBUF
+    BUFGCE_HDIO_X0Y3     BUFGCE (Prop_BUFCE_BUFGCE_HDIO_I_O)
+                                                      0.028     1.273 r  clk_IBUF_BUFG_inst/O
+    X1Y1 (CLOCK_ROOT)    net (fo=95585, routed)       1.644     2.917    u_book/clk_IBUF_BUFG
+    URAM288_X0Y49        URAM288                                      r  u_book/o_mem_reg_uram_1/CLK
+
+
+
+
+

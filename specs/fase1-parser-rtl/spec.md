@@ -1,355 +1,345 @@
-# fase1-parser-rtl (fase 1 del maestro)
+# fase1-parser-rtl (phase 1 of the master plan)
 
 ## Goal
 
-Construir el parser RTL **a line rate** Nasdaq TotalView-ITCH 5.0 en
-SystemVerilog (compatible Verilator): consume el **payload MoldUDP64**
-(decapado de IP/UDP en el testbench), valida el framing y la secuencia,
-alinea los mensajes que cruzan límites de palabra —un cruce de `tlast` es
-truncado y nunca continuación—, decodifica los
-tipos del subset (`S, R, A, F, E, C, X, D, U, P`) y emite por AXI-Stream un
-**registro decodificado por mensaje**, byte a byte idéntico al de los
-vectores de mensajes del golden model. Es la etapa previa al order book
-(fase 2): su salida es la entrada del engine URAM.
+Build the **line-rate** Nasdaq TotalView-ITCH 5.0 RTL parser in SystemVerilog
+(Verilator-compatible): it consumes the **MoldUDP64 payload** (IP/UDP stripped
+in the testbench), validates framing and sequence, aligns messages that cross
+word boundaries — a `tlast` crossing is a truncation and never a continuation —,
+decodes the subset types (`S, R, A, F, E, C, X, D, U, P`) and emits on
+AXI-Stream a **decoded record per message**, byte-exact against the golden
+model's message vectors. It is the stage preceding the order book (phase 2):
+its output is the input of the URAM engine.
 
-No construye libro: convierte un flujo crudo en `mensajes normalizados +
-señalización de gaps de secuencia`, a 1 palabra/ciclo en el peor caso, sobre
-un datapath 64-bit @ 156,25 MHz.
+It does not build a book: it turns a raw stream into `normalized messages +
+sequence-gap signalling`, at 1 word/cycle in the worst case, on a 64-bit
+datapath @ 156.25 MHz.
 
 ## Scope
 
 **In scope:**
 
-- `rtl/parser/` — módulos SystemVerilog del datapath de parsing:
-  - **Framing MoldUDP64** en el RTL: consumo del payload (session u64+u16,
-    seq u64, count u16) y **detección/senialización de gaps de sequence
-    number** (seq esperado = prev_seq + prev_count; gap si seq_actual >
-    esperado). Decap IP/UDP queda en el testbench (ver no-goals). — decisión
-    de la entrevista Q8: los gaps SÍ entran en fase 1.
-  - **Alineador** (barrel shifter): mensajes que cruzan límites de palabra de
-    8 B, manteniendo 1 palabra/ciclo. Un mensaje nunca cruza `tlast`: si el
-    datagrama termina antes de la longitud declarada, se cancela con `error` y
-    no se reanuda con bytes del paquete siguiente.
-  - **FSM de parsing**: identifica `msg_type`, valida longitud declarada,
-    extrae campos.
-  - **Decoder `S,R,A,F,E,C,X,D,U,P`** → registro normalizado.
+- `rtl/parser/` — SystemVerilog modules of the parsing datapath:
+  - **MoldUDP64 framing** in the RTL: payload consumption (session u64+u16,
+    seq u64, count u16) and **detection/signalling of sequence-number gaps**
+    (expected seq = prev_seq + prev_count; gap if seq_actual > expected).
+    IP/UDP strip stays in the testbench (see non-goals). — Interview decision
+    Q8: gaps DO enter phase 1.
+  - **Aligner** (barrel shifter): messages crossing 8 B word boundaries while
+    keeping 1 word/cycle. A message never crosses `tlast`: if the datagram ends
+    before the declared length, it is cancelled with `error` and is not resumed
+    with bytes of the next packet.
+  - **Parsing FSM**: identifies `msg_type`, validates declared length, extracts
+    fields.
+  - **Decoder `S,R,A,F,E,C,X,D,U,P`** → normalized record.
   - Top `itch_parser`.
-- `rtl/parser/common/` (o `rtl/common/`) — helpers compartidos (registros de
-  pipeline, FIFO de handshake) si `rtl/common/` no los aporta ya.
-- `verification/testbenches/parser/` — testbenches cocotb + Verilator:
-  - **Replay de pcaps** generados con `scripts/binaryfile_to_pcap.py`:
-    decap de Ethernet/IPv4/UDP en el testbench (los paquetes reales que sí
-    cruzan palabras, pero no límites de datagrama), alimentando el payload
-    MoldUDP64 al RTL.
-  - Oráculo byte a byte contra los **vectores de mensajes** del golden.
-  - Vectores congelados commiteados en `verification/vectors/messages/`.
-- **Extensión pactada de fase 0** (`golden_model/`): nuevo modo de volcado
-  `--emit-messages` que emite, por cada mensaje modificador/del subset, el
-  registro decodificado (Anexo A) — oráculo de mensajes, no BBO. Es un edit
-  explícito pactado de la spec fase 0 (no reabre la campaña).
-- Vectores congelados pequeños de mensajes commiteados en
-  `verification/vectors/` (híbrido: congelado + por-iteración).
+- `rtl/parser/common/` (or `rtl/common/`) — shared helpers (pipeline registers,
+  handshake FIFO) if `rtl/common/` does not already provide them.
+- `verification/testbenches/parser/` — cocotb + Verilator testbenches:
+  - **Replay of pcaps** generated with `scripts/binaryfile_to_pcap.py`:
+    Ethernet/IPv4/UDP strip in the testbench (real packets that DO cross words
+    but not datagram boundaries), feeding the MoldUDP64 payload to the RTL.
+  - Byte-exact oracle against the golden model's **message vectors**.
+  - Frozen vectors committed in `verification/vectors/messages/`.
+- **Agreed phase-0 extension** (`golden_model/`): new dump mode
+  `--emit-messages` that emits, per modifying/subset message, the decoded
+  record (Annex A) — a message oracle, not a BBO. This is an explicit agreed
+  edit of the phase-0 spec (does not reopen the campaign).
+- Small frozen message vectors committed in `verification/vectors/` (hybrid:
+  frozen + per-iteration).
 
 **Out of scope (non-goals):**
 
-- Order book / BBO / URAM: fase 2 (aquí solo mensajes normalizados).
-- Decap Ethernet/IPv4/UDP **en el RTL**: lo hace el testbench; el RTL recibe
-  el payload MoldUDP64 (sesión+seq+count+mensajes). (El MAC 10G / decap full
-  IP/UDP sería una fase propia posterior.)
-- Detección de desduplicación/arbitraje A/B de feeds (avanzado, no ITCH).
+- Order book / BBO / URAM: phase 2 (here only normalized messages).
+- Ethernet/IPv4/UDP strip **in the RTL**: the testbench does it; the RTL
+  receives the MoldUDP64 payload (session+seq+count+messages). (The 10G MAC /
+  full IP/UDP strip would be a later phase of its own.)
+- A/B feed dedup/arbitration detection (advanced, not ITCH).
 - Recovery/GLIMPSE/snapshot.
-- Variantes 32-bit @ 322 MHz (fase 3), timing closure Vivado (fase 3).
-- Métricas de latencia wire-to-BBO (fase 2).
-- Consumo de los 22 tipos: solo los 10 del subset se decodifican a registro;
-  los demás (H, I, B, N, W, O, …) se **validan por longitud y se cuentan**
-  (en línea, sin romper line rate), idéntico al criterio de fase 0.
-- CME MDP3 (fase stretch 4).
+- 32-bit @ 322 MHz variants (phase 3), Vivado timing closure (phase 3).
+- Wire-to-BBO latency metrics (phase 2).
+- Consuming the 22 types: only the 10 subset types decode to a record; the
+  rest (H, I, B, N, W, O, …) are **validated by length and counted** (inline,
+  without breaking line rate), identical to the phase-0 criterion.
+- CME MDP3 (stretch phase 4).
 
-**Radio medido (2026-08-12):** `rtl/parser/` y `rtl/orderbook/` están vacíos
-(verificado con `find rtl/ -type f`); `rtl/common/` vacío de fuentes. No se
-renombra ni mueve nada existente. `verification/testbenches/` y
-`verification/scripts/` vacíos de fuentes.
+**Measured radius (2026-08-12):** `rtl/parser/` and `rtl/orderbook/` are empty
+(verified with `find rtl/ -type f`); `rtl/common/` empty of sources. Nothing
+existing is renamed or moved. `verification/testbenches/` and
+`verification/scripts/` empty of sources.
 
 ## Constraints
 
-- **Familia/part objetivo:** AMD/Xilinx UltraScale+ (part del documento
-  maestro; se fija en síntesis fase 3). Datapath **64-bit @ 156,25 MHz**
-  (el que entrega el core 10GBASE-R).
-- **Line rate medido, sin promesa imposible:** el datapath usa AXI-Stream
-  completo y el test pactado mide cuatro A/U con QB=64, salida bit a bit y
-  stalls acumulados `<=24`. El peor caso infinito de mensajes mínimos es un
-  non-goal físico porque el Anexo A produce más bytes que el wire; se declara
-  en el criterio 2 y no se esconde con una FIFO ni con una afirmación de cero
-  stalls.
-- Endianness: ITCH y MoldUDP64 son **big-endian** en el cable; los registros
-  decodificados (Anexo A) se emiten en el **orden de campos del wire**
-  (big-endian), de modo que el RTL no hace byte-swaps y la comparación byte a
-  byte vs. golden es directa. No mezclar.
-- Determinismo: mismo pcap de entrada → mismos registros de salida bit a bit;
-  si aparece un gap de secuencia, el parsing continúa (no aborta), lo señaliza
-  y lo cuenta.
-- **Bytes válidos AXI:** la entrada incluye `s_axis_tkeep[DW/8-1:0]` con
-  semántica AXI estándar. Todo beat no final tiene todos sus lanes válidos; el
-  último usa un prefijo MSB contiguo de unos. Los lanes con `tkeep=0` no entran
-  en la cola. Máscaras con huecos, `tkeep=0` o una palabra parcial sin `tlast`
-  pulsan `error` y descartan el datagrama, drenándolo hasta `tlast` si el beat
-  inválido no era final.   Contrato completo:
-  `docs/decisiones/003-axis-tkeep-framing.md`.
+- **Target family/part:** AMD/Xilinx UltraScale+ (part from the master
+  document; fixed in phase-3 synthesis). Datapath **64-bit @ 156.25 MHz** (the
+  one delivered by the 10GBASE-R core).
+- **Measured line rate, no impossible promise:** the datapath uses full
+  AXI-Stream and the agreed test measures four A/U with QB=64, bit-exact output
+  and accumulated stalls `<= 24`. The infinite worst case of minimum messages
+  is a physical non-goal because Annex A produces more bytes than the wire; this
+  is declared in criterion 2 and is not hidden with a FIFO or a zero-stall claim.
+- Endianness: ITCH and MoldUDP64 are **big-endian** on the wire; decoded records
+  (Annex A) are emitted in **wire-field order** (big-endian), so the RTL does no
+  byte-swaps and byte-exact comparison vs. golden is direct. Do not mix.
+- Determinism: same input pcap → same output records bit-exact; if a sequence
+  gap appears, parsing continues (no abort), is signalled and counted.
+- **Valid AXI bytes:** the input includes `s_axis_tkeep[DW/8-1:0]` with standard
+  AXI semantics. Every non-final beat has all its lanes valid; the last uses a
+  contiguous MSB prefix of ones. Lanes with `tkeep=0` do not enter the queue.
+  Masks with holes, `tkeep=0` or a partial word without `tlast` pulse `error`
+  and discard the datagram, draining it to `tlast` if the invalid beat was not
+  final. Full contract: `docs/decisions/003-axis-tkeep-framing.md`.
 
-## Superficie y amenazas
+## Surface and threats
 
-**Entradas nuevas (puertos del top `itch_parser`):**
+**New inputs (ports of the top `itch_parser`):**
 
-| Señal | Ancho | Descripción |
+| Signal | Width | Description |
 |---|---|---|
-| `clk` | 1 | 156,25 MHz |
-| `rst_n` | 1 | reset activo bajo, síncrono |
-| `s_axis_tdata` | 64 | palabra del payload MoldUDP64 (ya decapado de IP/UDP) |
-| `s_axis_tkeep` | 8 | byte válido por lane AXI; prefijo MSB en el beat final |
-| `s_axis_tvalid` | 1 | hay palabra válida |
-| `s_axis_tready` | 1 | el parser acepta la palabra |
-| `s_axis_tlast` | 1 | última palabra del payload UDP (fin de paquete) |
+| `clk` | 1 | 156.25 MHz |
+| `rst_n` | 1 | active-low reset, synchronous |
+| `s_axis_tdata` | 64 | MoldUDP64 payload word (already IP/UDP-stripped) |
+| `s_axis_tkeep` | 8 | valid byte per AXI lane; MSB prefix on the final beat |
+| `s_axis_tvalid` | 1 | a valid word is present |
+| `s_axis_tready` | 1 | the parser accepts the word |
+| `s_axis_tlast` | 1 | last word of the UDP payload (end of packet) |
 
-**Salidas nuevas:**
+**New outputs:**
 
-| Señal | Ancho | Descripción |
+| Signal | Width | Description |
 |---|---|---|
-| `m_axis_tdata` | 64 | registro de mensaje decodificado (Anexo A), 1+ palabras |
-| `m_axis_tvalid` | 1 | hay datos de salida |
-| `m_axis_tready` | 1 | el downstream consume |
-| `m_axis_tlast` | 1 | última palabra del registro del mensaje |
-| `gap_detected` | 1 | pulso cuando se detecta un hueco de seq (contado interno) |
-| `error` | 1 | frame malformado / longitud incoherente (fail con señal, sin abortar el stream) |
+| `m_axis_tdata` | 64 | decoded message record (Annex A), 1+ words |
+| `m_axis_tvalid` | 1 | output data present |
+| `m_axis_tready` | 1 | downstream consumes |
+| `m_axis_tlast` | 1 | last word of the message record |
+| `gap_detected` | 1 | pulse when a seq gap is detected (counted internally) |
+| `error` | 1 | malformed frame / incoherent length (fail with signal, without aborting the stream) |
 
-**Mensajes de salida decodificados (10 tipos):** `S, R, A, F, E, C, X, D, U, P` —
-es la lista literal que el barrido de `/verify` ataca.
+**Decoded output messages (10 types):** `S, R, A, F, E, C, X, D, U, P` — the
+literal list that the `/verify` sweep attacks.
 
-**Casos de abuso del dominio** (cada uno con su escenario `SEC-` en Gherkin):
+**Domain abuse cases** (each with its `SEC-` scenario in Gherkin):
 
-- **Gap de secuencia MoldUDP64** (`seq_actual > esperado`) — SEC-GAP-01.
-- **Mensaje que cruza límite de palabra de 8 B** — SEC-ALN-01.
-- **Dos datagramas no alineados consecutivos**: cada payload es un burst AXI
-  independiente y el padding nunca precede al header posterior. — SEC-FRM-05.
-- **`tkeep` inválido**: máscara con huecos, cero o parcial sin `tlast` →
-  `error`, descarte y recuperación en el paquete siguiente. — SEC-FRM-06.
-- **`count` no coincide con el cierre físico**: mensajes o bytes extra tras
-  consumir `count`, o `count=0` con payload, dan `error` y se drenan hasta
-  `tlast`; jamás se reinterpretan como header. — SEC-FRM-07.
-- **Backpressure de entrada**: `(tdata,tkeep,tlast)` permanece estable mientras
+- **MoldUDP64 sequence gap** (`seq_actual > expected`) — SEC-GAP-01.
+- **Message crossing an 8 B word boundary** — SEC-ALN-01.
+- **Two consecutive unaligned datagrams**: each payload is an independent AXI
+  burst and padding never precedes a later header. — SEC-FRM-05.
+- **Invalid `tkeep`**: mask with holes, zero, or partial without `tlast` →
+  `error`, discard and recover in the next packet. — SEC-FRM-06.
+- **`count` does not match physical closure**: extra messages or bytes after
+  consuming `count`, or `count=0` with payload, give `error` and are drained to
+  `tlast`; never reinterpreted as header. — SEC-FRM-07.
+- **Input backpressure**: `(tdata,tkeep,tlast)` stays stable while
   `tvalid && !tready`. — SEC-FRM-08.
-- **Mensaje que cruza límite de paquete** (tlast en medio de un mensaje:
-  en MoldUDP64 un mensaje nunca se parte entre paquetes, pero el RTL debe
-  gestionarlo con firmeza: count inconsistente con el último paquete) —
-  SEC-FRM-02.
-- **Tipo no decodificable** (fuera del subset): validar longitud, avanzar el
-  `msg_idx` global y no emitir registro — SEC-PAR-04/05.
-- **Longitud declarada incoherente / frame truncado** — SEC-FRM-01, SEC-PAR-03.
-- **Tramo A/U back-to-back con QB=64** (régimen medido) — LIN-01/SEC-LIN-01.
-- **Backpressure del downstream** (tready bajo) sin pérdida de datos — SEC-OUT-02.
-- **Mensaje de sesión nueva** (session cambia) → reset de seq esperado — SEC-FRM-03.
-- **count = 0** en un paquete (válido en MoldUDP64) — SEC-FRM-04.
-- **Reemplazos/duplicados de seq** (seq == esperado, no gap): aceptar — SEC-GAP-02.
+- **Message crossing a packet boundary** (tlast in the middle of a message: in
+  MoldUDP64 a message is never split between packets, but the RTL must handle
+  it firmly: count inconsistent with the last packet) — SEC-FRM-02.
+- **Non-decodable type** (outside the subset): validate length, advance the
+  global `msg_idx` and emit no record — SEC-PAR-04/05.
+- **Incoherent declared length / truncated frame** — SEC-FRM-01, SEC-PAR-03.
+- **A/U back-to-back stretch with QB=64** (measured regime) — LIN-01/SEC-LIN-01.
+- **Downstream backpressure** (tready low) without data loss — SEC-OUT-02.
+- **New-session message** (session changes) → reset of expected seq — SEC-FRM-03.
+- **count = 0** in a packet (valid in MoldUDP64) — SEC-FRM-04.
+- **Seq replays/duplicates** (seq == expected, no gap): accept — SEC-GAP-02.
 
-**Qué se arriesga del maestro:** la **latencia determinista y el throughput
-medido**; un alineador mal diseñado o un decoder con lógica combinational larga
-rompe la cadena de 64-bit @ 156,25 MHz. El framing + gaps acercan el manejo
-real del feed (decisión Q8/Q9).
+**What is at risk from the master:** **deterministic latency and measured
+throughput**; a badly designed aligner or a decoder with long combinational
+logic breaks the 64-bit @ 156.25 MHz chain. Framing + gaps bring the real feed
+handling closer (decision Q8/Q9).
 
-## Reuso
+## Reuse
 
-- `golden_model/itch/messages.py` — **fuente única de layouts ITCH** (nada de
-  literales de protocolo fuera de aquí): el cocotb y el `--emit-messages` la
-  usan como oráculo. Si un tipo del subset falta como layout completo, se
-  añade aquí con `grep` de su struct (extensión pactada de fase 0).
-- `golden_model/itch/parser.py`, `golden_model/src/vectors.py` — reutilizados
-  por el modo `--emit-messages`.
-- `scripts/binaryfile_to_pcap.py` — genera los pcaps de replay (disponible y
-  verificado en fase 0, criterio 8).
-- `requirements-dev.txt` — cocotb/cocotb-bus/numpy (creado en esta campaña).
-- Dependencia cocotb-bus: se evita si el handshake se prueba a mano (data + 3
-  flags/sanitización); se añade solo si pacta aquí.
-- **Código nuevo que duplique** una tabla de layout ITCH = FAIL de la lente de
-  simplicidad de `/grade`: todo deriva de `messages.py`.
+- `golden_model/itch/messages.py` — **single source of ITCH layouts** (no
+  protocol literals elsewhere): cocotb and `--emit-messages` use it as oracle.
+  If a subset type lacks a full layout, it is added here with a `grep` of its
+  struct (agreed phase-0 extension).
+- `golden_model/itch/parser.py`, `golden_model/src/vectors.py` — reused by the
+  `--emit-messages` mode.
+- `scripts/binaryfile_to_pcap.py` — generates replay pcaps (available and
+  verified in phase 0, criterion 8).
+- `requirements-dev.txt` — cocotb/cocotb-bus/numpy (created in this campaign).
+- cocotb-bus dependency: avoided if the handshake is tested by hand (data + 3
+  flags/sanitization); added only if agreed here.
+- **New code that duplicates** an ITCH layout table = FAIL of the `/grade`
+  simplicity lens: everything derives from `messages.py`.
 
-## Criterios de aceptación (Definition of Done)
+## Acceptance criteria (Definition of Done)
 
-1. [x] El parser consume el payload MoldUDP64 y emite un **registro
-   decodificado (Anexo A) por cada mensaje de los 10 tipos del subset**,
-   byte a byte idéntico al `--emit-messages` del golden model (known-answer
-   sintético, incl. un mensaje de cada tipo).
+1. [x] The parser consumes the MoldUDP64 payload and emits a **decoded record
+   (Annex A) per message of the 10 subset types**, byte-exact against the
+   golden model `--emit-messages` (synthetic known-answer, incl. one message of
+   each type).
    — Gherkin: `parser.feature` §PAR-01, §SEC-PAR-04; `output.feature` §OUT-01
-2. [x] **Line rate (alcance acotado):** en un tramo literal de cuatro mensajes
-   A/U back-to-back que cabe amortiguado en la cola (QB=64), con el downstream
-   consumiendo, el RTL conserva la salida bit a bit y acumula como máximo 24
-   ciclos de stall de entrada; no se presenta ese tramo como cero stalls.
+2. [x] **Line rate (bounded scope):** on a literal four-message A/U
+   back-to-back stretch that fits buffered in the queue (QB=64), with the
+   downstream consuming, the RTL keeps bit-exact output and accumulates at most
+   24 input stall cycles; that stretch is not presented as zero stalls.
    — Gherkin: `datapath.feature` §LIN-01
-   — **Decisión de spec (edit 2026-08-13, iteración 3):** el peor caso de
-   mensajes MÍNIMOS (`D` 19 B, `X` 23 B, `S` 12 B) **back-to-back infinito** se
-   declara **non-goal físico** de esta campaña. El registro normalizado del
-   Anexo A añade 16 B de overhead por mensaje (word0 + word1), de modo que la
-   salida AXI-Stream siempre excede la entrada (D: 24 B salida por 21 B feed;
-   S: 24/14) y ningún aligner alcanza «1 palabra/ciclo infinito» con una cola
-   finita. Se verifica con el tramo acotado que cabe amortiguado (stalls `<=24`),
-   y el límite se documenta (con los ratios medidos y la evidencia de presión)
-   en la sección 9 de `docs/writeup/lecciones-aprendidas.md` como non-goal
-   derivado del Anexo A (no como defecto de RTL). Si en el futuro
-   se requiere el caso infinito, la decisión es rediseñar el Anexo A (salida
-   comprimida / bus más ancho), no parchear el parser.
+   — **Spec decision (edit 2026-08-13, iteration 3):** the MINIMUM-message
+   worst case (`D` 19 B, `X` 23 B, `S` 12 B) **infinite back-to-back** is
+   declared a **physical non-goal** of this campaign. The Annex-A normalized
+   record adds 16 B of overhead per message (word0 + word1), so the AXI-Stream
+   output always exceeds the input (D: 24 B out per 21 B feed; S: 24/14) and no
+   aligner reaches "infinite 1 word/cycle" with a finite queue. It is verified
+   with the bounded stretch that fits buffered (stalls `<=24`), and the limit is
+   documented (measured ratios and pressure evidence) in section 9 of
+   `docs/writeup/lessons-learned.md` as a non-goal derived from Annex A
+   (not as an RTL defect). If the infinite case is required in the future, the
+   decision is to redesign Annex A (compressed output / wider bus), not to patch
+   the parser.
    — Gherkin: `datapath.feature` §LIN-01
-3. [x] El alineador decodifica correctamente cualquiera de las 8 alineaciones
-   de un mensaje dentro de la palabra de 64-bit, incluidos mensajes que
-   cruzan el límite de palabra.
+3. [x] The aligner correctly decodes any of the 8 alignments of a message
+   within the 64-bit word, including messages crossing the word boundary.
    — Gherkin: `datapath.feature` §ALN-01
-4. [ ] **Framing MoldUDP64:** sesión, seq y count parseados; seq esperado =
-   prev_seq + prev_count; un **gap** se señaliza (`gap_detected`), se cuenta y
-   el parsing continúa; seq == esperado (sin gap) no señaliza; cambio de
-   sesión resetea el seq esperado; count=0 es válido. Cada payload se presenta
-   como burst independiente con `tkeep`; dos paquetes no alineados no comparten
-   beat ni contaminan cabeceras. `count` debe terminar exactamente con `tlast`:
-   cualquier byte válido residual o cierre tardío se señaliza y drena.
+4. [ ] **MoldUDP64 framing:** session, seq and count parsed; expected seq =
+   prev_seq + prev_count; a **gap** is signalled (`gap_detected`), counted and
+   parsing continues; seq == expected (no gap) is not signalled; a session
+   change resets the expected seq; count=0 is valid. Each payload is presented
+   as an independent burst with `tkeep`; two unaligned packets do not share a
+   beat nor contaminate headers. `count` must end exactly at `tlast`: any
+   residual valid byte or late closure is signalled and drained.
    — Gherkin: `framing.feature` §FRM-01, §FRM-02, §SEC-GAP-01, §SEC-GAP-02,
    §SEC-FRM-03, §SEC-FRM-04, §SEC-FRM-05, §SEC-FRM-06, §SEC-FRM-07
-5. [ ] **AXI-Stream con backpressure:** con `tready` bajo intermite el parser
-   retiene el stream sin perder ni duplicar ningún registro (oráculo byte a
-   byte); la secuencia `tvalid/tready/tlast` respeta el handshake y el productor
-   mantiene estable `(tdata,tkeep,tlast)` durante cada stall de entrada.
+5. [ ] **AXI-Stream with backpressure:** with `tready` intermittently low the
+   parser holds the stream without losing or duplicating any record (byte-exact
+   oracle); the `tvalid/tready/tlast` sequence respects the handshake and the
+   producer keeps `(tdata,tkeep,tlast)` stable during each input stall.
    — Gherkin: `output.feature` §OUT-02, §OUT-03; `framing.feature` §SEC-FRM-08
-6. [x] Los 22 tipos canónicos de `MESSAGE_LENGTHS`, incluidos los que están
-   fuera del subset, se validan por longitud antes de continuar. Los tipos
-   fuera del subset se contabilizan en el `msg_idx` global y **no** emiten
-   registro ni rompen el line rate; un tipo conocido con longitud incorrecta
-   pulsa `error` y se descarta. No se añade un banco de contadores por tipo:
-   nunca formó parte de los puertos y ningún consumidor del pipeline lo usa.
+6. [x] The 22 canonical types of `MESSAGE_LENGTHS`, including those outside the
+   subset, are validated by length before continuing. Out-of-subset types are
+   counted in the global `msg_idx` and **do not** emit a record nor break line
+   rate; a known type with an incorrect length pulses `error` and is discarded.
+   No per-type counter bank is added: it was never part of the ports and no
+   pipeline consumer uses it.
    — Gherkin: `parser.feature` §SEC-PAR-04
-7. [ ] Longitud incoherente / frame truncado cancelan el mensaje con `error`,
-   descartan el resto del datagrama inválido y continúan desde la cabecera del
-   siguiente paquete íntegro (sin abortar el stream, fail con señal). Los bytes
-   con `tkeep=0` nunca completan una longitud declarada.
+7. [ ] Incoherent length / truncated frame cancel the message with `error`,
+   discard the rest of the invalid datagram and continue from the header of the
+   next intact packet (without aborting the stream, fail with signal). Bytes
+   with `tkeep=0` never complete a declared length.
    — Gherkin: `parser.feature` §SEC-PAR-03, §SEC-FRM-01, §SEC-FRM-02
-8. [ ] **Replay real de fase 1 (hybrid oracle):** el RTL procesa los registros
-   de los mensajes del subset de un pcap local del día real/replay, y su
-   salida es byte a byte idéntica al oráculo `--emit-messages` sobre ese mismo
-   pcap, emitiendo un burst y un `tlast` por payload UDP. Además, un par de
-   **vectores congelados** pequeños se commitean en
-   `verification/vectors/messages/` y el RTL los reproduce.
+8. [ ] **Phase-1 real replay (hybrid oracle):** the RTL processes the subset
+   message records of a local real-day/replay pcap, and its output is
+   byte-exact against the `--emit-messages` oracle over that same pcap, emitting
+   one burst and one `tlast` per UDP payload. Additionally, a pair of small
+   **frozen vectors** is committed in `verification/vectors/messages/` and
+   reproduced by the RTL.
    — Gherkin: `replay.feature` §REP-01, §REP-02
-9. [x] **Cabos de fase 0** (decisión pendiente #2, cerrados ANTES del RTL):
-   el día de regresión `01302019` se procesa sin anomalías de invariantes y
-   los vectores sintéticos pequeños se commitean. Se documenta en el
-   verify-report de fase 0 (edit de ese informe) o en este spec como
-   pre-trabajo pactado.
-   — Verificación: comando de `run_golden.py` sobre el día de regresión.
-10. [ ] Cocotb + Verilator compilan el top con `--Wall` sin warnings reales
-    silenciados (trinquete documentado por área, cero silencios).
-    — Gherkin: estático (gate B/C de verify; sin escenario).
-11. [ ] Lint y estilo: `verible-verilog-lint` + `verilator --lint-only` en
-    verde sobre `rtl/parser/`.
-    — Sin escenario (gate B/C).
+9. [x] **Phase-0 loose ends** (pending decision #2, closed BEFORE the RTL): the
+   regression day `01302019` is processed without invariant anomalies and the
+   small synthetic vectors are committed. Documented in the phase-0
+   verify-report (edit of that report) or in this spec as agreed pre-work.
+   — Verification: `run_golden.py` command over the regression day.
+10. [ ] Cocotb + Verilator compile the top with `--Wall` with no real warnings
+    silenced (per-area documented ratchet, zero silences).
+    — Gherkin: static (gate B/C of verify; no scenario).
+11. [ ] Lint and style: `verible-verilog-lint` + `verilator --lint-only` green
+    over `rtl/parser/`.
+    — No scenario (gate B/C).
 
-## Verificación
+## Verification
 
-| Criterio | Cómo se prueba |
+| Criterion | How it is tested |
 |---|---|
-| 1 | cocotb `test_*` espejo de `parser.feature`/`output.feature` sobre vectores sintéticos (oráculo messages.py + `--emit-messages`) |
-| 2 | cocotb: cuatro A/U back-to-back con QB=64, salida bit a bit y stalls `<=24` con tready=1 |
-| 3 | cocotb: barrido de las 8 alineaciones (escenario ALN-01 con Esquema) |
-| 4 | cocotb: secuencias fabricadas (gap, sin-gap, cambio de sesión, count=0), dos datagramas no alineados, `count↔tlast` exacto y máscaras `tkeep` válidas/inválidas |
-| 5 | cocotb: tready aleatorio/pérdida controlada, comparar salida vs oráculo y monitorizar `(tdata,tkeep,tlast)` estable en stalls de entrada |
-| 6 | cocotb: H canónico/longitud H incorrecta entre mensajes A; chequear validación, avance de `msg_idx` y no-registro |
-| 7 | cocotb: longitudes rotas / frames truncados, incluidos bordes sub-word según `tkeep` → `error`, continuación |
-| 8 | cocotb: replay de pcap del día real como bursts independientes + conteo de `tlast` + vectores congelados commiteados |
-| 9 | `python3 -m golden_model.scripts.run_golden data/itch_sample/01302019.NASDAQ_ITCH50.gz …` (sin anomalías) + vectores sintéticos commiteados |
+| 1 | cocotb `test_*` mirror of `parser.feature`/`output.feature` over synthetic vectors (messages.py + `--emit-messages` oracle) |
+| 2 | cocotb: four A/U back-to-back with QB=64, bit-exact output and stalls `<=24` with tready=1 |
+| 3 | cocotb: sweep of the 8 alignments (ALN-01 scenario with Outline) |
+| 4 | cocotb: fabricated sequences (gap, no-gap, session change, count=0), two unaligned datagrams, exact `count↔tlast` and valid/invalid `tkeep` masks |
+| 5 | cocotb: random tready/controlled loss, compare output vs oracle and monitor stable `(tdata,tkeep,tlast)` on input stalls |
+| 6 | cocotb: canonical H/incorrect H length between A messages; check validation, `msg_idx` advance and no-record |
+| 7 | cocotb: broken lengths / truncated frames, incl. sub-word edges per `tkeep` → `error`, continuation |
+| 8 | cocotb: real-day pcap replay as independent bursts + `tlast` count + committed frozen vectors |
+| 9 | `python3 -m golden_model.scripts.run_golden data/itch_sample/01302019.NASDAQ_ITCH50.gz …` (no anomalies) + committed synthetic vectors |
 | 10 | `verilator --lint-only -Wall --top-module itch_parser rtl/parser/<files>.sv` |
 | 11 | `verible-verilog-lint rtl/parser/<files>.sv` |
 
-Régimen completo: skill `verify`. Gates específicos de esta campaña: A = cocotb/
-Verilator verde (make en `verification/testbenches/parser/`); B/C = lint+estilo;
-D = tabla spec↔tests + cobertura por tipo (los 10 del subset + no-subset);
-E = mutación HDL manual pactada sobre el alineador/decoder/FSM de framing
-(flip de `seq > esperado` → `>=`, `>=` a `>`, comparador de longitud relajado,
-off-by-one en el barrel shifter, omitir `tlast`) — cada uno muerto por un test;
-F = espejos Gherkin (`specs/gherkin-espejos.json` → `verification/testbenches/parser`);
-G = G0/G3 (datos reales fuera del repo) + **G de timing/Vivado:** NO EJECUTADO
-en fase 1 (se declara NO APLICA hasta fase 3; justificación en verify-report).
+Full regime: skill `verify`. Campaign-specific gates: A = cocotb/Verilator
+green (make in `verification/testbenches/parser/`); B/C = lint+style;
+D = spec↔test table + coverage by type (the 10 of the subset + non-subset);
+E = agreed manual HDL mutation over the aligner/decoder/framing FSM (flip
+`seq > expected` → `>=`, `>=` to `>`, relaxed length comparator, off-by-one in
+the barrel shifter, omit `tlast`) — each killed by a test; F = Gherkin mirrors
+(`specs/gherkin-espejos.json` → `verification/testbenches/parser`); G = G0/G3
+(real data outside the repo) + **G timing/Vivado:** NOT EXECUTED in phase 1
+(declared NOT APPLICABLE until phase 3; justification in the verify-report).
 
-**Contratos sin gate** — invariantes que pueden romperse con suite y lint en
-verde:
+**Geless contracts** — invariants that can break with suite and lint green:
 
-1. **Tabla de layouts autoconsistente pero mal transcrita** entre
-   `messages.py`, el RTL y `--emit-messages`. Guardarraíl: los vectores
-   sintéticos de los tests son **literales hex escritos a mano desde el PDF**
-   (oráculo independiente), nunca generados por el propio RTL; cocotb redecodifica
-   el stream de entrada con `messages.py` (independiente del RTL).
-2. **Layout del registro normalizado (Anexo A)** vs. el que consumirá el order
-   book en fase 2. Guardarraíl: Anexo A fijado byte a byte en esta spec
-   (cambiarlo = edit de spec) + round-trip cocotb writer↔reader↔texto.
-3. **Semántica heredada por fase 2** (qué campos del subset lleva el book):
-   la define esta spec (Anexo A), no la redefine fase 2.
-4. **Requisito de line rate** demostrado solo con vectores sintéticos: el
-   replay real (criterio 8) usa pcaps reales que SÍ contienen back-to-back real,
-   y el chequero de stalls (criterio 2) aplica también al replay real.
+1. **Self-consistent but mis-transcribed layout table** across `messages.py`,
+   the RTL and `--emit-messages`. Guardrail: the synthetic test vectors are
+   **hand-written hex literals from the PDF** (independent oracle), never
+   generated by the RTL itself; cocotb re-decodes the input stream with
+   `messages.py` (independent of the RTL).
+2. **Normalized record layout (Annex A)** vs. what the order book will consume
+   in phase 2. Guardrail: Annex A fixed byte by byte in this spec (changing it =
+   spec edit) + cocotb writer↔reader↔text round-trip.
+3. **Semantics inherited by phase 2** (which subset fields the book carries):
+   defined by this spec (Annex A), not redefined by phase 2.
+4. **Line-rate requirement demonstrated only with synthetic vectors**: the real
+   replay (criterion 8) uses real pcaps that DO contain real back-to-back, and
+   the stall checker (criterion 2) applies also to the real replay.
 
 ## Loop
 
-Stop limit: **5 iteraciones**. Cadencia: encadenar build→verify→grade mientras
-quede cola; al agotar el límite con criterios en FAIL, escala al owner.
+Stop limit: **5 iterations**. Cadence: chain build→verify→grade while there is a
+queue; when the limit is reached with criteria in FAIL, escalate to the owner.
 
-### Enmienda REP-02 (2026-08-18) — cierre del line-rate sobre tramo real
+### REP-02 amendment (2026-08-18) — line-rate closure over a real stretch
 
-El criterio 8 sigue abierto por su brazo line-rate. El cierre del replay
-agregado (byte a byte + `tlast` 91/91 + contador de stalls) ya está en
-`verify-report.md`, pero **no sustituye** la medición del umbral sobre un
-tramo real: REP-02 debe además:
+Criterion 8 stays open in its line-rate arm. The aggregated replay closure
+(byte-exact + `tlast` 91/91 + stall counter) is already in `verify-report.md`,
+but it does **not substitute** the threshold measurement over a real stretch:
+REP-02 must additionally:
 
-1. Seleccionar desde el pcap, **sin índices manuales**, un tramo real de
-   cuatro mensajes consecutivos de tipo A o U (primera ventana deslizante de
-   4 en orden de captura; definición en el test, no en el RTL).
-2. Procesar ese tramo aislado con `m_axis_tready=1` siempre y contar los
-   stalls de entrada (`s_axis_tvalid && !s_axis_tready`) durante el tramo:
-   **<= 24** (criterio 2 aplicado al replay real).
-3. Verificar la salida del tramo bit a bit contra el oráculo (misma
-   selección derivada, oráculo independiente).
+1. Select from the pcap, **without manual indices**, a real stretch of four
+   consecutive A or U messages (first sliding window of 4 in capture order;
+   definition in the test, not in the RTL).
+2. Process that isolated stretch with `m_axis_tready=1` always and count the
+   input stalls (`s_axis_tvalid && !s_axis_tready`) during the stretch:
+   **<= 24** (criterion 2 applied to the real replay).
+3. Verify the stretch output bit-exact against the oracle (same derived
+   selection, independent oracle).
 
-Espejo: `test_rep02_tramo_au_real_line_rate` en
-`verification/testbenches/parser/test_itch_parser.py`. Si el pcap local no
-existe o no contiene la ventana, el test declara la omisión (SkipTest) y el
-criterio permanece abierto.
+Mirror: `test_rep02_tramo_au_real_line_rate` in
+`verification/testbenches/parser/test_itch_parser.py`. If the local pcap does
+not exist or does not contain the window, the test declares the omission
+(SkipTest) and the criterion stays open.
 
 ---
 
-## Anexo A — layout del registro de mensaje normalizado (canónico)
+## Annex A — normalized message record layout (canonical)
 
-Cada mensaje decodificado del subset emite **una o más palabras de 64-bit**
-en el orden y con los campos del wire (big-endian, sin byte-swap del RTL). Un
-registro es un burst `tvalid` alta con `tlast` en la última palabra.
+Each decoded subset message emits **one or more 64-bit words** in wire order
+and fields (big-endian, no RTL byte-swap). A record is a burst with `tvalid`
+high and `tlast` on the last word.
 
-**Cabecera de contexto — Word 0:**
+**Context header — Word 0:**
 
-| Bits | Campo | Descripción |
+| Bits | Field | Description |
 |---|---|---|
-| 63:56 | `msg_type` | tipo ITCH ASCII (`S,R,A,F,E,C,X,D,U,P`) |
+| 63:56 | `msg_type` | ITCH ASCII type (`S,R,A,F,E,C,X,D,U,P`) |
 | 55:40 | `locate` | Stock Locate Code |
-| 39:32 | `length` | longitud total del mensaje ITCH (bytes, del campo de framing; max 50 → cabe) |
-| 31:0 | `msg_idx` | índice global del mensaje en el stream (32 bits; el día real ~268M < 2³²) |
+| 39:32 | `length` | total ITCH message length (bytes, from the framing field; max 50 → fits) |
+| 31:0 | `msg_idx` | global message index in the stream (32 bits; the real day ~268M < 2³²) |
 
-**Word 1 — contexto temporal:**
+**Word 1 — temporal context:**
 
-| Bits | Campo |
+| Bits | Field |
 |---|---|
-| 63:0 | `ts_ns` — timestamp ITCH (ns desde medianoche, del campo ITCH) |
+| 63:0 | `ts_ns` — ITCH timestamp (ns from midnight, from the ITCH field) |
 
-**Words 2…N — cuerpo del mensaje (campos decodificados):** los bytes del
-mensaje tras la cabecera común de ITCH (11 B: type, locate, tracking, ts), es
-decir exactamente los campos específicos del tipo en **orden del wire**
-(big-endian). Como los tipos del subset son de longitud fija, cada campo tiene
-un offset fijo dentro del cuerpo (el mismo de `golden_model/itch/messages.py`):
-decodificar = validar longitud por tipo y modulariar los campos a esos offsets
-fijos; no hay re-encodificación (el book de fase 2 indexa el cuerpo por offset
-de su tipo). Cero bytes de relleno a la palabra de 8 B (bits sobrantes en 0).
+**Words 2…N — message body (decoded fields):** the message bytes after the
+common ITCH header (11 B: type, locate, tracking, ts), i.e. exactly the
+type-specific fields in **wire order** (big-endian). Since the subset types are
+fixed length, each field has a fixed offset within the body (the same as
+`golden_model/itch/messages.py`): decoding = validate length by type and
+extract fields at those fixed offsets; no re-encoding (the phase-2 book indexes
+the body by its type offset). Zero padding bytes to the 8 B word (leftover bits
+at 0).
 
-**Número de palabras de cuerpo por tipo** (`length − 11` B → `ceil(·/8)`):
+**Body word count per type** (`length − 11` B → `ceil(·/8)`):
 
-| Tipo | len | cuerpo | words cuerpo | total (2+body) |
+| Type | len | body | body words | total (2+body) |
 |---|---|---|---|---|
 | S | 12 | 1 | 1 | 3 |
 | D | 19 | 8 | 1 | 3 |
@@ -362,32 +352,31 @@ de su tipo). Cero bytes de relleno a la palabra de 8 B (bits sobrantes en 0).
 | U | 35 | 24 | 3 | 5 |
 | P | 44 | 33 | 5 | 7 |
 
-> El orden **exacto** de campos y sus offsets es EL de `golden_model/itch/
-> messages.py` (fuente única); Anexo A fija la cabecera de contexto, la
-> semántica de burst y el cuerpo = bytes del wire tras los 11 B comunes.
-> `--emit-messages` emite exactamente estas palabras (cabecera + body).
-> `m_axis_tlast` delimita el burst; cocotb reconstruye el registro por `tlast`
-> y lo compara byte a byte contra `--emit-messages`.
+> The **exact** field order and offsets are those of
+> `golden_model/itch/messages.py` (single source); Annex A fixes the context
+> header, the burst semantics and body = wire bytes after the 11 common bytes.
+> `--emit-messages` emits exactly these words (header + body). `m_axis_tlast`
+> delimits the burst; cocotb reconstructs the record by `tlast` and compares it
+> byte-exact against `--emit-messages`.
 
-> **Edit explícito de spec (2026-08-12, hallazgo de diseño durante /build):**
-> la primera redacción de este Anexo tenía `msg_idx_lo[22:0]` de 23 bits
-> (insuficiente para un día real, ~268M mensajes) y un recuento de palabras
-> por tipo desajustado al tamaño real de los mensajes. Corregido a `msg_idx`
-> de 32 bits, `length` en bits 39:32 y tabla de words/cuerpo verificada. Sin
-> este edit, el criterio 8 (replay real byte a byte) y el contrato de fase 2
-> habrían quedado rotos por construcción.
+> **Explicit spec edit (2026-08-12, design finding during /build):** the first
+> draft of this Annex had `msg_idx_lo[22:0]` of 23 bits (insufficient for a
+> real day, ~268M messages) and a per-type word count misaligned with the real
+> message sizes. Corrected to a 32-bit `msg_idx`, `length` in bits 39:32 and a
+> verified words/body table. Without this edit, criterion 8 (byte-exact real
+> replay) and the phase-2 contract would have been broken by construction.
 
-## Anexo B — datos y entorno de la campaña
+## Annex B — campaign data and environment
 
-- **Replay real (criterio 8):** pcap generado del día local
-  `data/itch_sample/12302019…` con `scripts/binaryfile_to_pcap.py`
-  (`--msgs-per-packet` configurable); nunca se commitea el crudo.
-- **Vectores congelados (criterio 8/9):** pequeños, sintéticos, en
-  `verification/vectors/messages/` y `verification/vectors/` (regla G0).
-- **Toolchain (instalado en esta campaña):** Verilator 5.050 (brew),
-  `.venv` con cocotb 2.0.1 / numpy 2.4.6 sobre **Python 3.11** (el 3.14 del
-  sistema rompe cocotb 2.0.1 — ver DESARROLLO.md).
-- Cabos de fase 0 (criterio 9): día de regresión `01302019.NASDAQ_ITCH50.gz`
-  (~4,8 GB gz) + vectores sintéticos commiteados.
-- **Part objetivo:** UltraScale+ (part concreto en síntesis fase 3); aquí solo
-  se estipula datapath 64-bit @ 156,25 MHz y compatibilidad Verilator.
+- **Real replay (criterion 8):** pcap generated from the local day
+  `data/itch_sample/12302019…` with `scripts/binaryfile_to_pcap.py`
+  (`--msgs-per-packet` configurable); the raw data is never committed.
+- **Frozen vectors (criterion 8/9):** small, synthetic, in
+  `verification/vectors/messages/` and `verification/vectors/` (rule G0).
+- **Toolchain (installed in this campaign):** Verilator 5.050 (brew), `.venv`
+  with cocotb 2.0.1 / numpy 2.4.6 over **Python 3.11** (the system 3.14 breaks
+  cocotb 2.0.1 — see DEVELOPMENT.md).
+- Phase-0 loose ends (criterion 9): regression day `01302019.NASDAQ_ITCH50.gz`
+  (~4.8 GB gz) + committed synthetic vectors.
+- **Target part:** UltraScale+ (concrete part in phase-3 synthesis); here only
+  the 64-bit @ 156.25 MHz datapath and Verilator compatibility are stipulated.

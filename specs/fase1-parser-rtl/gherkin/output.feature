@@ -1,29 +1,29 @@
-# output.feature — interfaz AXI-Stream de salida
+# output.feature — AXI-Stream output interface
 
-Espejo de «Criterios de aceptación» 1 y 5 de `spec.md`.
+Mirror of "Acceptance criteria" 1 and 5 of `spec.md`.
 
-#language: es
-Funcionalidad: Interfaz AXI-Stream de salida con backpressure
-  Como pipeline de market data
-  Quiero que la salida AXI-Stream respete tvalid/tready/tlast y pueda retenerse
-  Para que el downstream (order book) pueda backpressurear sin pérdida
+# language: en
+Feature: AXI-Stream output interface with backpressure
+  As a market-data pipeline
+  I want the AXI-Stream output to respect tvalid/tready/tlast and be holdable
+  So that the downstream (order book) can backpressure without loss
 
-Escenario: OUT-01 — cada mensaje decodificado se emite como un burst con tlast al final
-  Dado un stream de mensajes del subset de distintos tipos
-  Cuando el RTL emite la salida
-  Entonces cada registro comienza con tvalid alta y termina con tlast
-  Y el número de palabras del burst coincide con el tipo del mensaje
+Scenario: OUT-01 — each decoded message is emitted as a burst with tlast at the end
+  Given a stream of subset messages of different types
+  When the RTL emits the output
+  Then each record starts with tvalid high and ends with tlast
+  And the number of words in the burst matches the message type
 
-#language: es
-Escenario: OUT-02 — con tready bajo el parser retiene el stream sin pérdida ni duplicado
-  Dado un downstream que intermitentemente baja tready
-  Cuando el RTL procesa el stream
-  Entonces la salida final contiene el mismo burst de registros que el oráculo
-  Y ningún registro se pierde ni se duplica
+# language: en
+Scenario: OUT-02 — with tready low the parser holds the stream without loss or duplicate
+  Given a downstream that intermittently lowers tready
+  When the RTL processes the stream
+  Then the final output contains the same burst of records as the oracle
+  And no record is lost or duplicated
 
-#language: es
-Escenario: OUT-03 — el handshake tvalid/tready solo avanza cuando ambos están altos
-  Dado un downstream con tready no constante
-  Cuando el RTL hace el handshake de salida
-  Entonces los datos solo avanzan en ciclos con tvalid y tready altos
-  Y los datos no cambian mientras tvalid está alto y tready bajo
+# language: en
+Scenario: OUT-03 — the tvalid/tready handshake only advances when both are high
+  Given a downstream with non-constant tready
+  When the RTL performs the output handshake
+  Then the data only advances in cycles with tvalid and tready high
+  And the data does not change while tvalid is high and tready low

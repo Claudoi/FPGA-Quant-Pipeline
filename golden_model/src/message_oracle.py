@@ -1,21 +1,21 @@
-"""Oráculo de mensajes de fase 1: consumidor del stream del RTL -> registro Anexo A.
+"""Phase-1 message oracle: consumer of the RTL stream -> Annex A record.
 
-El RTL (fase 1) consume el payload MoldUDP64 ya decapado de IP/UDP: una
-secuencia de paquetes, cada uno `session(10) + seq(8) + count(2) + [len u16 +
-mensaje]*`. Este módulo es el **oráculo**: recorre exactamente ese stream y, por
-cada mensaje de los 10 tipos del subset (`S,R,A,F,E,C,X,D,U,P`), emite el
-registro normalizado del Anexo A de `specs/fase1-parser-rtl/spec.md`:
+The RTL (phase 1) consumes the MoldUDP64 payload already decapsulated from
+IP/UDP: a sequence of packets, each one `session(10) + seq(8) + count(2) +
+[len u16 + message]*`. This module is the **oracle**: it walks exactly that
+stream and, for each message of the 10 subset types (`S,R,A,F,E,C,X,D,U,P`),
+emits the normalized Annex A record of `specs/fase1-parser-rtl/spec.md`:
 
     word0 = (msg_type<<56)|(locate<<40)|(length<<32)|(msg_idx)
     word1 = ts_ns
-    body  = bytes del mensaje tras la cabecera común ITCH de 11 B (campos del
-            wire, big-endian; el mismo struct de golden_model/itch/messages.py)
+    body  = bytes of the message after the 11 B ITCH common header (wire
+            fields, big-endian; the same struct as golden_model/itch/messages.py)
 
-Comparado byte a byte contra la salida del RTL en cocotb. Los tipos fuera del
-subset se validan por longitud y se cuentan, sin emitir registro (idéntico a
-la semántica del criterio 6 de fase 1).
+Compared byte-for-byte against the RTL output in cocotb. Types outside the
+subset are validated by length and counted, without emitting a record
+(identical to the phase-1 criterion 6 semantics).
 
-Determinismo: mismo stream -> mismos registros. Orden del wire, sin swap.
+Determinism: same stream -> same records. Wire order, no swap.
 """
 from __future__ import annotations
 
@@ -23,20 +23,20 @@ from typing import Iterator, Sequence
 
 from ..itch.messages import MESSAGE_LENGTHS
 
-#: tipos del subset de fase 1 (10): S,R,A,F,E,C,X,D,U,P
+#: phase-1 subset types (10): S,R,A,F,E,C,X,D,U,P
 SUBSET_TYPES = frozenset("SRCFDECXUAP")
 
-#: tipo -> long. total del mensaje (bytes); FOndo para validar longitud.
+#: type -> total message length (bytes); basis for length validation.
 _FOUND: dict[str, int] = MESSAGE_LENGTHS
 
-#: tuple de registro de mensaje: (word0, word1_ts, body bytes)
+#: message record tuple: (word0, word1_ts, body bytes)
 MessageRecord = tuple[int, int, bytes]
 
 COMMON_HEADER_LEN = 11
 
 
 class BadMessageError(ValueError):
-    """Mensaje con tipo fuera de la taba, longitud incoherente o truncado."""
+    """Message with a type outside the table, incoherent length, or truncated."""
 
 
 def _word0(msg_type: str, locate: int, length: int, msg_idx: int) -> int:
@@ -46,11 +46,11 @@ def _word0(msg_type: str, locate: int, length: int, msg_idx: int) -> int:
 def iter_message_records(
     packets: Sequence[tuple[int, list[bytes], bytes]],
 ) -> Iterator[MessageRecord]:
-    """Recorre el stream de paquetes MoldUDP64 y emite registros Anexo A.
+    """Walks the MoldUDP64 packet stream and emits Annex A records.
 
-    `packets` sigue el contrato de `binaryfile_to_pcap.iter_pcap_packets`:
-    para cada paquete, (seq, [mensajes ITCH], payload crudo). El seq guía el
-    conteo global de mensajes; no se requiere el payload crudo para decodificar.
+    `packets` follows the `binaryfile_to_pcap.iter_pcap_packets` contract:
+    for each packet, (seq, [ITCH messages], raw payload). The seq drives the
+    global message count; the raw payload is not required to decode.
     """
     global_idx = 0
     for _seq, messages, _payload in packets:
@@ -59,11 +59,11 @@ def iter_message_records(
             declared = len(raw)
             expected = _FOUND.get(mtype)
             if expected is None:
-                raise BadMessageError(f"msg {global_idx}: tipo desconocido {mtype!r}")
+                raise BadMessageError(f"msg {global_idx}: unknown type {mtype!r}")
             if declared != expected[1]:
                 raise BadMessageError(
-                    f"msg {global_idx}: tipo {mtype!r} declara {declared} B, "
-                    f"la spec exige {expected[1]} B"
+                    f"msg {global_idx}: type {mtype!r} declares {declared} B, "
+                    f"the spec requires {expected[1]} B"
                 )
             if mtype not in SUBSET_TYPES:
                 global_idx += 1

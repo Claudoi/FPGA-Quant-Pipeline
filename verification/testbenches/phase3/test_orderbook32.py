@@ -1,11 +1,11 @@
-"""Testbench cocotb del order book a DW=32 (fase 3, criterio 2) — área phase3.
+"""Cocotb testbench for the DW=32 order book (phase 3, criterion 2) — area
+phase3.
 
-Espejos B32-01/B32-02: el book parametrizado a DW=32 (layout Anexo A 32
-recortado: w0={type,locate,len}, w1=idx, w2..=cuerpo — sin ts) emite el BBO
-bit a bit
-contra el golden book.py, sobre corpus sintético y sobre el feed real del día
-local. Adversariales INV-B32: replace atómico, RAW add->execute y multi-símbolo
-a 32 bits (pincan errores de indexado de bytes del cuerpo a 4 B/palabra).
+Mirrors B32-01/B32-02: the book parameterized at DW=32 (trimmed 32-bit Annex A
+layout: w0={type,locate,len}, w1=idx, w2..=body — without ts) emits the BBO
+bit-exact against golden book.py, over the synthetic corpus and over the
+local-day real feed. Adversarials INV-B32: atomic replace, RAW add->execute and
+multi-symbol at 32 bits (pin body byte-indexing errors at 4 B/word).
 """
 import cocotb
 import os
@@ -17,8 +17,8 @@ from test_orderbook import (A, C, E, X, D, U, S, H, run_book, iter_records,
 
 
 def anexo_words32(messages):
-    """Convierte mensajes a words del Anexo A de 32 bits (layout recortado,
-    campaña fase3-uram: w0 context, w1 idx, w2.. cuerpo — sin ts) flat."""
+    """Converts messages to 32-bit Annex A words (trimmed layout, fase3-uram
+    campaign: w0 context, w1 idx, w2.. body — without ts) flat."""
     words = []
     for mtype, locate, body, idx in iter_records(messages):
         words.append((ord(mtype) << 24) | (locate << 8) | (11 + len(body)))
@@ -30,9 +30,9 @@ def anexo_words32(messages):
 
 
 async def drive_and_collect_bbo32(dut, messages, max_cycles=200000):
-    """Conduce Anexo A de 32 bits y recolecta eventos BBO del top.
+    """Drives 32-bit Annex A and collects BBO events from the top.
 
-    Devuelve (bbo_events, cross_count, anomaly_count)."""
+    Returns (bbo_events, cross_count, anomaly_count)."""
     await _reset(dut)
     words = anexo_words32(messages)
     ci = 0
@@ -74,7 +74,7 @@ async def drive_and_collect_bbo32(dut, messages, max_cycles=200000):
 
 @cocotb.test()
 async def test_b32_01_bbo_igual_golden(dut):
-    """Espejo §B32-01: secuencia multi-tipo -> BBO del golden bit a bit (32 bits)."""
+    """Mirror §B32-01: multi-type sequence -> golden BBO bit-exact (32 bits)."""
     AMZN = 393
     msgs = [
         S(AMZN, 1_000_000_000, ord("Q")),
@@ -98,7 +98,7 @@ async def test_b32_01_bbo_igual_golden(dut):
 
 @cocotb.test()
 async def test_inv_b32_01_replace_atomico(dut):
-    """INV/SEC-U-01 (32 bits): U sobre el mejor bid -> el estado final es visible."""
+    """INV/SEC-U-01 (32 bits): U on the best bid -> the final state is visible."""
     AMZN = 1101
     msgs = [
         A(AMZN, 1, 247097, b"B", 500, b"AMZN    ", 425_800),
@@ -109,12 +109,12 @@ async def test_inv_b32_01_replace_atomico(dut):
     got, _, _ = await drive_and_collect_bbo32(dut, msgs)
     assert got == expected, (
         f"INV-B32-01: got={got} exp={expected} "
-        f"(el U debe dejar visible el nivel 425700, no el 425800 stale)")
+        f"(the U must leave the 425700 level visible, not the stale 425800)")
 
 
 @cocotb.test()
 async def test_inv_b32_02_raw_add_execute(dut):
-    """INV/SEC-HZ-01 (32 bits): el execute ve el estado del add previo (RAW)."""
+    """INV/SEC-HZ-01 (32 bits): the execute sees the state of the prior add (RAW)."""
     AMZN = 393
     msgs = [
         A(AMZN, 1, 1, b"B", 100, b"AMZN    ", 1_000_00),
@@ -127,7 +127,7 @@ async def test_inv_b32_02_raw_add_execute(dut):
 
 @cocotb.test()
 async def test_inv_b32_03_dos_simbolos_independientes(dut):
-    """INV/MULTI-01 (32 bits): libros por símbolo independientes a 32 bits."""
+    """INV/MULTI-01 (32 bits): independent per-symbol books at 32 bits."""
     AMZN = 393
     AAPL = 13
     msgs = [
@@ -143,29 +143,29 @@ async def test_inv_b32_03_dos_simbolos_independientes(dut):
 
 
 # ---------------------------------------------------------------------------
-# B32-02: feed real (subset 20 símbolos) -> BBO idéntico al golden
+# B32-02: real feed (subset of 20 symbols) -> BBO identical to the golden model
 # ---------------------------------------------------------------------------
 @cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_b32_02_replay_feed_real_32(dut):
-    """Espejo §B32-02: el BBO del feed real a 32 bits es idéntico al golden,
-    bit a bit, evento a evento (pcap local no commiteado; se omite si no existe)."""
-    assert os.path.exists(REAL_PCAP), "B32-02 OMITIDO: pcap local ausente"
+    """Mirror §B32-02: the 32-bit real-feed BBO is identical to the golden model,
+    bit-exact, event by event (local pcap not committed; skipped if absent)."""
+    assert os.path.exists(REAL_PCAP), "B32-02 SKIPPED: local pcap absent"
     msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
     cocotb.log.info(
-        f"B32-02: {len(msgs)} mensajes de {len(keep)} símbolos "
-        f"({sorted(keep)[:3]}...) contra golden a 32 bits")
+        f"B32-02: {len(msgs)} messages of {len(keep)} symbols "
+        f"({sorted(keep)[:3]}...) against golden model at 32 bits")
     expected, golden = run_book(msgs)
     got, cross, anomaly = await drive_and_collect_bbo32(dut, msgs, max_cycles=2_000_000)
     if got != expected:
         first = next(i for i, (g, e) in enumerate(zip(got, expected)) if g != e)
         raise AssertionError(
-            f"B32-02: got({len(got)}) exp({len(expected)}) sobre {len(msgs)} msgs "
-            f"/ {len(keep)} símbolos; primer desajuste en evento {first}:\n"
+            f"B32-02: got({len(got)}) exp({len(expected)}) over {len(msgs)} msgs "
+            f"/ {len(keep)} symbols; first mismatch at event {first}:\n"
             f" got={got[first-2:first+3]}\n exp={expected[first-2:first+3]}")
     assert cross == golden.cross_events, (
         f"B32-02 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"B32-02 anomaly: got={anomaly} exp={golden.anomalies}")
     cocotb.log.info(
-        f"B32-02 OK: {len(got)} eventos bit a bit a 32 bits, "
+        f"B32-02 OK: {len(got)} events bit-exact at 32 bits, "
         f"cross={cross}, anomaly={anomaly}")

@@ -1,79 +1,93 @@
-# synth/reports — historial de runs Vivado (criterio 10)
+# synth/reports — Vivado run history (criterion 10)
 
-> Los informes de este directorio (`timing_impl.txt`, `util_impl.txt`,
-> `timing_synth.txt`, `util_synth.txt`, `ram_*.txt`, `drc_impl.txt`,
-> `check_timing_*.txt`, `clocks_synth.txt`) son los del **último run**; los
-> números de los runs anteriores están en las tablas de este documento y en
-> `specs/fase3-optimizacion/verify-report.md`.
+> **CLO-RPT-01 (2026-08-20): per-variant reports.** Each tcl writes to its own
+> directory and a run never overwrites another:
+>
+> - `synth/reports/322mhz/` — variant **32b @ 322.265625 MHz**
+>   (`fase3_synth.tcl`, 3.103 ns period).
+> - `synth/reports/156mhz/` — variant **64b @ 156.25 MHz**
+>   (`fase3_156mhz.tcl`, 6.400 ns period). The iter-16 156 run (WNS +0.057 ns,
+>   TNS 0, URAM 32/48, DRC 0) was archived here on 2026-08-20 before the next
+>   batch.
+>
+> The `.dcp` files are not versioned (project rule); the `timing_*.txt`,
+> `util_*.txt`, `ram_*.txt`, `drc_*.txt`, `check_timing_*.txt`,
+> `clocks_synth.txt` and `methodology_*.txt` are.
 
-Run reproducible con Vivado ML Standard (gratuito, part `xcku3p-ffva676-2L-e`,
-decisión 002; top de síntesis `synth/itch_chain_synth.sv`, wrapper del contrato
-AXI: el `itch_chain.sv` completo expone 896 puertos y no entra en el paquete
-FFVA676; DW=32, periodo 3,103 ns):
+Reproducible run with Vivado ML Standard (free, part `xcku3p-ffva676-2L-e`,
+decision 002; synthesis top `synth/itch_chain_synth.sv`, an AXI-contract
+wrapper: the full `itch_chain.sv` exposes 896 ports and does not fit the FFVA676
+package; DW=32, 3.103 ns period):
 
 ```bash
-vivado -mode batch -source synth/fase3_synth.tcl
+vivado -mode batch -source synth/fase3_synth.tcl   # 322 MHz -> reports/322mhz/
+vivado -mode batch -source synth/fase3_156mhz.tcl  # 156 MHz -> reports/156mhz/
 ```
 
-El tcl aborta con `FASE3 TIMING FAIL` ante slack negativo (gate sin rebajar).
-Verificación estática sin Vivado: `scripts/verify/synth_check.py`.
+The tcl aborts with `FASE3 TIMING FAIL` on any negative slack (gate never
+relaxed). Static check without Vivado: `scripts/verify/synth_check.py` (requires
+the per-variant outdirs to differ).
 
-## Historial de runs (2026-08-18, mismo tcl en todos)
+## Run history (2026-08-18, same tcl throughout; pre-CLO-RPT-01)
 
-| Run | Cambio (commit) | WNS | TNS | Endpoints failing | LUT as Logic | URAM | Peor familia |
+> The table keeps the 2026-08-18 322 runs (informative; their reports are no
+> longer on disk — they were overwritten by the iter-16 156 run). The current
+> numbers live in the `322mhz/` and `156mhz/` subdirectories.
+
+| Run | Change (commit) | WNS | TNS | Failing endpoints | LUT as Logic | URAM | Worst family |
 |---|---|---|---|---|---|---|---|
-| Base 10:59 | wrapper original | **-10,492 ns** | -590.856,875 ns | 181.711 | 163.259 (100,33 %) | 32/48 | lógica del book (37-41 niveles) + I/O `msg_len→tready` |
-| Iter 7 14:11 | ST_EMIT → etapas A/B/C registradas (`2fa7250`) | **-7,395 ns** | -430.582,411 ns | 189.127 | 157.011 (96,49 %) | 32/48 | `lv_eq → lv2_mode` (31 niveles, etapa B) + I/O |
-| Iter 8 15:55 | decode partido 2a/2b + FIFO/rst_n_c del wrapper (`7d728de`) | **-4,052 ns** | -213.040,636 ns | 176.945 | 155.697 (95,68 %) | 32/48 | `depth_tready` → URAM cascade (12 niveles, 7 URAM288, skew pin 2,2 ns) |
-| Iter 9 17:50 | guard solo tvalid + find-first precomputado (`5fbf6ac`) | **-3,527 ns** | -211.438,033 ns | 177.459 | 155.893 (95,80 %) | 32/48 | I/O del wrapper: `bbo_locate → pin` (1 nivel, skew árbol -2,67 ns); internas `out_data`/`body_acc` |
-| Iter 10 19:45 | IOB=TRUE en puertos + tready registrado (`b3d5327`) | **-3,748 ns** | -221.038,368 ns | 178.310 | 155.876 (95,79 %) | 32/48 | FFs de salida del book SIN packing (fanout interno: retención + guard); solo se replicó `tready_ff` |
+| Base 10:59 | original wrapper | **-10.492 ns** | -590.856.875 ns | 181.711 | 163.259 (100.33 %) | 32/48 | book logic (37-41 levels) + I/O `msg_len->tready` |
+| Iter 7 14:11 | ST_EMIT -> registered A/B/C stages (`2fa7250`) | **-7.395 ns** | -430.582.411 ns | 189.127 | 157.011 (96.49 %) | 32/48 | `lv_eq -> lv2_mode` (31 levels, stage B) + I/O |
+| Iter 8 15:55 | 2a/2b decode split + wrapper FIFO/rst_n_c (`7d728de`) | **-4.052 ns** | -213.040.636 ns | 176.945 | 155.697 (95.68 %) | 32/48 | `depth_tready` -> URAM cascade (12 levels, 7 URAM288, 2.2 ns pin skew) |
+| Iter 9 17:50 | tvalid-only guard + precomputed find-first (`5fbf6ac`) | **-3.527 ns** | -211.438.033 ns | 177.459 | 155.893 (95.80 %) | 32/48 | wrapper I/O: `bbo_locate -> pin` (1 level, -2.67 ns tree skew); internal `out_data`/`body_acc` |
+| Iter 10 19:45 | IOB=TRUE on ports + registered tready (`b3d5327`) | **-3.748 ns** | -221.038.368 ns | 178.310 | 155.876 (95.79 %) | 32/48 | book output FFs WITHOUT packing (internal fanout: retention + guard); only `tready_ff` replicated |
+| Iter 11 | wrapper output pipeline (`bbd3b6c`) | **-3.319 ns** | — | — | ~95.8 % | 32/48 | wide output buses not replicable to IOB |
+| split CLO-322-02 | first_one in B, cap mux by registered index in C | **-3.33 ns** | — | — | 90.2 % | 32/48 | output I/O (SCD 2.695 ns + OBUF 2.334 ns) |
 
-DRC: 0 errores en todos los runs. IOB: 222 en todos.
+DRC: 0 errors in every run. IOB: 222 in all 322 runs.
 
-## Lectura del historial
+## Reading the history
 
-- El retiming del book funcionó: WNS -10,49 → -3,53 ns y LUT 100,33 % →
-  95,79 % entre el base y la iter 9; la familia `depth_tready` → URAM del
-  run 8 murió con el guard solo-tvalid de la iter 9.
-- El cuello residual es **I/O del wrapper**: todo FF interno → pin pierde el
-  skew del árbol de reloj del área del book (~2,7-3,1 ns con LUT ~96 %) + el
-  output delay de 1,0 ns del XDC. La iter 10 demostró que el IOB packing NO
-  mueve los FFs de salida del book (se releen en la retención y los lee el
-  guard del FSM): solo los FFs del wrapper sin fanout (como `tready_ff`) se
-  replican al IOB.
-- **Candidato documentado y ejecutado (iter 11)**: pipeline de salida en el
-  wrapper — FFs propios `bbo_*_o`/`depth_*_o` con retención del lado del pin
-  (`tvalid_o <= tvalid_o && !tready`), captura con `tvalid_i && !tvalid_o`,
-  `(* IOB = "TRUE" *)` en esos FFs (ver addendum iter 11 de la spec). Mejoró
-  a WNS **-3,319 ns** (el mejor histórico) pero **no cerró**: los buses anchos
-  (`bbo_locate_o_reg`, `depth_tdata_o_reg`, `bbo_tdata_o_reg`) no se replican
-  al IOB; solo los FFs de 1 bit (`bbo_tvalid_o`, `depth_tvalid_o`,
-  `tready_ff`) y la ruta FF_IOB→pin ancha sigue con skew ~2,7 ns + output
-  delay 1,0 ns.
+- The book retiming worked: WNS -10.49 -> -3.53 ns and LUT 100.33 % -> 95.79 %
+  between base and iter 9; the `depth_tready` -> URAM family of run 8 died with
+  the tvalid-only guard of iter 9.
+- The residual bottleneck was the **wrapper I/O**: every internal FF -> pin lost
+  the clock-tree skew of the book area (~2.7-3.1 ns with LUT ~96 %) plus the
+  1.0 ns XDC output delay. Iter 10 showed IOB packing does NOT move the book's
+  output FFs (they are re-read by the retention and read by the FSM guard): only
+  wrapper FFs without fanout (`tready_ff`) replicate to the IOB.
+- **Documented and executed candidate (iter 11)**: output pipeline in the
+  wrapper — dedicated `bbo_*_o`/`depth_*_o` FFs with pin-side retention
+  (`tvalid_o <= tvalid_o && !tready`), capture with `tvalid_i && !tvalid_o`,
+  `(* IOB = "TRUE" *)` on those FFs (see iter-11 spec addendum). Improved to
+  WNS **-3.319 ns** (historical best) but **did not close**: wide buses
+  (`bbo_locate_o_reg`, `depth_tdata_o_reg`, `bbo_tdata_o_reg`) do not replicate
+  to the IOB; only 1-bit FFs (`bbo_tvalid_o`, `depth_tvalid_o`, `tready_ff`),
+  and the wide FF_IOB->pin path still has ~2.7 ns skew + 1.0 ns output delay.
 
-## Estado del criterio 10
+## Criterion 10 state
 
-**ABIERTO**: WNS < 0, TNS ≠ 0, LUT > 95 % en los 5 runs (más iter 11
-WNS -3,319); URAM 32/48 conservada y DRC 0. No se declara timing cerrado sin
-WNS ≥ 0 y TNS = 0 en un run post-route. **Limitación estructural del modelo
-I/O del wrapper de síntesis**: cualquier FF→pin de un bus ancho pierde el
-skew del árbol (~2,7 ns, LUT al 96 %) + el output delay (1,0 ns); el IOB
-packing solo replica FFs de 1 bit; un PHY/IOB registrado con el reloj del
-pin no existe en un wrapper. Cerrar 322 MHz exigiría bajar el output delay
-del XDC (rechazado: trampa del gate).
+After CLO-322-02 (split): the internal `m_loc_idx -> first_one -> sm_asel` path
+is split across two cycles. The book's internal datapath closes and LUT drops to
+**146,761** (fits). The top-10 violating paths are now **all output-pad paths**
+(`bbo_locate_o_reg` / `depth_tdata_o_reg` -> OBUF -> pin): source clock delay
+2.695 ns (clock net fanout 95.585) + OBUF 2.334 ns at the -2L speed grade exceed
+the 3.103 ns period even before the 1.0 ns `set_output_delay`. This is a
+device-level I/O limit; the timing gate is never relaxed and the XDC is not lied
+about. **322 MHz stays open.**
 
-**Camino del CV / variante industrial**: **DW=64 @ 156,25 MHz** (periodo
-6,400 ns, mismo 10G lineal) con el mismo RTL: **CERRADO (2026-08-19)** — WNS
-**+0,015 ns**, TNS 0, LUT 92,31 %, URAM 32/48, DRC 0 (run `fase3_156mhz.tcl`,
-XDC `fase3_156mhz.xdc`). A DW=64 la observabilidad completa excede el
-presupuesto de I/O del FFVA676 (258 > 256) y se parametrizó `BBO_W` a 64
-(solo precios al pin); datapath idéntico. El 322 MHz queda documentado como
-capítulo de optimización no cerrado; el gate del tcl no se rebaja. Las
-lecciones de síntesis que evitan repetir runs: sección 7 de
-`docs/writeup/lecciones-aprendidas.md`.
+**CV path / production variant**: **DW=64 @ 156.25 MHz** (6.400 ns period, same
+line-rate 10G) with the same RTL: **CLOSED** (2026-08-20, iter 16) — WNS
+**+0.057 ns**, TNS 0, LUT 154.4k (94.9 %), URAM 32/48, DRC 0 (run
+`fase3_156mhz.tcl`, XDC `fase3_156mhz.xdc`, reports archived in
+`synth/reports/156mhz/`). At DW=64 the full observability exceeds the FFVA676
+I/O budget (258 > 256), so `BBO_W` was parameterized to 64 (prices only at the
+pin); datapath identical. The 322 MHz is documented as a non-closed optimization
+chapter; the tcl gate is not relaxed. Synthesis lessons that avoid re-running
+runs: section 7 of `docs/writeup/lessons-learned.md`.
 
-## Artefactos adicionales (en `synth/`)
+## Additional artifacts (in `synth/`)
 
-- `iter_100_CongestedCLBsAndNets.txt` — CLBs congestionados y nets con
-  iter 100 (evidencia del diagnóstico del área del book).
-- `tight_setup_hold_pins.txt`, `clockInfo.txt` — informes auxiliares.
+- `iter_100_CongestedCLBsAndNets.txt` — congested CLBs and nets at iter 100
+  (evidence of the book-area placement diagnosis).
+- `tight_setup_hold_pins.txt`, `clockInfo.txt` — auxiliary reports.

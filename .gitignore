@@ -1,10 +1,10 @@
 # ───────────────────────────────────────────────────────────────
 # FPGA — .gitignore
-# Repo limpio "solo fuente": nada de artefactos de Vivado, datos
-# de mercado crudos ni cachés de simulación.
+# Source-only repo: no Vivado artifacts, raw market data, or
+# simulation caches.
 # ───────────────────────────────────────────────────────────────
 
-# ── Ruido de sistema / editor ──
+# ── System / editor noise ──
 .DS_Store
 **/.DS_Store
 ._*
@@ -16,7 +16,7 @@ Thumbs.db
 *.orig
 *.bak
 
-# ── opencode / agente ──
+# ── opencode / agent ──
 .opencode/skills/**/artifacts/
 .opencode/*.local.json
 
@@ -31,16 +31,16 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# ── Datos de mercado (nunca commitear feeds reales) ──
+# ── Market data (never commit real feeds) ──
 data/itch_sample/**
 !data/itch_sample/.gitkeep
 *.NASDAQ_ITCH50.gz
 
-# ── Schemas SBE MDP3 (spec, pero se mantienen fuera del repo — regla G0) ──
+# ── SBE MDP3 schemas (spec, but kept out of the repo — rule G0) ──
 data/mdp3/**
 !data/mdp3/.gitkeep
 
-# ── Simulación (cocotb / Verilator) ──
+# ── Simulation (cocotb / Verilator) ──
 sim_build/
 **/sim_build/
 **/sim_build_*/
@@ -55,7 +55,7 @@ coverage/
 **/coverage/
 *.xml
 
-# ── Vivado / síntesis ──
+# ── Vivado / synthesis ──
 *.jou
 *.log
 *.backup
@@ -70,7 +70,7 @@ synth/*.sim/
 *.ltx
 .idea/
 .vscode/
-# Artefactos binarios de Vivado
+# Vivado binary artifacts
 *.dcp
 synth/.Xil/
 synth/clockInfo.txt

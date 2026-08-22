@@ -1,12 +1,12 @@
-"""Testbench cocotb del top-N público (fase 3, criterio 6) — área phase3.
+"""Cocotb testbench for the public top-N (phase 3, criterion 6) — area phase3.
 
-Espejos DP-01/SEC-DP-01: depth_tdata (2*ND*64 = 640 bits) bit a bit contra los
-niveles ordenados del golden book.py para el símbolo de cada evento BBO,
-best-first (bid descendente, ask ascendente), vacíos a 0. DP-02: replay del
-feed real del día local (20 símbolos) con depth en TODOS los eventos.
+Mirrors DP-01/SEC-DP-01: depth_tdata (2*ND*64 = 640 bits) bit-exact against
+the ordered levels of golden book.py for the symbol of each BBO event,
+best-first (descending bid, ascending ask), empties at 0. DP-02: replay of the
+local-day real feed (20 symbols) with depth in ALL events.
 
-Empaquetado del bus (spec): {bid[ND-1..0], ask[ND-1..0]} con el mejor nivel a
-la izquierda (MSB): depth[639:576] = mejor bid {px[31:0], qty[31:0]}.
+Bus packing (spec): {bid[ND-1..0], ask[ND-1..0]} with the best level to the
+left (MSB): depth[639:576] = best bid {px[31:0], qty[31:0]}.
 """
 import cocotb
 import os
@@ -19,9 +19,9 @@ from test_orderbook32 import anexo_words32
 
 
 async def drive_and_collect_depth32(dut, messages, max_cycles=200000):
-    """Conduce Anexo A de 32 bits y recolecta (bbo_events, depth_words,
-    cross_count, anomaly_count). depth_tdata se muestrea en el mismo ciclo
-    del handshake del BBO (el par BBO/depth es atómico)."""
+    """Drives 32-bit Annex A and collects (bbo_events, depth_words, cross_count,
+    anomaly_count). depth_tdata is sampled in the same cycle as the BBO
+    handshake (the BBO/depth pair is atomic)."""
     await _reset(dut)
     words = anexo_words32(messages)
     ci = 0
@@ -39,10 +39,10 @@ async def drive_and_collect_depth32(dut, messages, max_cycles=200000):
         dut.depth_tready.value = 1
         await RisingEdge(dut.clk)
         if int(dut.bbo_tvalid.value) == 1 and int(dut.bbo_tready.value) == 1:
-            # el par BBO/depth es atómico: el depth acompaña al BBO siempre
+            # the BBO/depth pair is atomic: depth always accompanies the BBO
             if int(dut.depth_tvalid.value) != 1:
                 raise AssertionError(
-                    "DP: depth_tvalid debe acompañar al handshake del BBO")
+                    "DP: depth_tvalid must accompany the BBO handshake")
             loc = int(dut.bbo_locate.value)
             td = int(dut.bbo_tdata.value)
             ch = int(dut.bbo_changed.value)
@@ -66,27 +66,27 @@ async def drive_and_collect_depth32(dut, messages, max_cycles=200000):
 
 @cocotb.test()
 async def test_dp01_topn_igual_golden(dut):
-    """Espejo §DP-01: depth bit a bit contra el golden en cada evento, con un
-    símbolo de >= ND niveles por lado y otro de pocos (vacíos a 0), y un
-    reduce que debe reflejarse en la qty del nivel."""
+    """Mirror §DP-01: depth bit-exact against the golden model at each event, with
+    one symbol of >= ND levels per side and another of few (empties at 0), and
+    a reduce that must reflect in the qty of the level."""
     AMZN = 393
     AAPL = 13
     msgs = [S(AMZN, 1, ord("Q"))]
-    for i in range(6):   # 6 niveles bid y 6 ask de AMZN
+    for i in range(6):   # 6 bid and 6 ask levels of AMZN
         msgs.append(A(AMZN, 10 + i, 100 + i, b"B", 100 + i, b"AMZN    ", 1_000_00 + i * 10))
     for i in range(6):
         msgs.append(A(AMZN, 20 + i, 200 + i, b"S", 50 + i, b"AMZN    ", 2_000_00 + i * 10))
     msgs.append(A(AAPL, 30, 1000, b"B", 300, b"AAPL    ", 5_000_00))   # AAPL: 2 bid, 1 ask
     msgs.append(A(AAPL, 31, 1001, b"B", 200, b"AAPL    ", 5_100_00))
     msgs.append(A(AAPL, 32, 1002, b"S", 150, b"AAPL    ", 5_300_00))
-    msgs.append(E(AMZN, 40, 105, 10, 1))   # reduce la qty del mejor bid de AMZN
+    msgs.append(E(AMZN, 40, 105, 10, 1))   # reduces the qty of AMZN's best bid
     expected, exp_depth, golden = run_book_depth(msgs)
     got, got_depth, cross, anomaly = await drive_and_collect_depth32(dut, msgs)
     assert got == expected, f"DP-01: BBO got={got} exp={expected}"
     for i, (g, e) in enumerate(zip(got_depth, exp_depth)):
         exp_word = pack_depth(*e[1:])
         assert g == exp_word, (
-            f"DP-01: depth del evento {i} (locate {e[0]}) diverge:\n"
+            f"DP-01: depth of event {i} (locate {e[0]}) diverges:\n"
             f" got={g:0160x}\n exp={exp_word:0160x}")
     assert anomaly == golden.anomalies, (
         f"DP-01 anomaly: got={anomaly} exp={golden.anomalies}")
@@ -96,18 +96,18 @@ async def test_dp01_topn_igual_golden(dut):
 
 @cocotb.test()
 async def test_sec_dp01_simbolo_vacio_ceros(dut):
-    """Espejo §SEC-DP-01: niveles inexistentes -> 0: lado ask vacío y slots
-    sobrantes del bid a cero en el word de 640 bits."""
+    """Mirror §SEC-DP-01: nonexistent levels -> 0: empty ask side and remaining
+    bid slots at zero in the 640-bit word."""
     AMZN = 393
     msgs = [
         S(AMZN, 1, ord("Q")),
-        A(AMZN, 2, 1, b"B", 100, b"AMZN    ", 1_000_00),   # solo 1 nivel bid
+        A(AMZN, 2, 1, b"B", 100, b"AMZN    ", 1_000_00),   # only 1 bid level
     ]
     _, exp_depth, _ = run_book_depth(msgs)
     _, got_depth, _, _ = await drive_and_collect_depth32(dut, msgs)
     w = got_depth[0]
-    # mejor bid en [639:576] = (100000, 100); los 4 slots restantes del bid y
-    # los 5 del ask (bits [319:0]) a cero
+    # best bid in [639:576] = (100000, 100); the 4 remaining bid slots and the
+    # 5 ask slots (bits [319:0]) at zero
     assert (w >> 320) == (((1_000_00 << 32) | 100) << 256), hex(w)
     assert (w & ((1 << 320) - 1)) == 0, hex(w)
     assert got_depth == [pack_depth(*e[1:]) for e in exp_depth], (
@@ -115,29 +115,29 @@ async def test_sec_dp01_simbolo_vacio_ceros(dut):
 
 
 # ---------------------------------------------------------------------------
-# DP-02: feed real (subset 20 símbolos) -> depth en todos los eventos
+# DP-02: real feed (subset of 20 symbols) -> depth in all events
 # ---------------------------------------------------------------------------
 @cocotb.test(skip=not os.path.exists(REAL_PCAP))
 async def test_dp02_replay_feed_real_depth(dut):
-    """INV/DP-02: depth de TODOS los eventos del feed real (20 símbolos) bit a
-    bit contra el golden (pcap local no commiteado; se omite si no existe)."""
-    assert os.path.exists(REAL_PCAP), "DP-02 OMITIDO: pcap local ausente"
+    """INV/DP-02: depth of ALL the real-feed events (20 symbols) bit-exact against
+    the golden model (local pcap not committed; skipped if absent)."""
+    assert os.path.exists(REAL_PCAP), "DP-02 SKIPPED: local pcap absent"
     msgs, keep = _pcap_msgs_subset(REAL_PCAP, max_symbols=20)
     nd = len(dut.depth_tdata) // 128
     cocotb.log.info(
-        f"DP-02: {len(msgs)} mensajes de {len(keep)} símbolos, "
-        f"depth bit a bit en cada evento")
+        f"DP-02: {len(msgs)} messages of {len(keep)} symbols, "
+        f"depth bit-exact at each event")
     expected, exp_depth, golden = run_book_depth(msgs)
     got, got_depth, cross, anomaly = await drive_and_collect_depth32(
         dut, msgs, max_cycles=2_000_000)
     assert len(got) == len(expected), (
-        f"DP-02: got({len(got)}) exp({len(expected)}) eventos")
-    # El depth sigue el contrato enmendado del push-out (spec fase3-optimizacion,
-    # addendum iter 15, OVR-PUSH-01): bit a bit hasta la primera re-entrada de
-    # un nivel descartado por la cola P=32 (loc13 supera 32 niveles en el pico
-    # del día; ausencia/cantidad parcial en los niveles descartados). Desde el
-    # evento 14461 se exige solo propiedad de SUBconjunto a nivel de precio:
-    # todo precio del depth RTL está en el golden (jamás un fantasma).
+        f"DP-02: got({len(got)}) exp({len(expected)}) events")
+    # The depth follows the amended push-out contract (spec fase3-optimizacion,
+    # addendum iter 15, OVR-PUSH-01): bit-exact up to the first re-entry of a
+    # level discarded by the P=32 queue (loc13 exceeds 32 levels at the day's
+    # peak; absence/partial quantity in the discarded levels). From event 14461
+    # only the price-level SUBSET property is required: every RTL depth price
+    # is in the golden model (never a phantom).
     from golden_model.src import book as book_golden
     _bp = book_golden.Book()
     _gold_levs = []
@@ -153,13 +153,13 @@ async def test_dp02_replay_feed_real_depth(dut):
                 dict(sorted(_bp._levels.get((_loc, book_golden.ASK), {}).items()))))
     DEPTH_FIRST_REENTRY = 14461
     assert len(_gold_levs) == len(got_depth) == len(exp_depth), (
-        f"DP-02: alineación del oracle {len(_gold_levs)}")
+        f"DP-02: oracle alignment {len(_gold_levs)}")
     for i, (g, e) in enumerate(zip(got_depth, exp_depth)):
         exp_word = pack_depth(*e[1:])
         if g != exp_word:
             if i < DEPTH_FIRST_REENTRY:
                 raise AssertionError(
-                    f"DP-02: depth diverge ANTES de la re-entrada en evento "
+                    f"DP-02: depth diverges BEFORE the re-entry at event "
                     f"{i} (locate {e[0]}):\n got={g:0160x}\n exp={exp_word:0160x}")
             _loc, _gb_bid, _gb_ask = _gold_levs[i]
             for _k in range(2 * nd):
@@ -171,13 +171,13 @@ async def test_dp02_replay_feed_real_depth(dut):
                 _lev = _gb_bid if _side == book_golden.BID else _gb_ask
                 if _px not in _lev:
                     raise AssertionError(
-                        f"DP-02: depth con fantasma en la re-entrada (evento "
-                        f"{i}): precio {_px} ({_side}) fuera del golden")
+                        f"DP-02: depth with phantom in the re-entry (event "
+                        f"{i}): price {_px} ({_side}) outside the golden")
     assert cross == golden.cross_events, (
         f"DP-02 cross: got={cross} exp={golden.cross_events}")
     assert anomaly == golden.anomalies, (
         f"DP-02 anomaly: got={anomaly} exp={golden.anomalies}")
     cocotb.log.info(
-        f"DP-02 OK: {len(got_depth)} depth (bit a bit hasta la 1ª re-entrada "
-        f"{DEPTH_FIRST_REENTRY}; subconjunto después), "
+        f"DP-02 OK: {len(got_depth)} depth (bit-exact up to the 1st re-entry "
+        f"{DEPTH_FIRST_REENTRY}; subset afterwards), "
         f"cross={cross}, anomaly={anomaly}")

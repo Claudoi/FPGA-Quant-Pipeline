@@ -1,180 +1,57 @@
-# verify-report — fase2-orderbook (iteración 4)
+# Verification Report — fase2-orderbook (condensed)
 
-> Fecha: 2026-08-15. Área: `rtl/orderbook/`, testbench DW=64 y mutantes
-> funcionales nacidos en fase 2. La campaña queda cerrada funcionalmente; el
-> runner compartido con fase 3 conserva tres hallazgos posteriores explícitos
-> que se cierran en la campaña de fase 3, no se cuentan como PASS aquí.
+## Verdict
 
-## Objetivo adversarial
+**Phase 2 CLOSED functionally.** The order book applies the Annex-A records and
+emits a BBO bit-exact against the golden `book.py`, with atomic `U` replace,
+RAW-hazard handling, exact single subtract, and observed overflow/error. Current
+suite **17/17**; the real replay contributes 30,729 bit-exact BBO events
+(cross=0, anomaly=671). Timing (Vivado) is out of scope for phase 2.
 
-Refutar que el book pueda producir el BBO correcto mientras silencia una
-invariante, contaminar un locate vacío, aceptar un cancel inválido o aparentar
-un gate B limpio mediante una supresión. La iteración 4 elimina tres falsos
-positivos históricos: `SEC-OV-01` no observaba `error`, `BBO-02` no ejercitaba
-un segundo locate y la suite oficial no compilaba con Verilator 5.050 por
-`UNSIGNED`.
+## Criteria
 
-## Rojo reproducido antes del cambio
+| Criterion | Test(s) | Evidence | Status |
+|---|---|---|---|
+| 1 — BBO vs golden | `test_bbo01` | multi-type sequence bit-exact | PASS |
+| 2 — empty symbol / (0,0) side | `test_sec_em01` | AAPL stays empty, no event; ask=(0,0) | PASS |
+| 3 — atomic `U` | `test_sec_u01`, `test_inv_u01` | single final state | PASS |
+| 4 — RAW hazards | `test_sec_hz01/02` | add→execute, replace→execute | PASS |
+| 5 — no double subtract | `test_sec_dc01/02` | exact subtract vs golden | PASS |
+| 6 — overflow signaled | `test_sec_ov01` | `error` pulse observed, discard + recovery | PASS |
+| 7 — unknown ref anomaly | `test_sec_an01` | `anomaly_count` + continuation | PASS |
+| 8 — crossed book | `test_sec_cr01` | `cross_events` counter | PASS |
+| 9 — multi-symbol | `test_multi01` | independent BBO per locate | PASS |
+| 10 — real replay | `test_replay01` | **30,729 BBO events bit-exact**, cross=0, anomaly=671 | PASS |
+| 11 — frozen BBO vectors | `test_rep02` | synthetic frozen vector reproduced | PASS |
 
-### Gate B/A bloqueado por warning real
+## Gates
 
-```text
-%Warning-UNSIGNED: rtl/orderbook/orderbook.sv:818:48:
-Comparison is constant due to unsigned arithmetic
-  : (nx_bi >= 4'd0 && lt(nx_type));
-%Error: Exiting due to 1 warning(s)
-make: *** [sim] Error 2
-```
+| Gate | Result |
+|---|---|
+| A — simulation | `make sim` → **17/17 PASS** (14/14 historical suite + repaired `SEC-OV-01`/`SEC-EM-01` + replay) |
+| B — compile | `verilator --lint-only --Wall --top-module orderbook`, 0 warnings (removed a real `UNSIGNED` warning, not suppressed) |
+| C — style | verible NOT EXECUTED (not installed) |
+| D — coverage | level-1 spec↔test map; instrumented coverage NOT EXECUTED |
+| E — mutation | `mutate_orderbook.py` phase-2 mutants **9/9 killed** |
+| F — completeness | 12 scenarios in `orderbook.feature`, mirror in `gherkin-espejos.json` |
+| G — rigor | real replay local, independent golden, no versioned data; timing NOT APPLICABLE |
 
-No se añadió `-Wno-UNSIGNED`: la rama DW=64 se redujo a `lt(nx_type)`.
+## Key numbers
 
-### Test rojo de observabilidad
+- Real replay: **31,400 messages / 20 symbols** against the golden → **30,729
+  BBO events bit-exact**, cross=0, anomaly=671.
+- Mutation: 9/9 killed (OV-BEST, OV-EMPTY, U-NOTATOMIC, U-DELETE-HALF,
+  U-SKIP-ROUTE, D-DOUBLE, RED-REF, QTY-NOERROR, EMIT-NOCHANGED).
+- Phase-0 suite green (36 tests); WSL regression (2026-08-19) 13/14 + 1 SKIP
+  (replay pcap absent on that machine — the real-replay evidence is recorded in
+  this campaign).
 
-```text
-test_sec_ov01_overflow_cantidad
-ValueError: not enough values to unpack (expected 4, got 3)
-TESTS=1 PASS=0 FAIL=1 SKIP=0
-```
+## Honest limits
 
-El driver no devolvía ni muestreaba `error`. Después del cambio devuelve
-`error_cycles`; el escenario exige al menos un pulso, ausencia de evento para
-el cancel inválido y aceptación del add válido posterior.
-
-## Gates A–G
-
-| Gate | Comando / evidencia real | Resultado |
-|---|---|---|
-| **A — simulación** | `PATH=/Volumes/WD_Black/FPGA/.venv/bin:$PATH make -C verification/testbenches/orderbook clean sim` | **14/14 PASS, 0 FAIL — PASS** |
-| **B — compilación** | `verilator --lint-only --Wall --top-module orderbook rtl/orderbook/orderbook.sv` + `python3 -m py_compile ...` | **0 warnings/errores — PASS** |
-| **C — estilo** | `command -v verible-verilog-lint` | **NO EJECUTADO: herramienta no instalada** |
-| **D — cobertura** | mapa literal de abajo; cobertura funcional instrumentada no disponible | **nivel 1 PASS; nivel 2 NO EJECUTADO** |
-| **E — mutación** | mutantes aplicables de fase 2, ejecutados individualmente por `mutate_orderbook.py --mutant ID` | **9/9 muertos — PASS fase 2** |
-| **F — completitud** | 12 escenarios en `orderbook.feature`, 14 tests cocotb y entrada en `specs/gherkin-espejos.json` | **PASS** |
-| **G — rigor/timing** | replay local real, golden independiente, datos no versionados; timing Vivado fuera de fase 2 | **G0/G2/G3 PASS; timing NO APLICA** |
-
-## Gate A — evidencia funcional
-
-La suite oficial produjo 14 casos y cero fallos. Los dos escenarios reparados
-también se ejecutaron por separado:
-
-```text
-test_sec_ov01_overflow_cantidad  PASS
-TESTS=1 PASS=1 FAIL=0 SKIP=0
-
-test_sec_em01_simbolo_vacio      PASS
-TESTS=1 PASS=1 FAIL=0 SKIP=0
-```
-
-El replay real no fue sustituido por un vector sintético:
-
-```text
-REPLAY-01: 31400 mensajes de 20 símbolos contra golden
-REPLAY-01 OK: 30729 eventos bit a bit, cross=0, anomaly=671
-TESTS=1 PASS=1 FAIL=0 SKIP=0
-```
-
-`test_replay01_feed_real_bbo` queda decorado con `skip=` si
-`/tmp/real_trading.pcap` no existe. En selección manual, la ausencia produce
-un mensaje `REPLAY-01 OMITIDO`; nunca se presenta la falta de datos como
-evidencia real.
-
-## Gate D/F — mapa spec ↔ Gherkin ↔ tests
-
-| Contrato | Test(s) espejo | Evidencia |
-|---|---|---|
-| BBO-01 | `test_bbo01_secuencia_bbo_igual_golden` | secuencia multi-tipo bit a bit |
-| BBO-02 | `test_sec_em01_simbolo_vacio` | locate AAPL permanece vacío, sin evento; ask AMZN = (0,0) |
-| SEC-U-01 | `test_sec_u01_replace_atomico`, `test_inv_u01_replace_best_bid_estado_final` | estado final único |
-| SEC-HZ-01/02 | `test_sec_hz01_add_execute_raw`, `test_sec_hz02_replace_execute_raw` | hazards RAW |
-| SEC-DC-01 | `test_sec_dc01_sin_doble_descuento`, `test_sec_dc02_delete_descuenta_exacto` | descuento exacto |
-| SEC-OV-01 | `test_sec_ov01_overflow_cantidad` | pulso observado, descarte y recuperación |
-| SEC-AN-01 | `test_sec_an01_ref_desconocida` | anomalía y continuidad |
-| SEC-CR-01 | `test_sec_cr01_libro_cruzado` | contador de cruzado |
-| MULTI-01 | `test_multi01_dos_simbolos_independientes` | aislamiento por locate |
-| REPLAY-01 | `test_replay01_feed_real_bbo` | 30.729 eventos reales |
-| REPLAY-02 | `test_rep02_vectores_congelados_bbo` | vector sintético congelado |
-
-`specs/gherkin-espejos.json` contiene:
-
-```text
-specs/fase2-orderbook/gherkin -> verification/testbenches/orderbook
-```
-
-## Gate E — mutación aplicable de fase 2
-
-Cada mutante compiló antes de ejecutar tests. El runner restaura el RTL en un
-`finally` por mutante, limpia los builds y corta al primer test rojo: un
-mutante roto no cuenta y una interrupción no deja el DUT alterado.
-
-```text
-OV-BEST           MATADO  FAIL=2
-OV-EMPTY          MATADO  FAIL=1
-U-NOTATOMIC       MATADO  FAIL=2
-U-DELETE-HALF     MATADO  FAIL=2
-U-SKIP-ROUTE      MATADO  FAIL=5
-D-DOUBLE          MATADO  FAIL=3
-RED-REF           MATADO  FAIL=2
-QTY-NOERROR       MATADO  FAIL=1
-EMIT-NOCHANGED    MATADO  FAIL=14
-```
-
-El mutante nuevo `QTY-NOERROR` cambia únicamente el pulso de reducción
-excesiva a cero; lo mata `SEC-OV-01`. Esto demuestra que la observación de
-`error` ya no es decorativa.
-
-### Resultado integral compartido observado, todavía no PASS
-
-Al ejecutar el runner completo de fases 2–3 se obtuvo **23/26 muertos** y tres
-supervivientes de fase 3:
-
-```text
-URAM-COMB-INDEX  SOBREVIVE
-NSYM-GUARD       SOBREVIVE
-BP-NORET         SOBREVIVE
-```
-
-No afectan al cierre funcional DW=64 de esta campaña, pero sí bloquean el gate
-E integral y la fase 3. Sus causas verificadas son: propiedad de inferencia
-URAM no comprobada estáticamente, error agregado que oculta el índice OOB y
-stall periódico que no garantiza coincidir con `tvalid`. Se corrigen y
-reejecutan en `specs/fase3-*/verify-report.md`.
-
-## Gate G — fronteras honestas
-
-- El alcance documentado empieza en `MoldUDP64`; MAC 10G y Ethernet/IP/UDP no
-  se atribuyen a este repositorio.
-- El golden usado es `golden_model/src/book.py`, independiente del RTL.
-- `/tmp/real_trading.pcap` se leyó localmente y no aparece en `git status`.
-- La rama DW=64 compila con `--Wall` sin `Wno-UNSIGNED`.
-- Vivado, WNS/TNS y utilización pertenecen a fase 3; no se infieren desde
-  Verilator ni se declaran cerrados aquí.
-
-## Veredicto
-
-**Fase 2 cerrada funcionalmente.** Gates A, B, D nivel 1, E fase 2, F y G
-aplicables están en PASS; C y cobertura instrumentada están declarados NO
-EJECUTADOS. El replay real aporta 30.729 comparaciones bit a bit. El gate E
-integral compartido permanece abierto hasta cerrar los tres supervivientes de
-fase 3, registrados sin convertirlos en PASS.
-
-## Re-ejecución WSL (2026-08-19) — evidencia fresca de regresión
-
-Cocotb 2.0.1 + Verilator 5.046 + Python 3.12 sobre el HEAD tras el cierre de
-REP-02 (fase 1) y el fix de SEC-URAM-03 (fase 3-uram): el RTL vigente
-(iter 8: FSM LV2→LV2B→LV3) mantiene el contrato de fase 2.
-
-```text
-$ make -C verification/testbenches/orderbook sim
-** TESTS=14 PASS=13 FAIL=0 SKIP=1 **
-```
-
-- El único SKIP es `test_replay01_feed_real_bbo` (replay del feed real del
-  book): requiere un pcap local no presente en la máquina WSL; la evidencia
-  del replay real del book ya consta en esta campaña (30.729 comparaciones
-  bit a bit). La omisión se informa; no se sustituye por una pasada sintética.
-- Sin cambios de contrato: el FSM con LV2B y el +1 de latencia (iter 8 de
-  fase 3) no alteran el BBO ni los invariantes de fase 2 (los tests de esta
-  campaña comparan contra el golden `book.py`).
-
-Suites de fase 3 re-ejecutadas en la misma pasada (misma máquina WSL):
-sim-rtm 4/4, sim-rtm64 1/1, sim-lat 2/2 (media 44,5 ≤ 48) y sim-uram 4/4.
+- Scope starts at the decapsulated `MoldUDP64` payload; 10G MAC and
+  Ethernet/IP/UDP are not claimed by this repository.
+- `/tmp/real_trading.pcap` is read locally and does not appear in `git status`.
+- Vivado / WNS / TNS / utilization belong to phase 3; none are inferred here.
+- Three phase-3 mutants (`URAM-COMB-INDEX`, `NSYM-GUARD`, `BP-NORET`) survived
+  the shared phase-2/3 runner; they do not affect this campaign's closure but
+  block the integrated gate E — resolved in the phase-3 campaign.

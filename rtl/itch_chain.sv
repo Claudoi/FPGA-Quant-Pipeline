@@ -1,22 +1,22 @@
-// itch_chain.sv — cadena parser ITCH -> order book (fase 3, CHAIN-01).
+// itch_chain.sv — parser ITCH -> order book chain (phase 3, CHAIN-01).
 //
-// Top de integración del pipeline a datapath parametrizado: el Anexo A del
-// parser se cablea directamente (1 palabra/ciclo) al consumidor del book, sin
-// FIFO intermedia ni re-parseo. DW=32 es la variante objetivo de la fase 3
-// (322,265625 MHz); DW=64 conserva la base de la fase 2.
+// Integration top of the pipeline with a parameterized datapath: the parser's
+// Annex A is wired directly (1 word/cycle) into the book's consumer, without
+// an intermediate FIFO nor re-parsing. DW=32 is the phase-3 target variant
+// (322,265625 MHz); DW=64 keeps the phase-2 baseline.
 module itch_chain #(
     parameter DW   = 32,
-    // QB (iter 4, SEC-URAM-04): 64 -> 46. La latencia wire->BBO media del
-    // feed real (make sim-lat) con QB=46 queda en ~45 (umbral RTM-LAT-01
-    // media <= 48); subir QB (iter 15 experimental: 64) rompía el criterio
-    // (media 72,7). QB=46 es el piso: el peor caso canónico (P=44 B => 46 B
-    // con prefijo) cabe exacto; QB=32 DEADLOCKEA (2+len=46 > 32). Los
-    // mensajes > QB (I=50 B, 2+len=52) se drenan por ST_DRAIN (addendum
-    // iter 12), con la contabilidad de frontera corregida en iter 15.
+    // QB (iter 4, SEC-URAM-04): 64 -> 46. The avg wire->BBO latency of the
+    // real feed (make sim-lat) with QB=46 lands at ~45 (RTM-LAT-01 threshold
+    // avg <= 48); raising QB (experimental iter 15: 64) broke the criterion
+    // (avg 72,7). QB=46 is the floor: the canonical worst case (P=44 B => 46 B
+    // with prefix) fits exactly; QB=32 DEADLOCKS (2+len=46 > 32). Messages
+    // > QB (I=50 B, 2+len=52) are drained via ST_DRAIN (addendum
+    // iter 12), with the boundary accounting fixed in iter 15.
     parameter QB   = 46,
-    // K=64 (addendum iter 12): el ref del wire viaja sin truncar. El día
-    // real supera 2^19 (refs ~1,6M en apertura; K=19 truncaba residuos y
-    // perdía eventos del subset); el book ensancha su entrada a OW=130 bits
+    // K=64 (addendum iter 12): the wire's ref travels untruncated. The real
+    // day exceeds 2^19 (refs ~1,6M at the open; K=19 truncated residues and
+    // lost subset events); the book widens its input to OW=130 bits
     parameter K    = 64,
     parameter P    = 32,
     parameter ND   = 5,

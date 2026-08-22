@@ -1,8 +1,8 @@
-"""Codec SBE MDP 3.0: encode/decode de mensajes y paquetes + Anexo M.
+"""SBE MDP 3.0 codec: encode/decode of messages and packets + Annex M.
 
-Round-trip estricto: lo que encode_message escribe es exactamente lo que
-decode_message lee (M3-GEN-01). El Anexo M materializa la tabla de derivación
-por template de la spec (§Derivación del Anexo M por template).
+Strict round-trip: what encode_message writes is exactly what
+decode_message reads (M3-GEN-01). Annex M materializes the per-template derivation
+table from the spec (§Annex M derivation by template).
 """
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from dataclasses import dataclass
 from golden_model.mdp3.schema import Schema, MessageDef, GroupDef, FieldDef, SUBSET_TEMPLATES
 
 PACKET_HEADER_SIZE = 12
-MESSAGE_PREFIX_SIZE = 10  # msg_size u16 + cabecera SBE 8 B
+MESSAGE_PREFIX_SIZE = 10  # msg_size u16 + 8 B SBE header
 
-# schema pinned templates_FixBinary_v12.xml (id=1 version=12); firma que el
-# corpus sintetico debe usar (criterio 5, addendum 2026-08-19).
+# Pinned schema templates_FixBinary_v12.xml (id=1 version=12); signature that the
+# synthetic corpus must use (criterion 5, addendum 2026-08-19).
 SCHEMA_ID = 1
 SCHEMA_VERSION = 12
 
@@ -27,10 +27,10 @@ PRIMITIVE_SIZES = {
 }
 
 
-# ── utilidades de valor ──────────────────────────────────────────────────────
+# ── value utilities ──────────────────────────────────────────────────────
 
 def _encode_value(schema: Schema, type_name: str, value, raw: bytearray):
-    """Escribe `value` (int/bytes/dict-compuesto) con el layout de type_name."""
+    """Writes `value` (int/bytes/composite-dict) using the layout of type_name."""
     if type_name in schema.composites:
         comps = schema.composites[type_name]
         for comp in comps:
@@ -67,7 +67,7 @@ def _encode_primitive(schema: Schema, primitive: str, value, raw: bytearray):
 
 
 def _decode_value(schema: Schema, type_name: str, buf: bytes, offset: int):
-    """Lee un campo; devuelve int/bytes/(mantissa, exponent)."""
+    """Reads a field; returns int/bytes/(mantissa, exponent)."""
     if type_name in schema.composites:
         comps = schema.composites[type_name]
         out = {}
@@ -99,14 +99,14 @@ def _decode_primitive(primitive: str, buf: bytes, offset: int):
     return int.from_bytes(raw, "little")
 
 
-# ── mensajes ─────────────────────────────────────────────────────────────────
+# ── messages ─────────────────────────────────────────────────────────────────
 
 def encode_message(schema: Schema, template_id: int, values: dict,
                    schema_id: int = SCHEMA_ID, version: int | None = None) -> bytes:
-    """Codifica un mensaje SBE (con su prefijo msg_size + cabecera de 8 B).
+    """Encodes an SBE message (with its msg_size prefix + 8 B header).
 
-    `values`: dict con los campos del root por NOMBRE (o tag FIX como str) y
-    los grupos por NOMBRE como listas de dicts de entrada.
+    `values`: dict with the root fields by NAME (or FIX tag as str) and the
+    groups by NAME as lists of input dicts.
     """
     msg = schema.messages[template_id]
     act_version = schema.version if version is None else version
@@ -148,7 +148,7 @@ def encode_message(schema: Schema, template_id: int, values: dict,
 
 def encode_packet(schema: Schema, seq: int, sending_time_ns: int,
                   messages: list[bytes]) -> bytes:
-    """Paquete MDP 3.0: MsgSeqNum u32 + SendingTime u64 + mensajes."""
+    """MDP 3.0 packet: MsgSeqNum u32 + SendingTime u64 + messages."""
     return (struct.pack("<IQ", seq, sending_time_ns) + b"".join(messages))
 
 
@@ -163,11 +163,11 @@ class PacketMessage:
     template_id: int
     schema_id: int
     version: int
-    body: bytes  # bloque declarado por msg_size (sin los 10 B de prefijo)
+    body: bytes  # block declared by msg_size (without the 10 B prefix)
 
 
 def iter_packet_messages(packet: bytes):
-    """Camina un paquete; devuelve PacketMessage por mensaje declarado."""
+    """Walks a packet; returns a PacketMessage per declared message."""
     seq, sending = struct.unpack_from("<IQ", packet, 0)
     off = PACKET_HEADER_SIZE
     while off + 2 <= len(packet):
@@ -184,10 +184,10 @@ def iter_packet_messages(packet: bytes):
 
 
 def decode_message(schema: Schema, pm: PacketMessage) -> dict:
-    """Decodifica un mensaje a dict (root + grupos) respetando version/block_length.
+    """Decodes a message to a dict (root + groups) honoring version/block_length.
 
-    Solo el subset de libro se decodifica; cualquier otro template (aunque
-    exista en el schema) es passthrough y devuelve {}.
+    Only the book subset is decoded; any other template (even if it exists in
+    the schema) is passthrough and returns {}.
     """
     if pm.template_id not in SUBSET_TEMPLATES:
         return {}
@@ -228,25 +228,25 @@ def decode_message(schema: Schema, pm: PacketMessage) -> dict:
 
 
 def message_body_bytes(pm: PacketMessage) -> bytes:
-    """Cuerpo crudo del mensaje (para passthrough y verificaciones de tamaño)."""
+    """Raw message body (for passthrough and size checks)."""
     return pm.body
 
 
-# ── Anexo M ──────────────────────────────────────────────────────────────────
+# ── Annex M ──────────────────────────────────────────────────────────────────
 
 MBP_RECORD_WORDS = 13
 MBOFD_RECORD_WORDS = 18
 
 
 def _price(px) -> tuple[int, int]:
-    """(mantissa, exponent); el exponent constante viene del schema (PRICE9=-9)."""
+    """(mantissa, exponent); the constant exponent comes from the schema (PRICE9=-9)."""
     if px is None:
         return 0, 0
     return px["mantissa"], px["exponent"]
 
 
 def anexo_m_records(schema: Schema, pm: PacketMessage, decoded: dict):
-    """Records Anexo M (listas de words) para mensajes del subset; [] si passthrough."""
+    """Annex M records (lists of words) for subset messages; [] if passthrough."""
     tpl = pm.template_id
     if tpl not in SUBSET_TEMPLATES:
         return []
@@ -370,11 +370,11 @@ def _entry_type_int(v):
 
 
 def passthrough_record(schema: Schema, pm: PacketMessage) -> list[int]:
-    """w0/w1 + cuerpo crudo rellenado a palabra (32 bits), cero al final.
+    """w0/w1 + raw body padded to a word (32 bits), zero at the end.
 
-    El cuerpo se empaqueta en words big-endian: el stream del Anexo M es
-    byte-continuo con words MSB-first, así que los bytes del cuerpo se
-    preservan exactamente (record_bytes == w0_be + w1_be + cuerpo + pad).
+    The body is packed into big-endian words: the Annex M stream is a
+    byte-continuous stream with MSB-first words, so the body bytes are
+    preserved exactly (record_bytes == w0_be + w1_be + body + pad).
     """
     words = [pm.template_id << 16 | (pm.msg_size & 0xFFFF),
              (pm.schema_id << 16) | (pm.version & 0xFFFF)]
@@ -386,5 +386,5 @@ def passthrough_record(schema: Schema, pm: PacketMessage) -> list[int]:
 
 
 def record_bytes(record: list[int]) -> bytes:
-    """Bytes del record en el stream: cada word MSB-first, concatenadas."""
+    """Bytes of the record on the stream: each word MSB-first, concatenated."""
     return b"".join((w & 0xFFFFFFFF).to_bytes(4, "big") for w in record)

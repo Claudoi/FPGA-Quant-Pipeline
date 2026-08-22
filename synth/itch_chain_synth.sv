@@ -1,35 +1,35 @@
-// itch_chain_synth.sv — top de SÍNTESIS (timing/recursos, criterio 10).
+// itch_chain_synth.sv — SYNTHESIS top (timing/resources, criterion 10).
 //
-// El top de integración rtl/itch_chain.sv expone 896 puertos (buses de
-// observabilidad: bbo_tdata 128 bits + depth_tdata 640 bits + contadores de
-// debug). El paquete FFVA676 del XCKU3P solo tiene 256 I/O (AVAILABLE_IOBS),
-// por lo que el placer falla con Place 30-415 (hallazgo 2026-08-18). Este
-// wrapper recorta a los puertos del contrato AXI:
+// The rtl/itch_chain.sv integration top exposes 896 ports (observability
+// buses: bbo_tdata 128 bits + depth_tdata 640 bits + debug counters). The
+// FFVA676 package of the XCKU3P only has 256 I/O (AVAILABLE_IOBS), so the
+// placer fails with Place 30-415 (finding 2026-08-18). This wrapper trims
+// down to the AXI contract ports:
 //
-//   - bbo_tdata (128 bits) íntegro: es la salida BBO del contrato.
-//   - depth_tdata recortado a [31:0]: la observabilidad del depth NO es un
-//     requisito de timing; el pipeline que lo genera se conserva (los bits
-//     sin conectar se optimizan, el datapath medido es idéntico).
-//   - cross_events/anomaly_count/error/gap_detected sin conectar (los
-//     contadores y flags del pipeline se conservan; solo se recortan los
-//     pins).
+//   - bbo_tdata (128 bits) fully: it is the BBO output of the contract.
+//   - depth_tdata trimmed to [31:0]: depth observability is NOT a timing
+//     requirement; the pipeline that generates it is kept (the unconnected
+//     bits are optimized away, the measured datapath is identical).
+//   - cross_events/anomaly_count/error/gap_detected unconnected (the
+//     pipeline's counters and flags are kept; only the pins are
+//     trimmed).
 //
-// El QB efectivo de la cadena se fija aquí como en rtl/itch_chain.sv (46) y
-// en la línea -G/`generic` del tcl: NO cambiar defaults de submódulos.
+// The chain's effective QB is fixed here as in rtl/itch_chain.sv (46) and on
+// the tcl -G/`generic` line: do NOT change submodule defaults.
 module itch_chain_synth #(
     parameter DW   = 32,
     parameter QB   = 46,
-    // K=64 (addendum iter 12): el ref del wire viaja sin truncar (el día
-    // real supera 2^19; el book ensancha su entrada a OW=130 bits)
+    // K=64 (addendum iter 12): the wire's ref travels untruncated (the real
+    // day exceeds 2^19; the book widens its input to OW=130 bits)
     parameter K    = 64,
     parameter P    = 32,
     parameter ND   = 5,
     parameter NSYM = 20,
     parameter PXW  = 32,
     parameter QW   = 32,
-    parameter BBO_W = 128   // ancho del bus bbo_tdata al pin (recorte de
-                            // observabilidad para el presupuesto de I/O del
-                            // paquete; la variante 156 MHz usa 64)
+    parameter BBO_W = 128   // width of the bbo_tdata bus at the pin (trim of
+                            // observability for the package I/O budget; the
+                            // 156 MHz variant uses 64)
 ) (
 input  wire              clk,
     input  wire              rst_n,
@@ -55,10 +55,10 @@ input  wire              clk,
     wire [31:0] cross_events, anomaly_count;
     wire [2*ND*64-1:0] depth_full;
 
-    // salidas del book (conectadas a wires internos; los FFs del book tienen
-    // fanout interno — retención + guard — y el placer NO los empaqueta en el
-    // IOB, iter 10). El pipeline de salida de la iter 11 registra FFs propios
-    // del wrapper con IOB (mismo mecanismo que replicó tready_ff).
+    // book outputs (wired to internal wires; the book's FFs have internal
+    // fanout — retention + guard — and the placer does NOT pack them into the
+    // IOB, iter 10). The iter-11 output pipeline registers the wrapper's own
+    // FFs with IOB (same mechanism that replicated tready_ff).
     wire [15:0]  bbo_locate_i;
     wire [127:0] bbo_tdata_i;
     wire         bbo_tvalid_i, bbo_changed_i;
@@ -80,18 +80,18 @@ input  wire              clk,
     assign depth_tvalid = depth_tvalid_o;
 
     // ---------------------------------------------------------------
-    // pines registrados (iter 8, addendum spec): la peor ruta del re-run
-    // 2026-08-18 14:11 era un I/O del wrapper (msg_len_reg -> s_axis_tready,
-    // -7,395 ns: el parser empujaba su drenaje hasta el pin) y las rutas
-    // de reset del pin (rst_n -> lv_qty_reg/R, ~-5,7 ns). El wrapper de
-    // síntesis replica la integración real de la cadena a 322 MHz:
-    //   - FIFO de entrada de 4xDW: el handshake del pin lo gobierna un
-    //     contador local (ruta FF->pin de ~3 niveles). Régimen (no ocultado):
-    //     la backpressure del pin se difiere hasta 3 palabras de
-    //     amortiguación; la cadena interna no cambia; latencia de pin +1
-    //     ciclo (SEC-URAM-04/RTM-LAT-01 miden la cadena, no el wrapper).
-    //   - rst_n regenerado en un FF local: corta la ruta del pin a los R
-    //     de los FDRE (sincronizador de práctica estándar en el top).
+    // registered pins (iter 8, spec addendum): the worst path of the
+    // 2026-08-18 14:11 re-run was a wrapper I/O (msg_len_reg -> s_axis_tready,
+    // -7,395 ns: the parser pushed its drain to the pin) and the pin's reset
+    // paths (rst_n -> lv_qty_reg/R, ~-5,7 ns). The synthesis wrapper mirrors
+    // the chain's real integration at 322 MHz:
+    //   - 4xDW input FIFO: the pin's handshake is governed by a local counter
+    //     (FF->pin path of ~3 levels). Regime (not hidden): the pin's
+    //     backpressure is deferred up to 3 words of buffering; the internal
+    //     chain is unchanged; pin latency +1 cycle (SEC-URAM-04/RTM-LAT-01
+    //     measure the chain, not the wrapper).
+    //   - rst_n regenerated in a local FF: cuts the pin path to the FDRE
+    //     R inputs (standard-practice synchronizer at the top).
     // ---------------------------------------------------------------
     reg [DW-1:0]   f_mem [3:0];
     reg [DW/8-1:0] f_keep [3:0];
@@ -111,12 +111,12 @@ input  wire              clk,
     wire fifo_hs  = s_axis_tvalid && s_axis_tready;
     wire fifo_pop = p_s_axis_tvalid && p_s_axis_tready;
 
-    // tready del pin registrado (iter 10): la ruta f_n -> LUT -> OBUF ->
-    // pin con el skew del area del book no cierra; el FF del comparador se
-    // empaca en el IOB (atributo en el puerto). El handshake usa el tready
-    // registrado: el productor empuja cuando ve ready=1 y el wrapper cuenta
-    // el mismo ready (fifo_hs) -> regimen coherente, sin overflow
-    // (f_n <= 3 por construccion), backpressure diferida 1 ciclo en el pin.
+    // registered pin tready (iter 10): the f_n -> LUT -> OBUF -> pin path
+    // with the book area's skew does not close; the comparator FF packs into
+    // the IOB (attribute on the port). The handshake uses the registered
+    // tready: the producer pushes when it sees ready=1 and the wrapper counts
+    // the same ready (fifo_hs) -> coherent regime, no overflow
+    // (f_n <= 3 by construction), backpressure deferred 1 cycle at the pin.
     always_ff @(posedge clk) begin
         if (!rst_n_c)
             tready_ff <= 1'b0;
@@ -166,15 +166,15 @@ input  wire              clk,
     );
 
     // ---------------------------------------------------------------
-    // pipeline de salida (iter 11, addendum spec): el par BBO/depth del
-    // book se registra en FFs PROPIOS del wrapper (IOB = "TRUE"), porque
-    // los FFs del book tienen fanout interno (retención + guard) y no se
-    // empaquetan. Régimen del pin idéntico al del book: captura cuando el
-    // book ofrece un par sin par en curso (`tvalid_i && !tvalid_o`),
-    // retención del lado del pin (`tvalid_o <= tvalid_o && !tready`: se
-    // retira 1 ciclo tras la aceptación externa, sin duplicado si el
-    // consumidor mantiene tready=1). +1 ciclo de latencia solo en el pin.
-    // Los tready del pin van directos al book (retención interna intacta).
+    // output pipeline (iter 11, spec addendum): the book's BBO/depth pair is
+    // registered in the wrapper's OWN FFs (IOB = "TRUE"), because the book's
+    // FFs have internal fanout (retention + guard) and do not pack. Pin regime
+    // identical to the book's: capture when the book offers a pair with no
+    // pair in flight (`tvalid_i && !tvalid_o`), pin-side retention
+    // (`tvalid_o <= tvalid_o && !tready`: it retires 1 cycle after the
+    // external acceptance, no duplicate if the consumer holds tready=1). +1
+    // cycle of latency only at the pin. The pin's tready lines go straight to
+    // the book (internal retention intact).
     // ---------------------------------------------------------------
     always_ff @(posedge clk) begin
         if (!rst_n_c) begin
@@ -182,11 +182,11 @@ input  wire              clk,
             bbo_tvalid_o <= 1'b0; bbo_changed_o <= 1'b0;
             depth_tdata_o <= 0; depth_tvalid_o <= 1'b0;
         end else begin
-            // retención del lado del pin (el par queda visible hasta la
-            // aceptación externa; se retira el ciclo siguiente)
+            // pin-side retention (the pair stays visible until external
+            // acceptance; it retires the following cycle)
             bbo_tvalid_o <= bbo_tvalid_o && !bbo_tready;
             depth_tvalid_o <= depth_tvalid_o && !depth_tready;
-            // captura de un par nuevo del book (solo si el pin está libre)
+            // capture of a new pair from the book (only if the pin is free)
             if (bbo_tvalid_i && !bbo_tvalid_o) begin
                 bbo_locate_o  <= bbo_locate_i;
                 bbo_tdata_o   <= bbo_tdata_i[127 -: BBO_W];
