@@ -1,4 +1,4 @@
-"""Mirror tests of specs/fase0-golden-model/gherkin/vectores.feature."""
+"""Reference-vector sink tests (the bit-exact record contract)."""
 from __future__ import annotations
 
 import io

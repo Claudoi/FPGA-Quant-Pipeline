@@ -1,9 +1,9 @@
-"""Mirror tests of specs/fase0-golden-model/gherkin/parser.feature.
+"""ITCH parser tests (independent oracle).
 
-Independent oracle: the synthetic payloads are built here with offsets written
-by hand from NQTVITCHSpecification.pdf. NOTHING is imported from
-golden_model.itch.messages to fabricate messages: if the canonical table is
-mis-transcribed, these tests shout it.
+The synthetic payloads are built here with offsets written by hand from
+NQTVITCHSpecification.pdf. NOTHING is imported from golden_model.itch.messages
+to fabricate messages: if the canonical table is mis-transcribed, these tests
+shout it.
 """
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ class TestParser(unittest.TestCase):
         self.assertEqual(msgs[-1][0], 9)  # last index = total - 1
 
     def test_par02_conteo_por_tipo_de_mensaje_del_dia_real(self):
-        # the mirror verifies the counting behavior; the real day goes to the verify-report
+        # the mirror verifies the counting behavior; the real day is reported separately
         stream = binaryfile(p_s(), p_s(), p_r(), p_a(), p_a(), p_a(), p_e())
         counts: dict[str, int] = {}
         for _, mtype, *_ in iter_messages(stream):
@@ -175,7 +175,7 @@ class TestParser(unittest.TestCase):
                 self.assertEqual(fields, esperado)
         # independent offset pin: the ref of A lives in bytes 11..18 of the payload
         self.assertEqual(p_a()[11:19], (123456789).to_bytes(8, "big"))
-        # R: stock and market category (fields of the Gherkin example)
+        # R: stock and market category (fields of the message example)
         _, mtype, locate, _, _, fields = list(iter_messages(binaryfile(p_r(locate=42))))[0]
         self.assertEqual(mtype, "R")
         self.assertEqual(locate, 42)

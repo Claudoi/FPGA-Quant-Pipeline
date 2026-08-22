@@ -6,8 +6,8 @@ decapsulated from IP/UDP) and emits, for each message of the 10 subset types,
 the words of the normalized Annex A record (word0 header, word1 ts, words
 2..N wire body). It is the source of criterion 1 and of the cocotb comparator.
 
-Mirror naming: title = normalized phase-1 Gherkin scenario
-(lowercase, spaces->_, test_ prefix). Here the oracle's scenarios are exercised.
+Mirror naming: test titles are normalized scenario names (lowercase,
+spaces->_, test_ prefix). Here the oracle's scenarios are exercised.
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Mirror tests of specs/fase0-golden-model/gherkin/datos.feature."""
+"""Golden-model run/selection tests (day processing and subset selection)."""
 from __future__ import annotations
 
 import hashlib

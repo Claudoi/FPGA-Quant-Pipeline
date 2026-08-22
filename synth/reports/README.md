@@ -24,9 +24,8 @@ vivado -mode batch -source synth/fase3_synth.tcl   # 322 MHz -> reports/322mhz/
 vivado -mode batch -source synth/fase3_156mhz.tcl  # 156 MHz -> reports/156mhz/
 ```
 
-The tcl aborts with `FASE3 TIMING FAIL` on any negative slack (gate never
-relaxed). Static check without Vivado: `scripts/verify/synth_check.py` (requires
-the per-variant outdirs to differ).
+The tcl aborts with `FASE3 TIMING FAIL` on any negative slack (the gate is
+never relaxed).
 
 ## Run history (2026-08-18, same tcl throughout; pre-CLO-RPT-01)
 
@@ -84,7 +83,7 @@ line-rate 10G) with the same RTL: **CLOSED** (2026-08-20, iter 16) — WNS
 I/O budget (258 > 256), so `BBO_W` was parameterized to 64 (prices only at the
 pin); datapath identical. The 322 MHz is documented as a non-closed optimization
 chapter; the tcl gate is not relaxed. Synthesis lessons that avoid re-running
-runs: section 7 of `docs/writeup/lessons-learned.md`.
+runs.
 
 ## Additional artifacts (in `synth/`)
 

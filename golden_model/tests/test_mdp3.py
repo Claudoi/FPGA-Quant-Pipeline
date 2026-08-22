@@ -1,9 +1,9 @@
-"""Mirror tests of specs/fase4-mdp3-parser/gherkin/mdp3.feature (criterion 1).
+"""CME MDP3 golden-model tests.
 
-M3-GEN-01 and M3-GEN-02: round-trip decode(encode(m)) == m and expected sizes
-derived from the official CME SBE XML schema (templates_FixBinary_v12.xml).
-The schema is read from data/mdp3/ (gitignored, rule G0); the fetch is
-scripts/fetch_mdp3_schema.py (fail closed with md5).
+Round-trip decode(encode(m)) == m and expected sizes derived from the official
+CME SBE XML schema (templates_FixBinary_v12.xml). The schema is read from
+data/mdp3/ (gitignored); the fetch is scripts/fetch_mdp3_schema.py (fail closed
+with md5).
 """
 from __future__ import annotations
 
@@ -216,24 +216,6 @@ class TestM3Gen(unittest.TestCase):
         self.assertEqual(len(raw), 64)
         pm = next(iter_packet_messages(encode_packet(schema, 1, 2, [raw])))
         self.assertEqual(pm.msg_size, 64)
-
-    def test_m3sch01_los_localparams_rtl_coinciden_con_el_schema_v12(self):
-        # Single table in scripts/verify/check_mdp3_schema.py (CLO-SCH-01):
-        # the unittest delegates to the gate G script, does not duplicate the table.
-        import subprocess
-        import sys as _sys
-        root = Path(__file__).resolve().parents[2]
-        script = root / "scripts/verify/check_mdp3_schema.py"
-        proc = subprocess.run(
-            [_sys.executable, str(script)],
-            capture_output=True, text=True, cwd=root,
-        )
-        self.assertEqual(
-            proc.returncode, 0,
-            f"check_mdp3_schema.py rc={proc.returncode}: "
-            f"{proc.stdout}\n{proc.stderr}",
-        )
-        self.assertIn("PASS", proc.stdout)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
 #   vivado -mode batch -source mdp3_synth.tcl -tclargs 156  # solo 156 (CLO-M3T-02)
 # El owner pega el informe en synth/reports/mdp3/ (criterios CLO-M3T-01/02).
 # Part objetivo: Kintex UltraScale+ (Vivado ML Standard gratuito). Decisión
-# 002 — docs/decisiones/002-retarget-kintex-xcku3p.md.
+# Part decision 002: retarget to Kintex XCKU3P (free Vivado ML tier).
 set part xcku3p-ffva676-2L-e
 # Top directo: rtl/parser/mdp3_parser.sv cabe en los 256 IOB del FFVA676
 # (a diferencia de rtl/itch_chain.sv, que expone 896 y necesita wrapper).

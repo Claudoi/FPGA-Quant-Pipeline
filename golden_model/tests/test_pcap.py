@@ -1,4 +1,4 @@
-"""Mirror tests of specs/fase0-golden-model/gherkin/pcap.feature."""
+"""pcap tooling tests (BinaryFILE -> MoldUDP64 pcap conversion)."""
 from __future__ import annotations
 
 import shutil

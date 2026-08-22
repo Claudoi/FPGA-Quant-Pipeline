@@ -4,7 +4,7 @@ The RTL (phase 1) consumes the MoldUDP64 payload already decapsulated from
 IP/UDP: a sequence of packets, each one `session(10) + seq(8) + count(2) +
 [len u16 + message]*`. This module is the **oracle**: it walks exactly that
 stream and, for each message of the 10 subset types (`S,R,A,F,E,C,X,D,U,P`),
-emits the normalized Annex A record of `specs/fase1-parser-rtl/spec.md`:
+emits the normalized Annex A record:
 
     word0 = (msg_type<<56)|(locate<<40)|(length<<32)|(msg_idx)
     word1 = ts_ns

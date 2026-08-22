@@ -2,7 +2,7 @@
 # (mismo throughput de 10G que el 32b/322; cierre de timing con holgura).
 # Uso (Vivado batch, desde synth/):
 #   vivado -mode batch -source fase3_156mhz.tcl
-# Decisión 002 — docs/decisiones/002-retarget-kintex-xcku3p.md.
+# Part decision 002: retarget to Kintex XCKU3P (free Vivado ML tier).
 set part xcku3p-ffva676-2L-e
 # Top de SÍNTESIS: itch_chain_synth.sv (wrapper de synth/, hallazgo
 # 2026-08-18): rtl/itch_chain.sv expone 896 I/O (buses de observabilidad) y

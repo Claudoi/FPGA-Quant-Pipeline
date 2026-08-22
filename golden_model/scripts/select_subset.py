@@ -2,8 +2,8 @@
 """select_subset.py — picks the symbol subset for the vectors.
 
 Rule (spec phase 0, Constraints): top N by peak live orders of the main day,
-tie-broken by messages. The stats table that justifies it is pasted into the
-verify-report (criterion 9).
+tie-broken by messages. The stats table that justifies the selection is
+printed here.
 
 Usage:
     python3 -m golden_model.scripts.select_subset <stats.csv> \

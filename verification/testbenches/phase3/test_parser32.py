@@ -8,8 +8,7 @@ the worst probed case. 32 layout (trimmed Annex A, fase3-uram campaign):
     w1 = msg_idx[31:0]
     w2.. = body (MSB-first, padding 0)
 
-(without timestamp words: the book does not consume them; contract amended by
-specs/fase3-uram/spec.md, criterion 1).
+(without timestamp words: the book does not consume them).
 
 Adversarials INV-P32: output backpressure without loss (mirror OUT-02 of phase
 1, now at 32 bits) and replay of the local-day real pcap (mirror REP-02).

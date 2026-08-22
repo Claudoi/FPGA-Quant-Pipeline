@@ -242,9 +242,8 @@ async def test_sec_uram_03_el_pipeline_de_niveles_no_crea_burbujas_ni_fantasmas(
             assert int(dut.sm_cap_qt[i].value) != 0xFFFFFF9C, (
                 f"SEC-URAM-03: phantom wrapped quantity at 100000 "
                 f"(LV-NEGWRAP)")
-    # bubble <= 3 cycles per operation (phase 3 iter 8: the decode was split
-    # into LV2+LV2B, +1 over the 2 of the original Gherkin; spec
-    # fase3-optimizacion iter 8): 35 level operations (33 adds + 2 deletes),
+# bubble <= 3 cycles per operation (phase 3 iter 8: the decode was split
+# into LV2+LV2B, +1 over the original 2): 35 level operations (33 adds + 2 deletes),
     # each a contiguous run of at most 3 cycles, strictly forward
     # (LV2->LV2B->LV3, never repetition or backtracking)
     runs = _split_lv_runs(trace)

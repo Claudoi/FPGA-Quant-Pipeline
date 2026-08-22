@@ -19,7 +19,7 @@
 //     writing via task broke the inference, Synth 8-7186, finding
 //     2026-08-18; max 1 write per cycle, never in the same cycle as a probe
 //     read). NEVER combinational indexing of the table (blocker B1 of
-//     criterion 10, documented in docs/writeup/lessons-learned.md §7).
+//     criterion 10, documented in the synthesis run notes).
 //   - The probe (probe engine) serializes the lookup to ≤1 slot/cycle and
 //     starts DURING ST_BODY (prefetch of the hash group: the order_ref
 //     travels in the first words of the body and the hash is known before

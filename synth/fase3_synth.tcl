@@ -3,7 +3,7 @@
 #   vivado -mode batch -source fase3_synth.tcl
 # El owner pega el informe en synth/reports/ (criterio 10).
 # Part objetivo: Kintex UltraScale+ (Vivado ML Standard gratuito). Decisión
-# 002 — docs/decisiones/002-retarget-kintex-xcku3p.md.
+# Part decision 002: retarget to Kintex XCKU3P (free Vivado ML tier).
 set part xcku3p-ffva676-2L-e
 # Top de SÍNTESIS: itch_chain_synth.sv (wrapper de synth/, hallazgo
 # 2026-08-18): rtl/itch_chain.sv expone 896 I/O (buses de observabilidad) y

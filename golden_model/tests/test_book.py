@@ -1,4 +1,4 @@
-"""Mirror tests of specs/fase0-golden-model/gherkin/book.feature.
+"""Order book tests (golden model).
 
 Messages are built with the literal helpers of test_parser (offsets written
 by hand from the spec PDF) and fed to the book through the real parser:

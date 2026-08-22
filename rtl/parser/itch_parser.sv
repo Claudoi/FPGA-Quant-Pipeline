@@ -9,8 +9,7 @@
 //   word1 = ts_ns (48 useful bits, in bits [47:0]; rest 0)
 //   words 2..N = body (msg[11:len], MSB-first, zero-padded)
 // At DW=32 (fase3-uram, Annex-A trim): w0={type,locate,len}, w1=msg_idx,
-// w2..=body — WITHOUT timestamp words (the book does not consume them;
-// contract amended by specs/fase3-uram/spec.md, criterion 1).
+// w2..=body — WITHOUT timestamp words (the book does not consume them).
 //
 // ARCHITECTURE (capture to msg_reg): when the message is COMPLETE in the
 // queue (2+len <= QB), it is captured at once into msg_reg (a stable emitter
@@ -33,7 +32,7 @@
 // B => 46 B with prefix) fits with margin (64 >= 46). Do not touch QB without
 // re-measuring the latency evidence (SEC-LAT-01). ATTENTION: in the chain
 // (itch_chain.sv) the QB parameter is overridden from the top — changing the
-// default here does not affect phase 3 (see docs/writeup/lessons-learned.md §1).
+// default here does not affect phase 3.
 module itch_parser #(
     parameter DW = 64,
     parameter QB = 64
@@ -469,7 +468,7 @@ end else if (9'(2 + 8'({pbyte(q,0), pbyte(q,1)})) > 9'(QB)) begin
                             // w0: {type, locate, len, idx} at 64 bits; at 32 bits
                             // the idx is emitted in its own word (w1, Annex-A
                             // trim: the ts words were removed — the book does
-                            // not consume them; specs/fase3-uram criterion 1)
+                            // not consume them)
                             if (DW == 32)
                                 out_data_reg <= DW'({msg_type, locate, msg_len});
                             else

@@ -1,7 +1,7 @@
 """Reference vectors: the bit-exact contract between golden model and RTL.
 
-Canonical record layout (Annex A of specs/fase0-golden-model/spec.md —
-changing it is an explicit spec edit): 40 bytes, little-endian:
+Canonical record layout (Annex A, the bit-exact contract): 40 bytes,
+little-endian:
 
     msg_idx u64 | ts_ns u64 | bid_px u32 | bid_qty u32 | ask_px u32 |
     ask_qty u32 | locate u16 | msg_type u8 (ASCII) | flags u8 | reserved u32
